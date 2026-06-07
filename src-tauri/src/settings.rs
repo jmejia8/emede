@@ -16,10 +16,16 @@ pub struct Settings {
     pub margin: String,
     #[serde(default = "default_window_frame")]
     pub window_frame: String,
+    #[serde(default = "default_keybindings")]
+    pub keybindings: String,
 }
 
 fn default_window_frame() -> String {
     "emede".into()
+}
+
+fn default_keybindings() -> String {
+    "default".into()
 }
 
 fn default_font_inherit() -> String {
@@ -45,6 +51,7 @@ impl Default for Settings {
             color_bg: "#faf8f5".into(),
             margin: default_margin(),
             window_frame: default_window_frame(),
+            keybindings: default_keybindings(),
         }
     }
 }

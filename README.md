@@ -37,6 +37,7 @@ emede notes/lecture.md
 - Typography: separate body, title, and code fonts; font size and side margins
 - Color presets: Light, Sepia, Dark, Gruvbox; font presets for common type stacks
 - Settings persisted in `~/.config/emede/settings.json`
+- Keybinding schemes: Default (browser), Vim, Emacs, and Common reader navigation
 
 ## Math syntax
 
@@ -47,6 +48,8 @@ emede notes/lecture.md
 ## Settings
 
 Press `Ctrl+,` or click the gear icon (top-right on hover) to open settings.
+
+Choose a keybinding scheme under **Keybindings**. Vim mode adds `j`/`k` line scrolling, `d`/`u` half-page movement, `f`/`b`/`Space` paging, and `gg`/`G` for top and bottom. Emacs mode uses `Ctrl+n`/`Ctrl+p` and `Ctrl+v`/`Alt+v`. Common reader mode uses `j`/`k`, `Space`/`Shift+Space`, and `Ctrl+Home`/`Ctrl+End`. All schemes also support `Ctrl+,` for settings, `Ctrl+Shift+T` for the table of contents, and `Escape` to close panels.
 
 Default typography uses Literata with Source Serif 4 and Noto Serif fallbacks.
 

@@ -123,6 +123,21 @@
         </label>
 
         <label>
+          Keybindings
+          <select id="setting-keybindings">
+            <option value="default">Default (browser)</option>
+            <option value="vim">Vim</option>
+            <option value="emacs">Emacs</option>
+            <option value="common">Common reader</option>
+          </select>
+        </label>
+
+        <div class="keybindings-help">
+          <span>Shortcuts</span>
+          <div id="keybindings-help" class="keybindings-help-body"></div>
+        </div>
+
+        <label>
           Text color
           <input id="setting-fg" type="color" />
         </label>

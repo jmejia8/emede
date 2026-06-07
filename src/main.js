@@ -1,3 +1,9 @@
+import {
+  createKeybindingController,
+  normalizeKeybindingMode,
+  renderKeybindingHelp,
+} from "./keybindings.js";
+
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 const { getCurrentWindow } = window.__TAURI__.window;
@@ -119,6 +125,8 @@ const settingMarginLabel = document.getElementById("setting-margin-label");
 const settingFg = document.getElementById("setting-fg");
 const settingBg = document.getElementById("setting-bg");
 const settingWindowFrame = document.getElementById("setting-window-frame");
+const settingKeybindings = document.getElementById("setting-keybindings");
+const keybindingsHelp = document.getElementById("keybindings-help");
 const titlebarTitle = document.getElementById("titlebar-title");
 const winMinimize = document.getElementById("win-minimize");
 const winMaximize = document.getElementById("win-maximize");
@@ -255,6 +263,8 @@ function applySettings(settings) {
   settingFg.value = settings.color_fg;
   settingBg.value = settings.color_bg;
   settingWindowFrame.value = normalizeWindowFrame(settings.window_frame);
+  settingKeybindings.value = normalizeKeybindingMode(settings.keybindings);
+  renderKeybindingHelp(keybindingsHelp, settings.keybindings);
   void applyWindowFrame(settings.window_frame);
 }
 
@@ -268,6 +278,7 @@ function settingsFromForm() {
     color_bg: settingBg.value,
     margin: `${Number(settingMargin.value)}%`,
     window_frame: settingWindowFrame.value,
+    keybindings: settingKeybindings.value,
   };
 }
 
@@ -594,6 +605,10 @@ function toggleToc(open) {
   tocPanel.setAttribute("aria-hidden", String(!show));
 }
 
+function toggleTocPanel() {
+  toggleToc(tocPanel.classList.contains("hidden"));
+}
+
 function wireToc() {
   tocToggle.addEventListener("click", () => toggleToc(true));
   tocClose.addEventListener("click", () => toggleToc(false));
@@ -678,8 +693,13 @@ function wireSettings() {
     settingFg,
     settingBg,
     settingWindowFrame,
+    settingKeybindings,
   ].forEach((el) => {
     el.addEventListener("input", scheduleSave);
+  });
+
+  settingKeybindings.addEventListener("change", () => {
+    renderKeybindingHelp(keybindingsHelp, settingKeybindings.value);
   });
 
   settingSize.addEventListener("input", () => {
@@ -715,16 +735,15 @@ function wireSettings() {
       await invoke("set_settings", { settings });
     });
   });
+}
 
-  document.addEventListener("keydown", (e) => {
-    if (e.ctrlKey && e.key === ",") {
-      e.preventDefault();
-      toggleSettings(true);
-    }
-    if (e.key === "Escape") {
-      if (!settingsPanel.classList.contains("hidden")) toggleSettings(false);
-      if (!tocPanel.classList.contains("hidden")) toggleToc(false);
-    }
+function wireKeybindings() {
+  createKeybindingController({
+    getKeybindingMode: () => currentSettings?.keybindings ?? settingKeybindings.value,
+    toggleSettings,
+    toggleToc: toggleTocPanel,
+    settingsPanel,
+    tocPanel,
   });
 }
 
@@ -734,6 +753,7 @@ async function boot() {
   wireToc();
   wireTitlebar();
   wireSettings();
+  wireKeybindings();
 
   const startupFilePromise = invoke("get_startup_file");
   const settingsPromise = invoke("get_settings");
