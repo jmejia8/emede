@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>emede</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [
+            ["\\(", "\\)"],
+            ["$", "$"],
+          ],
+          displayMath: [
+            ["\\[", "\\]"],
+            ["$$", "$$"],
+          ],
+        },
+        options: {
+          skipHtmlTags: ["script", "noscript", "style", "textarea", "pre", "code"],
+        },
+      };
+    </script>
+    <script src="vendor/mathjax/tex-chtml.js" defer></script>
+    <script type="module" src="main.js" defer></script>
+  </head>
+  <body>
+    <button id="settings-toggle" class="settings-toggle" title="Settings (Ctrl+,)" aria-label="Settings">
+      &#9881;
+    </button>
+
+    <aside id="settings-panel" class="settings-panel hidden" aria-hidden="true">
+      <header class="settings-header">
+        <h2>Settings</h2>
+        <button id="settings-close" class="settings-close" aria-label="Close settings">&times;</button>
+      </header>
+
+      <div class="settings-body">
+        <label>
+          Font family
+          <select id="setting-font"></select>
+        </label>
+
+        <label>
+          Font size
+          <span class="range-row">
+            <input id="setting-size" type="range" min="8" max="32" step="1" />
+            <span id="setting-size-label" class="range-value"></span>
+          </span>
+        </label>
+
+        <label>
+          Margins
+          <span class="range-row">
+            <input id="setting-margin" type="range" min="0" max="240" step="4" />
+            <span id="setting-margin-label" class="range-value"></span>
+          </span>
+        </label>
+
+        <label>
+          Text color
+          <input id="setting-fg" type="color" />
+        </label>
+
+        <label>
+          Background
+          <input id="setting-bg" type="color" />
+        </label>
+
+        <div class="presets">
+          <span>Presets</span>
+          <div class="preset-buttons">
+            <button type="button" data-preset="light">Light</button>
+            <button type="button" data-preset="sepia">Sepia</button>
+            <button type="button" data-preset="dark">Dark</button>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <main id="reader">
+      <div id="loading-state" class="loading-state hidden" role="status" aria-live="polite" aria-label="Loading document">
+        <article class="dummy-document" aria-hidden="true">
+          <div class="dummy-kicker"></div>
+          <div class="dummy-title"></div>
+          <div class="dummy-line wide"></div>
+          <div class="dummy-line"></div>
+          <div class="dummy-line medium"></div>
+          <div class="dummy-gap"></div>
+          <div class="dummy-line wide"></div>
+          <div class="dummy-line short"></div>
+          <div class="dummy-quote"></div>
+          <div class="dummy-line"></div>
+          <div class="dummy-line medium"></div>
+        </article>
+        <p class="loading-label">Preparing document</p>
+      </div>
+      <article id="content" class="prose"></article>
+      <div id="empty-state" class="empty-state hidden">
+        <p class="empty-title">emede</p>
+        <p class="empty-hint">Pass a markdown file:</p>
+        <code>emede document.md</code>
+      </div>
+      <div id="missing-state" class="missing-state hidden">
+        <p class="missing-eyebrow">Document not found</p>
+        <h1>That file is not on this shelf.</h1>
+        <p id="missing-message" class="missing-message"></p>
+        <p class="missing-hint">Check the path and try opening it again.</p>
+      </div>
+      <div id="error-state" class="error-state hidden"></div>
+    </main>
+  </body>
+</html>
