@@ -2,7 +2,8 @@ mod markdown;
 mod settings;
 
 use std::sync::Mutex;
-use tauri::{AppHandle, Emitter, Manager, Url, window::Color};
+use tauri::{window::Color, AppHandle, Emitter, Manager, Url};
+use tauri_plugin_window_state::StateFlags;
 use tauri_plugin_cli::CliExt;
 use tauri_plugin_opener::OpenerExt;
 
@@ -49,6 +50,15 @@ fn handle_navigation(app: &AppHandle, url: &Url) -> bool {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(
+            tauri_plugin_window_state::Builder::new()
+                // Keep visibility under frontend control so the window stays hidden
+                // until the first frame is painted.
+                .with_state_flags(
+                    StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED,
+                )
+                .build(),
+        )
         .plugin(tauri_plugin_cli::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(

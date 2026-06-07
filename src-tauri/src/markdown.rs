@@ -392,7 +392,9 @@ fn preprocess_tex_delimiters(src: &str) -> String {
             while chars.peek() == Some(&'`') {
                 run.push(chars.next().unwrap());
             }
-            if inline_code_marker.is_none() && at_line_start(&out) && try_open_fence(&run, &mut chars, &mut out)
+            if inline_code_marker.is_none()
+                && at_line_start(&out)
+                && try_open_fence(&run, &mut chars, &mut out)
             {
                 in_fence = true;
                 fence_marker = run;
@@ -564,7 +566,8 @@ mod tests {
             &result.html[..result.html.len().min(2000)]
         );
         assert!(
-            !result.html.contains("<h1># development</h1>") && !result.html.contains("<h1>development</h1>"),
+            !result.html.contains("<h1># development</h1>")
+                && !result.html.contains("<h1>development</h1>"),
             "comment in code block became a heading; html snippet: {}",
             &result.html[..result.html.len().min(3000)]
         );
@@ -581,7 +584,9 @@ mod tests {
         );
         let expected_img = resolve_asset_path(Path::new(path), "src-tauri/icons/128x128.png");
         assert!(
-            result.html.contains(&format!(r#"<img src="{expected_img}""#))
+            result
+                .html
+                .contains(&format!(r#"<img src="{expected_img}""#))
                 && result.html.contains(r#"<h1 align="center">emede</h1>"#),
             "expected README header image and title HTML, got: {}",
             &result.html[..result.html.len().min(2000)]
@@ -632,9 +637,8 @@ mod tests {
     #[test]
     fn wraps_yaml_front_matter_in_code_block() {
         let src = "---\ntitle: My Doc\nauthor: Alice\n---\n\n# Hello\n";
-        let preprocessed = preprocess_tex_delimiters(&preprocess_math_fences(&preprocess_front_matter(
-            src,
-        )));
+        let preprocessed =
+            preprocess_tex_delimiters(&preprocess_math_fences(&preprocess_front_matter(src)));
         let arena = Arena::new();
         let options = comrak_options_for(Path::new("test.md"));
         let root = parse_document(&arena, &preprocessed, &options);
@@ -736,7 +740,8 @@ mod tests {
             return;
         }
         let raw = std::fs::read_to_string(path).unwrap();
-        let preprocessed = preprocess_tex_delimiters(&preprocess_math_fences(&preprocess_front_matter(&raw)));
+        let preprocessed =
+            preprocess_tex_delimiters(&preprocess_math_fences(&preprocess_front_matter(&raw)));
         assert!(
             preprocessed.contains("```javascript\nlisten(\"document-updated\""),
             "missing javascript fence in preprocessed output around: {}",
@@ -755,8 +760,7 @@ mod tests {
         }
         let result = render_markdown_inner(path).expect("render plan");
         assert!(
-            result.html.contains("language-javascript")
-                && result.html.contains("document-updated"),
+            result.html.contains("language-javascript") && result.html.contains("document-updated"),
             "javascript block missing; html snippet: {}",
             &result.html[result.html.len().saturating_sub(2000)..]
         );
@@ -824,17 +828,22 @@ mod tests {
         )
         .expect("write temp markdown");
 
-        let result = render_markdown_inner(md_path.to_str().unwrap()).expect("render temp markdown");
+        let result =
+            render_markdown_inner(md_path.to_str().unwrap()).expect("render temp markdown");
         let expected_raw = resolve_asset_path(&md_path, "images/raw.png");
 
         assert!(
-            result.html.contains(&format!(r#"<img src="{expected_raw}""#)),
+            result
+                .html
+                .contains(&format!(r#"<img src="{expected_raw}""#)),
             "expected raw HTML image to resolve, got: {}",
             &result.html[..result.html.len().min(2000)]
         );
         assert!(
             result.html.contains(r#"<img src="images/code.png""#)
-                || result.html.contains("&lt;img src=&quot;images/code.png&quot;"),
+                || result
+                    .html
+                    .contains("&lt;img src=&quot;images/code.png&quot;"),
             "expected fenced html code block to keep literal image path, got: {}",
             &result.html[..result.html.len().min(2000)]
         );
