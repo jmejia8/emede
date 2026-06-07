@@ -26,24 +26,21 @@ emede notes/lecture.md
 
 ## Features
 
-- Read-only rendering — no editor, distraction-free reader layout
-- In-process Comrak markdown-to-HTML conversion (no external tools)
-- GFM-style extensions: tables, task lists, strikethrough, autolinks
-- YAML/front matter shown as a fenced block; document title from `title:` or first `#` heading
-- Bundled MathJax for offline math rendering
-- Table of contents for documents with headings (expand/collapse sections)
-- External links open in the system browser
-- Custom titlebar or native system window decorations
-- Typography: separate body, title, and code fonts; font size and side margins
-- Color presets: Light, Sepia, Dark, Gruvbox; font presets for common type stacks
+- Read-only rendering — no editor, distraction-free reader layout.
+- In-process Comrak markdown-to-HTML conversion (no external dependencies).
+- GFM-style extensions: tables, task lists, strikethrough, autolinks.
+- Bundled MathJax for offline math rendering.
+- Table of contents for documents. 
+- Typography and side margins customization.
+- Color presets: Light, Sepia, Dark, Gruvbox; font presets for common type stacks.
 - Settings persisted in `~/.config/emede/settings.json`
-- Keybinding schemes: Default (browser), Vim, Emacs, and Common reader navigation
+- Keybinding schemes: Vim, Emacs, and Common reader navigation.
 
 ## Math syntax
 
-- Inline: `$...$` or `\(...\)`
-- Display: `$$...$$` or `\[...\]`
-- Fenced: ` ```math ` code blocks
+- Inline: `$...$` or `\(...\)`.
+- Display: `$$...$$` or `\[...\]`.
+- Fenced: ` ```math ` code blocks.
 
 ## Settings
 
