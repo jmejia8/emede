@@ -20,7 +20,6 @@
 
 html {
   font-size: 16px;
-  scroll-behavior: smooth;
 }
 
 body {
@@ -31,8 +30,8 @@ body {
   font-family: var(--font-serif);
   font-size: var(--font-size);
   line-height: var(--line-height);
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
+  text-rendering: auto;
+  -webkit-font-smoothing: subpixel-antialiased;
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
@@ -45,13 +44,11 @@ body {
   max-width: none;
   margin: 0 auto;
   opacity: 0;
-  transform: translateY(8px);
-  transition: opacity 0.45s ease, transform 0.45s ease;
+  transition: opacity 0.45s ease;
 }
 
 .prose.visible {
   opacity: 1;
-  transform: translateY(0);
 }
 
 .prose :first-child {
