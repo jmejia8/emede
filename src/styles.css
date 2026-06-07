@@ -153,13 +153,28 @@ body {
 
 .prose th,
 .prose td {
-  border: 1px solid var(--color-border);
+  border: none;
+  border-bottom: 1px solid var(--color-border);
   padding: 0.5em 0.75em;
   text-align: left;
 }
 
 .prose th {
-  background: var(--color-code-bg);
+  background: transparent;
+}
+
+.prose thead tr:first-child th,
+.prose tbody tr:first-child th,
+.prose tbody tr:first-child td,
+.prose > tr:first-child th,
+.prose > tr:first-child td {
+  border-top: 2px solid var(--color-border);
+}
+
+.prose tbody tr:last-child td,
+.prose tr:last-child th,
+.prose tr:last-child td {
+  border-bottom-width: 2px;
 }
 
 .prose hr {
