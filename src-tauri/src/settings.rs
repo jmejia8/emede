@@ -5,11 +5,23 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
     pub font_family: String,
+    #[serde(default = "default_font_inherit")]
+    pub font_title: String,
+    #[serde(default = "default_font_code", alias = "font_mono")]
+    pub font_code: String,
     pub font_size: String,
     pub color_fg: String,
     pub color_bg: String,
     #[serde(default = "default_margin")]
     pub margin: String,
+}
+
+fn default_font_inherit() -> String {
+    String::new()
+}
+
+fn default_font_code() -> String {
+    "\"IBM Plex Mono\", \"JetBrains Mono\", \"Fira Code\", monospace".into()
 }
 
 fn default_margin() -> String {
@@ -20,6 +32,8 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             font_family: "\"Literata\", \"Source Serif 4\", \"Noto Serif\", serif".into(),
+            font_title: default_font_inherit(),
+            font_code: default_font_code(),
             font_size: "12pt".into(),
             color_fg: "#2c2c2c".into(),
             color_bg: "#faf8f5".into(),

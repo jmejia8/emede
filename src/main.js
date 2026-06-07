@@ -4,6 +4,7 @@ const { getCurrentWindow } = window.__TAURI__.window;
 const { openUrl } = window.__TAURI__.opener;
 
 const DEFAULT_FONT = '"Literata", "Source Serif 4", "Noto Serif", serif';
+const DEFAULT_FONT_CODE = '"IBM Plex Mono", "JetBrains Mono", "Fira Code", monospace';
 
 const FONT_GROUPS = [
   {
@@ -29,12 +30,17 @@ const FONT_GROUPS = [
   {
     label: "Monospace",
     fonts: [
+      { label: "IBM Plex Mono (default)", value: DEFAULT_FONT_CODE },
       { label: "JetBrains Mono", value: '"JetBrains Mono", monospace' },
       { label: "Fira Code", value: '"Fira Code", monospace' },
       { label: "DejaVu Sans Mono", value: '"DejaVu Sans Mono", monospace' },
+      { label: "Noto Sans Mono", value: '"Noto Sans Mono", monospace' },
     ],
   },
 ];
+
+const PROSE_FONT_GROUPS = FONT_GROUPS.filter((group) => group.label !== "Monospace");
+const CODE_FONT_GROUPS = FONT_GROUPS.filter((group) => group.label === "Monospace");
 
 const DEFAULT_MARGIN_PERCENT = 10;
 
@@ -57,6 +63,34 @@ const PRESETS = {
   },
 };
 
+const FONT_PRESETS = {
+  literata: {
+    font_family: DEFAULT_FONT,
+    font_title: "",
+    font_code: '"JetBrains Mono", monospace',
+  },
+  source: {
+    font_family: '"Source Serif 4", "Noto Serif", serif',
+    font_title: '"Source Serif 4", "Noto Serif", serif',
+    font_code: '"JetBrains Mono", "Fira Code", monospace',
+  },
+  noto: {
+    font_family: '"Noto Serif", serif',
+    font_title: '"Noto Serif", serif',
+    font_code: '"Noto Sans Mono", monospace',
+  },
+  dejavu: {
+    font_family: '"DejaVu Serif", serif',
+    font_title: '"DejaVu Serif", serif',
+    font_code: '"DejaVu Sans Mono", monospace',
+  },
+  technical: {
+    font_family: '"Noto Sans", sans-serif',
+    font_title: '"Cantarell", sans-serif',
+    font_code: '"Fira Code", "JetBrains Mono", monospace',
+  },
+};
+
 const contentEl = document.getElementById("content");
 const emptyStateEl = document.getElementById("empty-state");
 const errorStateEl = document.getElementById("error-state");
@@ -71,6 +105,8 @@ const settingsPanel = document.getElementById("settings-panel");
 const settingsToggle = document.getElementById("settings-toggle");
 const settingsClose = document.getElementById("settings-close");
 const settingFont = document.getElementById("setting-font");
+const settingFontTitle = document.getElementById("setting-font-title");
+const settingFontCode = document.getElementById("setting-font-code");
 const settingSize = document.getElementById("setting-size");
 const settingSizeLabel = document.getElementById("setting-size-label");
 const settingMargin = document.getElementById("setting-margin");
@@ -82,8 +118,15 @@ let currentSettings = null;
 let saveTimer = null;
 let activeOpenToken = 0;
 
-function populateFontOptions() {
-  for (const group of FONT_GROUPS) {
+function populateFontSelect(select, { includeInherit = false, groups = FONT_GROUPS } = {}) {
+  select.replaceChildren();
+  if (includeInherit) {
+    const inheritOption = document.createElement("option");
+    inheritOption.value = "";
+    inheritOption.textContent = "Same as body";
+    select.appendChild(inheritOption);
+  }
+  for (const group of groups) {
     const optgroup = document.createElement("optgroup");
     optgroup.label = group.label;
     for (const font of group.fonts) {
@@ -93,8 +136,23 @@ function populateFontOptions() {
       option.style.fontFamily = font.value;
       optgroup.appendChild(option);
     }
-    settingFont.appendChild(optgroup);
+    select.appendChild(optgroup);
   }
+}
+
+function populateFontOptions() {
+  populateFontSelect(settingFont, { groups: PROSE_FONT_GROUPS });
+  populateFontSelect(settingFontTitle, { includeInherit: true, groups: PROSE_FONT_GROUPS });
+  populateFontSelect(settingFontCode, { groups: CODE_FONT_GROUPS });
+}
+
+function bodyFontFromSettings(settings) {
+  return settings.font_family || DEFAULT_FONT;
+}
+
+function syncFontSelect(select, value, fallback) {
+  select.value = value ?? "";
+  if (!select.value && fallback) select.value = fallback;
 }
 
 // Parse a CSS length to an integer point value, tolerating legacy `rem` values.
@@ -124,15 +182,21 @@ function applySettings(settings) {
   currentSettings = settings;
   const sizePt = toPt(settings.font_size, 12);
   const marginPercent = toMarginPercent(settings.margin);
+  const bodyFont = bodyFontFromSettings(settings);
+  const titleFont = settings.font_title || bodyFont;
+  const codeFont = settings.font_code || DEFAULT_FONT_CODE;
 
-  document.documentElement.style.setProperty("--font-serif", settings.font_family);
+  document.documentElement.style.setProperty("--font-serif", bodyFont);
+  document.documentElement.style.setProperty("--font-title", titleFont);
+  document.documentElement.style.setProperty("--font-code", codeFont);
   document.documentElement.style.setProperty("--font-size", `${sizePt}pt`);
   document.documentElement.style.setProperty("--reader-margin", `${marginPercent}%`);
   document.documentElement.style.setProperty("--color-fg", settings.color_fg);
   document.documentElement.style.setProperty("--color-bg", settings.color_bg);
 
-  settingFont.value = settings.font_family;
-  if (!settingFont.value) settingFont.value = DEFAULT_FONT;
+  syncFontSelect(settingFont, settings.font_family, DEFAULT_FONT);
+  syncFontSelect(settingFontTitle, settings.font_title, "");
+  syncFontSelect(settingFontCode, settings.font_code, DEFAULT_FONT_CODE);
   settingSize.value = sizePt;
   settingSizeLabel.textContent = `${sizePt}pt`;
   settingMargin.value = marginPercent;
@@ -144,6 +208,8 @@ function applySettings(settings) {
 function settingsFromForm() {
   return {
     font_family: settingFont.value || DEFAULT_FONT,
+    font_title: settingFontTitle.value,
+    font_code: settingFontCode.value || DEFAULT_FONT_CODE,
     font_size: `${Number(settingSize.value)}pt`,
     color_fg: settingFg.value,
     color_bg: settingBg.value,
@@ -530,7 +596,15 @@ function wireSettings() {
   settingsToggle.addEventListener("click", () => toggleSettings(true));
   settingsClose.addEventListener("click", () => toggleSettings(false));
 
-  [settingFont, settingSize, settingMargin, settingFg, settingBg].forEach((el) => {
+  [
+    settingFont,
+    settingFontTitle,
+    settingFontCode,
+    settingSize,
+    settingMargin,
+    settingFg,
+    settingBg,
+  ].forEach((el) => {
     el.addEventListener("input", scheduleSave);
   });
 
@@ -545,6 +619,19 @@ function wireSettings() {
   document.querySelectorAll("[data-preset]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const preset = PRESETS[btn.dataset.preset];
+      if (!preset) return;
+      const settings = {
+        ...(currentSettings || settingsFromForm()),
+        ...preset,
+      };
+      applySettings(settings);
+      await invoke("set_settings", { settings });
+    });
+  });
+
+  document.querySelectorAll("[data-font-preset]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const preset = FONT_PRESETS[btn.dataset.fontPreset];
       if (!preset) return;
       const settings = {
         ...(currentSettings || settingsFromForm()),

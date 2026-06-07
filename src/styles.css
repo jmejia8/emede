@@ -1,5 +1,7 @@
 :root {
   --font-serif: "Literata", "Source Serif 4", "Noto Serif", serif;
+  --font-title: var(--font-serif);
+  --font-code: "IBM Plex Mono", "JetBrains Mono", "Fira Code", monospace;
   --font-size: 12pt;
   --line-height: 1.75;
   --reader-margin: 10%;
@@ -71,7 +73,10 @@ body {
 .prose h1,
 .prose h2,
 .prose h3,
-.prose h4 {
+.prose h4,
+.prose h5,
+.prose h6 {
+  font-family: var(--font-title);
   line-height: 1.25;
   font-weight: 600;
   margin: 2em 0 0.75em;
@@ -208,7 +213,7 @@ body {
 }
 
 .prose code {
-  font-family: "IBM Plex Mono", "JetBrains Mono", "Fira Code", monospace;
+  font-family: var(--font-code);
   font-size: 0.88em;
   background: var(--color-code-bg);
   padding: 0.15em 0.35em;
@@ -220,6 +225,7 @@ body {
   padding: 1em 1.25em;
   background: var(--color-code-bg);
   border-radius: 6px;
+  font-family: var(--font-code);
   font-size: 0.88em;
   line-height: 1.6;
 }
@@ -787,6 +793,7 @@ body:has(.settings-panel:not(.hidden)) .settings-toggle {
 
 .preset-buttons {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   margin-top: 0.4rem;
 }
