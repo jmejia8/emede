@@ -1,6 +1,12 @@
-# emede
+<p align="center">
+  <img src="src-tauri/icons/128x128.png" alt="emede" width="128" height="128">
+</p>
 
-Immersive, read-only markdown viewer powered by [Tauri](https://tauri.app), [Comrak](https://github.com/kivikakk/comrak), and bundled [MathJax](https://www.mathjax.org).
+<h1 align="center">emede</h1>
+
+<p align="center">
+  Immersive, read-only markdown viewer powered by <a href="https://tauri.app">Tauri</a>, <a href="https://github.com/kivikakk/comrak">Comrak</a>, and bundled <a href="https://www.mathjax.org">MathJax</a>.
+</p>
 
 ## Requirements
 

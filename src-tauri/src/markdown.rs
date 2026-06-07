@@ -408,6 +408,7 @@ fn comrak_options() -> Options<'static> {
     options.extension.autolink = true;
     options.extension.tasklist = true;
     options.render.tasklist_classes = true;
+    options.render.r#unsafe = true;
     options.extension.header_id_prefix = Some(String::new());
     options
 }
@@ -479,6 +480,23 @@ mod tests {
             !result.html.contains("<h1># development</h1>") && !result.html.contains("<h1>development</h1>"),
             "comment in code block became a heading; html snippet: {}",
             &result.html[..result.html.len().min(3000)]
+        );
+    }
+
+    #[test]
+    fn renders_readme_embedded_html() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../README.md");
+        let result = render_markdown_inner(path).expect("render README");
+        assert!(
+            !result.html.contains("raw HTML omitted"),
+            "embedded HTML was stripped from README, got: {}",
+            &result.html[..result.html.len().min(2000)]
+        );
+        assert!(
+            result.html.contains(r#"<img src="src-tauri/icons/128x128.png""#)
+                && result.html.contains(r#"<h1 align="center">emede</h1>"#),
+            "expected README header image and title HTML, got: {}",
+            &result.html[..result.html.len().min(2000)]
         );
     }
 
