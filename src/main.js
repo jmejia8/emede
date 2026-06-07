@@ -401,19 +401,6 @@ async function boot() {
     }
   });
 
-  void listen("document-updated", (event) => {
-    if (event.payload) {
-      void applyDocument(event.payload, { reload: true });
-    }
-  });
-
-  void listen("document-error", (event) => {
-    if (event.payload) {
-      showMissingFile(String(event.payload));
-      void getCurrentWindow().setTitle("emede");
-    }
-  });
-
   let startupFile = null;
   try {
     startupFile = await startupFilePromise;

@@ -5,9 +5,6 @@ use comrak::{parse_document, Arena, Options};
 use serde::Serialize;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
-use tauri::{AppHandle, State};
-
-use crate::watcher::WatcherState;
 
 #[derive(Serialize, Clone)]
 pub struct RenderResult {
@@ -260,14 +257,8 @@ pub fn render_markdown_inner(path: &str) -> Result<RenderResult, String> {
 }
 
 #[tauri::command]
-pub fn render_markdown(
-    path: String,
-    app: AppHandle,
-    watcher: State<WatcherState>,
-) -> Result<RenderResult, String> {
-    let result = render_markdown_inner(&path)?;
-    crate::watcher::watch_file(app, PathBuf::from(&result.path), watcher)?;
-    Ok(result)
+pub fn render_markdown(path: String) -> Result<RenderResult, String> {
+    render_markdown_inner(&path)
 }
 
 #[cfg(test)]
