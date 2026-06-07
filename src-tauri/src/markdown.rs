@@ -91,10 +91,12 @@ fn preprocess_tex_delimiters(src: &str) -> String {
             out.push(ch);
             if ch == '\n' {
                 let mut matched = true;
+                let mut closing = String::new();
                 for expected in fence_marker.chars() {
                     match chars.peek() {
                         Some(&c) if c == expected => {
                             chars.next();
+                            closing.push(c);
                         }
                         _ => {
                             matched = false;
@@ -103,8 +105,14 @@ fn preprocess_tex_delimiters(src: &str) -> String {
                     }
                 }
                 if matched && !fence_marker.is_empty() {
-                    in_fence = false;
-                    fence_marker.clear();
+                    while matches!(chars.peek(), Some(' ') | Some('\t')) {
+                        closing.push(chars.next().unwrap());
+                    }
+                    if matches!(chars.peek(), Some('\n') | Some('\r') | None) {
+                        out.push_str(&closing);
+                        in_fence = false;
+                        fence_marker.clear();
+                    }
                 }
             }
             continue;
@@ -125,24 +133,35 @@ fn preprocess_tex_delimiters(src: &str) -> String {
         }
 
         if ch == '\n' {
-            let mut marker = String::from("`");
+            out.push('\n');
+            let mut marker = String::new();
             while chars.peek() == Some(&'`') {
                 chars.next();
                 marker.push('`');
             }
 
             if marker.len() >= 3 {
-                if let Some(&next) = chars.peek() {
+                let mut info = String::new();
+                while let Some(&next) = chars.peek() {
                     if next == '\n' || next == '\r' {
-                        in_fence = true;
-                        fence_marker = marker.clone();
-                        out.push_str(&marker);
-                        continue;
+                        break;
                     }
+                    info.push(chars.next().unwrap());
                 }
-            }
 
-            out.push('\n');
+                if matches!(chars.peek(), Some('\n') | Some('\r')) {
+                    in_fence = true;
+                    fence_marker = marker.clone();
+                    out.push_str(&marker);
+                    out.push_str(&info);
+                    continue;
+                }
+
+                out.push_str(&marker);
+                out.push_str(&info);
+            } else {
+                out.push_str(&marker);
+            }
             continue;
         }
 
@@ -264,6 +283,41 @@ pub fn render_markdown(path: String) -> Result<RenderResult, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn renders_readme_fenced_code_blocks() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../README.md");
+        let result = render_markdown_inner(path).expect("render README");
+        assert!(
+            result.html.contains("<pre>"),
+            "expected fenced code blocks in README, got: {}",
+            &result.html[..result.html.len().min(2000)]
+        );
+        assert!(
+            !result.html.contains("<h1># development</h1>") && !result.html.contains("<h1>development</h1>"),
+            "comment in code block became a heading; html snippet: {}",
+            &result.html[..result.html.len().min(3000)]
+        );
+    }
+
+    #[test]
+    fn renders_fenced_code_blocks() {
+        let src = "```bash\n# development\nnpm install\n```\n";
+        let preprocessed = preprocess_tex_delimiters(&preprocess_math_fences(src));
+        let arena = Arena::new();
+        let options = comrak_options();
+        let root = parse_document(&arena, &preprocessed, &options);
+        let mut html = String::new();
+        MathJaxFormatter::format_document(root, &options, &mut html).unwrap();
+        assert!(
+            html.contains("<pre>"),
+            "expected fenced code block, got: {html}"
+        );
+        assert!(
+            !html.contains("<h1"),
+            "comment should not become a heading, got: {html}"
+        );
+    }
 
     #[test]
     fn renders_math_delimiters() {
