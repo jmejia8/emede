@@ -64,6 +64,11 @@ const PRESETS = {
 };
 
 const FONT_PRESETS = {
+  default: {
+    font_family: '"C059", serif',
+    font_title: '"Cantarell", sans-serif',
+    font_code: DEFAULT_FONT_CODE,
+  },
   literata: {
     font_family: DEFAULT_FONT,
     font_title: "",
