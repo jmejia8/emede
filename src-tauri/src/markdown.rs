@@ -35,9 +35,53 @@ fn strip_bom(s: &str) -> &str {
     s.strip_prefix('\u{FEFF}').unwrap_or(s)
 }
 
-fn split_front_matter(content: &str) -> Option<(&str, &str, &str)> {
+fn skip_leading_front_matter_prefix(content: &str) -> usize {
     let content = strip_bom(content);
     let mut pos = 0;
+    loop {
+        while pos < content.len() {
+            let rest = &content[pos..];
+            if rest.starts_with(' ') || rest.starts_with('\t') {
+                pos += 1;
+                continue;
+            }
+            break;
+        }
+        if pos >= content.len() {
+            return pos;
+        }
+        if content[pos..].starts_with("<!--") {
+            let rest = &content[pos..];
+            let Some(comment_end) = rest.find("-->") else {
+                return pos;
+            };
+            pos += comment_end + 3;
+            continue;
+        }
+        let line_end = content[pos..]
+            .find('\n')
+            .map(|i| pos + i)
+            .unwrap_or(content.len());
+        let line = content[pos..line_end].trim_end().trim_end_matches('\r');
+        if line.is_empty() {
+            pos = if line_end < content.len() {
+                line_end + 1
+            } else {
+                content.len()
+            };
+            continue;
+        }
+        break;
+    }
+    pos
+}
+
+fn split_front_matter(content: &str) -> Option<(&str, &str, &str)> {
+    let content = strip_bom(content);
+    let mut pos = skip_leading_front_matter_prefix(content);
+    if pos >= content.len() {
+        return None;
+    }
     let line_end = content[pos..]
         .find('\n')
         .map(|i| pos + i)
@@ -170,6 +214,70 @@ fn preprocess_math_fences(src: &str) -> String {
     out
 }
 
+fn read_backtick_run(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> String {
+    let mut run = String::new();
+    if chars.peek() == Some(&'`') {
+        run.push(chars.next().unwrap());
+        while chars.peek() == Some(&'`') {
+            run.push(chars.next().unwrap());
+        }
+    }
+    run
+}
+
+fn at_line_start(out: &str) -> bool {
+    out.is_empty() || out.ends_with('\n')
+}
+
+fn try_open_fence(
+    marker: &str,
+    chars: &mut std::iter::Peekable<std::str::Chars<'_>>,
+    out: &mut String,
+) -> bool {
+    if marker.len() < 3 {
+        return false;
+    }
+    let mut info = String::new();
+    while let Some(&next) = chars.peek() {
+        if next == '\n' || next == '\r' {
+            break;
+        }
+        info.push(chars.next().unwrap());
+    }
+    if !matches!(chars.peek(), Some('\n') | Some('\r') | None) {
+        out.push_str(&info);
+        return false;
+    }
+    out.push_str(marker);
+    out.push_str(&info);
+    true
+}
+
+enum FenceCloseResult {
+    Closed(String),
+    NotClosing(String),
+}
+
+fn try_close_fence(
+    chars: &mut std::iter::Peekable<std::str::Chars<'_>>,
+    fence_marker: &str,
+) -> Option<FenceCloseResult> {
+    let mut collected = String::new();
+    while chars.peek() == Some(&'`') {
+        collected.push(chars.next().unwrap());
+    }
+    if collected.len() < fence_marker.len() {
+        return Some(FenceCloseResult::NotClosing(collected));
+    }
+    while matches!(chars.peek(), Some(' ') | Some('\t')) {
+        collected.push(chars.next().unwrap());
+    }
+    if matches!(chars.peek(), Some('\n') | Some('\r') | None) {
+        return Some(FenceCloseResult::Closed(collected));
+    }
+    Some(FenceCloseResult::NotClosing(collected))
+}
+
 /// Convert pandoc-style `\(...\)` / `\[...\]` to Comrak `$...$` / `$$...$$`,
 /// skipping fenced and inline code.
 fn preprocess_tex_delimiters(src: &str) -> String {
@@ -177,84 +285,62 @@ fn preprocess_tex_delimiters(src: &str) -> String {
     let mut chars = src.chars().peekable();
     let mut in_fence = false;
     let mut fence_marker = String::new();
-    let mut inline_code = false;
+    let mut inline_code_marker: Option<String> = None;
 
     while let Some(ch) = chars.next() {
         if in_fence {
             out.push(ch);
             if ch == '\n' {
-                let mut matched = true;
-                let mut closing = String::new();
-                for expected in fence_marker.chars() {
-                    match chars.peek() {
-                        Some(&c) if c == expected => {
-                            chars.next();
-                            closing.push(c);
+                if let Some(result) = try_close_fence(&mut chars, &fence_marker) {
+                    match result {
+                        FenceCloseResult::Closed(closing) => {
+                            out.push_str(&closing);
+                            in_fence = false;
+                            fence_marker.clear();
                         }
-                        _ => {
-                            matched = false;
-                            break;
-                        }
+                        FenceCloseResult::NotClosing(literal) => out.push_str(&literal),
                     }
                 }
-                if matched && !fence_marker.is_empty() {
-                    while matches!(chars.peek(), Some(' ') | Some('\t')) {
-                        closing.push(chars.next().unwrap());
-                    }
-                    if matches!(chars.peek(), Some('\n') | Some('\r') | None) {
-                        out.push_str(&closing);
-                        in_fence = false;
-                        fence_marker.clear();
-                    }
-                }
-            }
-            continue;
-        }
-
-        if inline_code {
-            out.push(ch);
-            if ch == '`' {
-                inline_code = false;
             }
             continue;
         }
 
         if ch == '`' {
-            inline_code = true;
+            let mut run = String::from("`");
+            while chars.peek() == Some(&'`') {
+                run.push(chars.next().unwrap());
+            }
+            if inline_code_marker.is_none() && at_line_start(&out) && try_open_fence(&run, &mut chars, &mut out)
+            {
+                in_fence = true;
+                fence_marker = run;
+                continue;
+            }
+            match inline_code_marker.as_ref() {
+                Some(marker) if marker == &run => inline_code_marker = None,
+                None => inline_code_marker = Some(run.clone()),
+                Some(_) => {}
+            }
+            out.push_str(&run);
+            continue;
+        }
+
+        if inline_code_marker.is_some() {
             out.push(ch);
             continue;
         }
 
         if ch == '\n' {
             out.push('\n');
-            let mut marker = String::new();
-            while chars.peek() == Some(&'`') {
-                chars.next();
-                marker.push('`');
+            let marker = read_backtick_run(&mut chars);
+
+            if marker.len() >= 3 && try_open_fence(&marker, &mut chars, &mut out) {
+                in_fence = true;
+                fence_marker = marker;
+                continue;
             }
 
-            if marker.len() >= 3 {
-                let mut info = String::new();
-                while let Some(&next) = chars.peek() {
-                    if next == '\n' || next == '\r' {
-                        break;
-                    }
-                    info.push(chars.next().unwrap());
-                }
-
-                if matches!(chars.peek(), Some('\n') | Some('\r')) {
-                    in_fence = true;
-                    fence_marker = marker.clone();
-                    out.push_str(&marker);
-                    out.push_str(&info);
-                    continue;
-                }
-
-                out.push_str(&marker);
-                out.push_str(&info);
-            } else {
-                out.push_str(&marker);
-            }
+            out.push_str(&marker);
             continue;
         }
 
@@ -482,6 +568,95 @@ mod tests {
         let src = "---\ntitle: Broken\n\n# Still Works\n";
         let preprocessed = preprocess_front_matter(src);
         assert_eq!(preprocessed, src);
+    }
+
+    #[test]
+    fn preprocess_preserves_fenced_code_at_start() {
+        let src = "```bash\n# development\nnpm install\n```\n";
+        let out = preprocess_tex_delimiters(&preprocess_math_fences(src));
+        assert_eq!(out, src, "preprocessed output drifted");
+    }
+
+    #[test]
+    fn wraps_front_matter_after_html_comment() {
+        let src = "<!-- plan-id -->\n---\ntitle: Plan\n---\n\n# Body\n";
+        let preprocessed = preprocess_front_matter(src);
+        assert!(preprocessed.starts_with("```yaml\n"));
+        assert!(preprocessed.contains("title: Plan"));
+        assert!(preprocessed.contains("# Body\n"));
+    }
+
+    #[test]
+    fn preserves_fenced_code_after_html_block() {
+        let src = "```html\n<span>\\(...\\)</span>\n```\n\n**New listener** in `boot()`:\n\n```javascript\nlisten(\"document-updated\");\n```\n";
+        let preprocessed = preprocess_tex_delimiters(&preprocess_math_fences(src));
+        assert!(preprocessed.contains("```javascript\nlisten(\"document-updated\");\n```"));
+        let arena = Arena::new();
+        let options = comrak_options();
+        let root = parse_document(&arena, &preprocessed, &options);
+        let mut html = String::new();
+        MathJaxFormatter::format_document(root, &options, &mut html).unwrap();
+        assert!(
+            html.contains("listen(&quot;document-updated&quot;)"),
+            "expected javascript code block, got: {html}"
+        );
+        assert!(
+            html.contains("<strong>New listener</strong>"),
+            "expected bold listener heading text, got: {html}"
+        );
+    }
+
+    #[test]
+    fn preserves_inline_code_with_nested_backticks() {
+        let src = "- `extension.math_code = true` (for `` $`...`$ `` and ` ```math ` blocks)\n\n```bash\nnpm test\n```\n";
+        let preprocessed = preprocess_tex_delimiters(&preprocess_math_fences(src));
+        assert!(preprocessed.contains("```bash\nnpm test\n```"));
+        let arena = Arena::new();
+        let options = comrak_options();
+        let root = parse_document(&arena, &preprocessed, &options);
+        let mut html = String::new();
+        MathJaxFormatter::format_document(root, &options, &mut html).unwrap();
+        assert!(
+            html.contains("npm test"),
+            "expected bash code block after inline backtick examples, got: {html}"
+        );
+    }
+
+    #[test]
+    fn plan_preprocess_has_javascript_fence() {
+        let path = "/home/jesus/.cursor/plans/Comrak notify migration-2fd7c3a9.plan.md";
+        if !Path::new(path).exists() {
+            return;
+        }
+        let raw = std::fs::read_to_string(path).unwrap();
+        let preprocessed = preprocess_tex_delimiters(&preprocess_math_fences(&preprocess_front_matter(&raw)));
+        assert!(
+            preprocessed.contains("```javascript\nlisten(\"document-updated\""),
+            "missing javascript fence in preprocessed output around: {}",
+            preprocessed
+                .find("New listener")
+                .map(|idx| &preprocessed[idx..(idx + 250).min(preprocessed.len())])
+                .unwrap_or("New listener section missing")
+        );
+    }
+
+    #[test]
+    fn renders_plan_style_code_blocks() {
+        let path = "/home/jesus/.cursor/plans/Comrak notify migration-2fd7c3a9.plan.md";
+        if !Path::new(path).exists() {
+            return;
+        }
+        let result = render_markdown_inner(path).expect("render plan");
+        assert!(
+            result.html.contains("language-javascript")
+                && result.html.contains("document-updated"),
+            "javascript block missing; html snippet: {}",
+            &result.html[result.html.len().saturating_sub(2000)..]
+        );
+        assert!(
+            result.html.contains("<strong>New listener</strong>"),
+            "expected bold listener heading text"
+        );
     }
 
     #[test]
