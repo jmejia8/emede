@@ -290,22 +290,20 @@ async function boot() {
   wireSettings();
 
   const startupFilePromise = invoke("get_startup_file");
+  const settingsPromise = invoke("get_settings");
 
-  await listen("file-to-open", (event) => {
+  void listen("file-to-open", (event) => {
     if (event.payload) {
       openFile(event.payload);
     }
   });
 
   const startupFile = await startupFilePromise;
-  if (startupFile) {
-    showLoadingState();
-  }
-
-  const settings = await invoke("get_settings");
+  const settings = await settingsPromise;
   applySettings(settings);
 
   if (startupFile) {
+    showLoadingState();
     await openFile(startupFile);
   } else {
     showEmptyState();
