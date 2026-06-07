@@ -2,7 +2,7 @@
   --font-serif: "Literata", "Source Serif 4", "Noto Serif", serif;
   --font-size: 12pt;
   --line-height: 1.75;
-  --reader-margin: 72pt;
+  --reader-margin: 10%;
   --max-width: 65ch;
   --color-fg: #2c2c2c;
   --color-bg: #faf8f5;
@@ -20,11 +20,14 @@
 
 html {
   font-size: 16px;
+  overflow-x: clip;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: clip;
   color: var(--color-fg);
   background: var(--color-bg);
   font-family: var(--font-serif);
@@ -36,8 +39,13 @@ body {
 }
 
 #reader {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
   min-height: 100vh;
-  padding: 3rem var(--reader-margin) 4rem;
+  min-height: 100dvh;
+  padding-block: clamp(1.5rem, 5vh, 4rem);
+  padding-inline: var(--reader-margin);
 }
 
 .prose {
@@ -448,7 +456,7 @@ body:hover .settings-toggle,
 }
 
 .range-value {
-  min-width: 3.5ch;
+  min-width: 4ch;
   text-align: right;
   font-variant-numeric: tabular-nums;
   color: var(--color-muted);
@@ -485,9 +493,3 @@ body:hover .settings-toggle,
   background: color-mix(in srgb, var(--color-fg) 6%, transparent);
 }
 
-@media (max-width: 600px) {
-  #reader {
-    padding-top: 2rem;
-    padding-bottom: 3rem;
-  }
-}

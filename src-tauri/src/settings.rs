@@ -13,7 +13,7 @@ pub struct Settings {
 }
 
 fn default_margin() -> String {
-    "72pt".into()
+    "10%".into()
 }
 
 impl Default for Settings {

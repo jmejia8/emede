@@ -35,34 +35,36 @@ const FONT_GROUPS = [
   },
 ];
 
+const DEFAULT_MARGIN_PERCENT = 10;
+
 const PRESETS = {
   light: {
     font_family: DEFAULT_FONT,
     font_size: "12pt",
     color_fg: "#2c2c2c",
     color_bg: "#faf8f5",
-    margin: "72pt",
+    margin: "10%",
   },
   sepia: {
     font_family: DEFAULT_FONT,
     font_size: "12pt",
     color_fg: "#433422",
     color_bg: "#f4ecd8",
-    margin: "72pt",
+    margin: "10%",
   },
   dark: {
     font_family: DEFAULT_FONT,
     font_size: "12pt",
     color_fg: "#d4d0c8",
     color_bg: "#1a1a1a",
-    margin: "72pt",
+    margin: "10%",
   },
   gruvbox: {
     font_family: DEFAULT_FONT,
     font_size: "12pt",
     color_fg: "#ebdbb2",
     color_bg: "#282828",
-    margin: "72pt",
+    margin: "10%",
   },
 };
 
@@ -110,14 +112,29 @@ function toPt(value, fallback) {
   return Math.round(n);
 }
 
+// Parse margin to an integer percentage, migrating legacy `pt`/`rem` values.
+function toMarginPercent(value, fallback = DEFAULT_MARGIN_PERCENT) {
+  const n = parseFloat(value);
+  if (!Number.isFinite(n)) return fallback;
+  const unit = String(value);
+  if (unit.includes("%")) return clampMarginPercent(n);
+  if (unit.includes("pt")) return clampMarginPercent(n / 7.2);
+  if (unit.includes("rem")) return clampMarginPercent((n * 12) / 7.2);
+  return clampMarginPercent(n);
+}
+
+function clampMarginPercent(value) {
+  return Math.min(25, Math.max(0, Math.round(value)));
+}
+
 function applySettings(settings) {
   currentSettings = settings;
   const sizePt = toPt(settings.font_size, 12);
-  const marginPt = toPt(settings.margin, 72);
+  const marginPercent = toMarginPercent(settings.margin);
 
   document.documentElement.style.setProperty("--font-serif", settings.font_family);
   document.documentElement.style.setProperty("--font-size", `${sizePt}pt`);
-  document.documentElement.style.setProperty("--reader-margin", `${marginPt}pt`);
+  document.documentElement.style.setProperty("--reader-margin", `${marginPercent}%`);
   document.documentElement.style.setProperty("--color-fg", settings.color_fg);
   document.documentElement.style.setProperty("--color-bg", settings.color_bg);
 
@@ -125,8 +142,8 @@ function applySettings(settings) {
   if (!settingFont.value) settingFont.value = DEFAULT_FONT;
   settingSize.value = sizePt;
   settingSizeLabel.textContent = `${sizePt}pt`;
-  settingMargin.value = marginPt;
-  settingMarginLabel.textContent = `${marginPt}pt`;
+  settingMargin.value = marginPercent;
+  settingMarginLabel.textContent = `${marginPercent}%`;
   settingFg.value = settings.color_fg;
   settingBg.value = settings.color_bg;
 }
@@ -137,7 +154,7 @@ function settingsFromForm() {
     font_size: `${Number(settingSize.value)}pt`,
     color_fg: settingFg.value,
     color_bg: settingBg.value,
-    margin: `${Number(settingMargin.value)}pt`,
+    margin: `${Number(settingMargin.value)}%`,
   };
 }
 
@@ -269,7 +286,7 @@ function wireSettings() {
   });
 
   settingMargin.addEventListener("input", () => {
-    settingMarginLabel.textContent = `${Number(settingMargin.value)}pt`;
+    settingMarginLabel.textContent = `${Number(settingMargin.value)}%`;
   });
 
   document.querySelectorAll("[data-preset]").forEach((btn) => {
