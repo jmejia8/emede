@@ -40,32 +40,20 @@ const DEFAULT_MARGIN_PERCENT = 10;
 
 const PRESETS = {
   light: {
-    font_family: DEFAULT_FONT,
-    font_size: "12pt",
     color_fg: "#2c2c2c",
     color_bg: "#faf8f5",
-    margin: "10%",
   },
   sepia: {
-    font_family: DEFAULT_FONT,
-    font_size: "12pt",
     color_fg: "#433422",
     color_bg: "#f4ecd8",
-    margin: "10%",
   },
   dark: {
-    font_family: DEFAULT_FONT,
-    font_size: "12pt",
     color_fg: "#d4d0c8",
     color_bg: "#1a1a1a",
-    margin: "10%",
   },
   gruvbox: {
-    font_family: DEFAULT_FONT,
-    font_size: "12pt",
     color_fg: "#ebdbb2",
     color_bg: "#282828",
-    margin: "10%",
   },
 };
 
@@ -371,8 +359,12 @@ function wireSettings() {
     btn.addEventListener("click", async () => {
       const preset = PRESETS[btn.dataset.preset];
       if (!preset) return;
-      applySettings(preset);
-      await invoke("set_settings", { settings: preset });
+      const settings = {
+        ...(currentSettings || settingsFromForm()),
+        ...preset,
+      };
+      applySettings(settings);
+      await invoke("set_settings", { settings });
     });
   });
 
