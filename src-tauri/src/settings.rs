@@ -14,6 +14,12 @@ pub struct Settings {
     pub color_bg: String,
     #[serde(default = "default_margin")]
     pub margin: String,
+    #[serde(default = "default_window_frame")]
+    pub window_frame: String,
+}
+
+fn default_window_frame() -> String {
+    "emede".into()
 }
 
 fn default_font_inherit() -> String {
@@ -38,6 +44,7 @@ impl Default for Settings {
             color_fg: "#2c2c2c".into(),
             color_bg: "#faf8f5".into(),
             margin: default_margin(),
+            window_frame: default_window_frame(),
         }
     }
 }

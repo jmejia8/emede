@@ -12,6 +12,7 @@
   --color-link: color-mix(in srgb, #3d5a80 72%, var(--color-fg));
   --color-code-bg: color-mix(in srgb, var(--color-fg) 10%, var(--color-bg));
   --color-border: color-mix(in srgb, var(--color-fg) 14%, var(--color-bg));
+  --titlebar-height: 2.25rem;
 }
 
 *,
@@ -460,6 +461,79 @@ body {
 
 .hidden {
   display: none !important;
+}
+
+.titlebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  height: var(--titlebar-height);
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-fg);
+  user-select: none;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.titlebar-drag {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding-inline: 0.75rem;
+}
+
+.titlebar-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-title);
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+.titlebar-controls {
+  display: flex;
+  height: 100%;
+  flex-shrink: 0;
+}
+
+.titlebar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 100%;
+  border: none;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.titlebar-btn:hover {
+  background: color-mix(in srgb, var(--color-fg) 8%, transparent);
+  color: var(--color-fg);
+}
+
+.titlebar-btn-close:hover {
+  background: #c42b1c;
+  color: #fff;
+}
+
+body.frame-system .titlebar {
+  display: none;
+}
+
+body.frame-emede .reader-control {
+  top: calc(var(--titlebar-height) + 1rem);
 }
 
 .reader-control {

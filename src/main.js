@@ -118,6 +118,11 @@ const settingMargin = document.getElementById("setting-margin");
 const settingMarginLabel = document.getElementById("setting-margin-label");
 const settingFg = document.getElementById("setting-fg");
 const settingBg = document.getElementById("setting-bg");
+const settingWindowFrame = document.getElementById("setting-window-frame");
+const titlebarTitle = document.getElementById("titlebar-title");
+const winMinimize = document.getElementById("win-minimize");
+const winMaximize = document.getElementById("win-maximize");
+const winClose = document.getElementById("win-close");
 
 let currentSettings = null;
 let saveTimer = null;
@@ -183,6 +188,47 @@ function clampMarginPercent(value) {
   return Math.min(25, Math.max(0, Math.round(value)));
 }
 
+function normalizeWindowFrame(frame) {
+  return frame === "system" ? "system" : "emede";
+}
+
+async function applyWindowFrame(frame) {
+  const mode = normalizeWindowFrame(frame);
+  document.body.classList.remove("frame-emede", "frame-system");
+  document.body.classList.add(mode === "system" ? "frame-system" : "frame-emede");
+
+  try {
+    await getCurrentWindow().setDecorations(mode === "system");
+  } catch (err) {
+    console.warn("Failed to set window decorations", err);
+  }
+}
+
+async function setWindowTitle(text) {
+  titlebarTitle.textContent = text;
+  try {
+    await getCurrentWindow().setTitle(text);
+  } catch (err) {
+    console.warn("Failed to set window title", err);
+  }
+}
+
+function formatWindowTitle(label) {
+  const trimmed = label?.trim();
+  if (!trimmed) return "emede";
+  return `${trimmed} — emede`;
+}
+
+async function syncMaximizeButton() {
+  try {
+    const maximized = await getCurrentWindow().isMaximized();
+    winMaximize.setAttribute("aria-label", maximized ? "Restore" : "Maximize");
+    winMaximize.textContent = maximized ? "\u2750" : "\u25A1";
+  } catch (err) {
+    console.warn("Failed to read maximize state", err);
+  }
+}
+
 function applySettings(settings) {
   currentSettings = settings;
   const sizePt = toPt(settings.font_size, 12);
@@ -208,6 +254,8 @@ function applySettings(settings) {
   settingMarginLabel.textContent = `${marginPercent}%`;
   settingFg.value = settings.color_fg;
   settingBg.value = settings.color_bg;
+  settingWindowFrame.value = normalizeWindowFrame(settings.window_frame);
+  void applyWindowFrame(settings.window_frame);
 }
 
 function settingsFromForm() {
@@ -219,6 +267,7 @@ function settingsFromForm() {
     color_fg: settingFg.value,
     color_bg: settingBg.value,
     margin: `${Number(settingMargin.value)}%`,
+    window_frame: settingWindowFrame.value,
   };
 }
 
@@ -332,8 +381,7 @@ async function applyDocument(result, { initial = false, reload = false, openToke
   missingStateEl.classList.add("hidden");
   errorStateEl.classList.add("hidden");
 
-  const win = getCurrentWindow();
-  await win.setTitle(`${result.title} — emede`);
+  await setWindowTitle(formatWindowTitle(result.title));
 
   if (!reload) {
     requestAnimationFrame(() => {
@@ -530,8 +578,7 @@ async function openFile(path) {
 
     showMissingFile(String(err));
 
-    const win = getCurrentWindow();
-    await win.setTitle("emede");
+    await setWindowTitle("emede");
   }
 }
 
@@ -597,6 +644,27 @@ function wireExternalLinks() {
   });
 }
 
+function wireTitlebar() {
+  const win = getCurrentWindow();
+
+  winMinimize.addEventListener("click", () => {
+    void win.minimize();
+  });
+
+  winMaximize.addEventListener("click", () => {
+    void win.toggleMaximize().then(syncMaximizeButton);
+  });
+
+  winClose.addEventListener("click", () => {
+    void win.close();
+  });
+
+  void win.onResized(() => {
+    void syncMaximizeButton();
+  });
+  void syncMaximizeButton();
+}
+
 function wireSettings() {
   settingsToggle.addEventListener("click", () => toggleSettings(true));
   settingsClose.addEventListener("click", () => toggleSettings(false));
@@ -609,6 +677,7 @@ function wireSettings() {
     settingMargin,
     settingFg,
     settingBg,
+    settingWindowFrame,
   ].forEach((el) => {
     el.addEventListener("input", scheduleSave);
   });
@@ -663,6 +732,7 @@ async function boot() {
   populateFontOptions();
   wireExternalLinks();
   wireToc();
+  wireTitlebar();
   wireSettings();
 
   const startupFilePromise = invoke("get_startup_file");

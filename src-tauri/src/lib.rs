@@ -68,6 +68,8 @@ pub fn run() {
 
             if let Some(window) = app.get_webview_window("main") {
                 let settings = settings::load_settings();
+                let use_system_frame = settings.window_frame == "system";
+                let _ = window.set_decorations(use_system_frame);
                 if let Some(color) = hex_to_color(&settings.color_bg) {
                     let _ = window.set_background_color(Some(color));
                 }

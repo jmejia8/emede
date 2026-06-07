@@ -37,6 +37,17 @@
     <script type="module" src="main.js" defer></script>
   </head>
   <body>
+    <header id="titlebar" class="titlebar">
+      <div class="titlebar-drag" data-tauri-drag-region>
+        <span id="titlebar-title" class="titlebar-title">emede</span>
+      </div>
+      <div class="titlebar-controls">
+        <button type="button" id="win-minimize" class="titlebar-btn" aria-label="Minimize">&minus;</button>
+        <button type="button" id="win-maximize" class="titlebar-btn" aria-label="Maximize">&#9633;</button>
+        <button type="button" id="win-close" class="titlebar-btn titlebar-btn-close" aria-label="Close">&times;</button>
+      </div>
+    </header>
+
     <button id="toc-toggle" class="reader-control toc-toggle hidden" title="Contents" aria-label="Table of contents">
       &#9776;
     </button>
@@ -101,6 +112,14 @@
             <input id="setting-margin" type="range" min="0" max="25" step="1" />
             <span id="setting-margin-label" class="range-value"></span>
           </span>
+        </label>
+
+        <label>
+          Window frame
+          <select id="setting-window-frame">
+            <option value="emede">emede (custom)</option>
+            <option value="system">System (native)</option>
+          </select>
         </label>
 
         <label>
