@@ -57,6 +57,13 @@ const PRESETS = {
     color_bg: "#1a1a1a",
     margin: "72pt",
   },
+  gruvbox: {
+    font_family: DEFAULT_FONT,
+    font_size: "12pt",
+    color_fg: "#ebdbb2",
+    color_bg: "#282828",
+    margin: "72pt",
+  },
 };
 
 const contentEl = document.getElementById("content");
