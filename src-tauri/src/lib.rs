@@ -96,6 +96,21 @@ fn hex_to_color(hex: &str) -> Option<Color> {
     Some(Color(r, g, b, 255))
 }
 
+fn file_arg_path(value: &serde_json::Value) -> Option<String> {
+    match value {
+        serde_json::Value::String(path) if !path.is_empty() => Some(path.clone()),
+        serde_json::Value::Array(parts) => {
+            let segments: Vec<&str> = parts.iter().filter_map(|part| part.as_str()).collect();
+            if segments.is_empty() {
+                None
+            } else {
+                Some(segments.join(" "))
+            }
+        }
+        _ => None,
+    }
+}
+
 fn capture_cli_file(app: &AppHandle) {
     let matches = match app.cli().matches() {
         Ok(m) => m,
@@ -106,8 +121,7 @@ fn capture_cli_file(app: &AppHandle) {
     };
 
     if let Some(arg) = matches.args.get("file") {
-        if let Some(path) = arg.value.as_str() {
-            let path = path.to_string();
+        if let Some(path) = file_arg_path(&arg.value) {
             if let Ok(mut slot) = app.state::<StartupFile>().0.lock() {
                 *slot = Some(path.clone());
             }
