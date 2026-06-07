@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@tauri-apps/plugin-cli": "^2",
+    "@tauri-apps/plugin-opener": "^2.5.4",
     "mathjax": "^4"
   }
 }

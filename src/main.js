@@ -1,6 +1,7 @@
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 const { getCurrentWindow } = window.__TAURI__.window;
+const { openUrl } = window.__TAURI__.opener;
 
 const DEFAULT_FONT = '"Literata", "Source Serif 4", "Noto Serif", serif';
 
@@ -295,6 +296,30 @@ function toggleSettings(open) {
   settingsPanel.setAttribute("aria-hidden", String(!show));
 }
 
+function wireExternalLinks() {
+  contentEl.addEventListener("click", (event) => {
+    const anchor = event.target.closest("a[href]");
+    if (!anchor || !contentEl.contains(anchor)) return;
+
+    const href = anchor.getAttribute("href");
+    if (!href || href.startsWith("#")) return;
+
+    let url;
+    try {
+      url = new URL(href, window.location.href);
+    } catch {
+      return;
+    }
+
+    if (!["http:", "https:", "mailto:", "tel:"].includes(url.protocol)) return;
+
+    event.preventDefault();
+    void openUrl(url.href).catch((err) => {
+      console.warn("Failed to open link in system browser", err);
+    });
+  });
+}
+
 function wireSettings() {
   settingsToggle.addEventListener("click", () => toggleSettings(true));
   settingsClose.addEventListener("click", () => toggleSettings(false));
@@ -333,6 +358,7 @@ function wireSettings() {
 
 async function boot() {
   populateFontOptions();
+  wireExternalLinks();
   wireSettings();
 
   const startupFilePromise = invoke("get_startup_file");

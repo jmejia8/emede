@@ -2,15 +2,60 @@ mod pandoc;
 mod settings;
 
 use std::sync::Mutex;
-use tauri::{AppHandle, Emitter, Manager, window::Color};
+use tauri::{AppHandle, Emitter, Manager, Url, window::Color};
 use tauri_plugin_cli::CliExt;
+use tauri_plugin_opener::OpenerExt;
 
 struct StartupFile(Mutex<Option<String>>);
+
+fn is_app_url(url: &Url) -> bool {
+    match url.scheme() {
+        "tauri" => true,
+        "http" | "https" => matches!(
+            url.host_str(),
+            Some("tauri.localhost") | Some("localhost") | Some("127.0.0.1")
+        ),
+        _ => false,
+    }
+}
+
+fn is_app_entry(url: &Url) -> bool {
+    matches!(url.path(), "" | "/" | "/index.html")
+}
+
+fn handle_navigation(app: &AppHandle, url: &Url) -> bool {
+    let scheme = url.scheme();
+
+    if matches!(scheme, "http" | "https" | "mailto" | "tel") {
+        if is_app_url(url) {
+            return is_app_entry(url);
+        }
+        let _ = app.opener().open_url(url.as_str(), None::<&str>);
+        return false;
+    }
+
+    if scheme == "file" {
+        let _ = app.opener().open_path(url.path(), None::<&str>);
+        return false;
+    }
+
+    if is_app_url(url) {
+        return is_app_entry(url);
+    }
+
+    scheme == "tauri" || scheme == "data"
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_cli::init())
+        .plugin(tauri_plugin_opener::init())
+        .plugin(
+            tauri::plugin::Builder::<tauri::Wry, ()>::new("external-links")
+                .on_navigation(|webview, url| handle_navigation(webview.app_handle(), url))
+                .build(),
+        )
         .manage(StartupFile(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             pandoc::render_markdown,
