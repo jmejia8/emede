@@ -1,10 +1,9 @@
 # emede
 
-Immersive, read-only markdown viewer powered by [Tauri](https://tauri.app), [pandoc](https://pandoc.org), and bundled [MathJax](https://www.mathjax.org).
+Immersive, read-only markdown viewer powered by [Tauri](https://tauri.app), [Comrak](https://github.com/kivikakk/comrak), and bundled [MathJax](https://www.mathjax.org).
 
 ## Requirements
 
-- [pandoc](https://pandoc.org) on `PATH` (e.g. `pacman -S pandoc`)
 - Rust toolchain and Node.js (for building)
 
 ## Usage
@@ -28,11 +27,18 @@ emede notes/lecture.md
 ## Features
 
 - Read-only rendering — no editor, distraction-free layout
-- Pandoc converts markdown to HTML (with LaTeX math)
+- In-process Comrak markdown-to-HTML conversion (no external tools)
+- Live reload when an external editor saves the open file
 - Bundled MathJax for offline math rendering
 - Configurable font, text color, and background
-- Presets: Light, Sepia, Dark
+- Presets: Light, Sepia, Dark, Gruvbox
 - Settings stored in `~/.config/emede/settings.json`
+
+## Math syntax
+
+- Inline: `$...$` or `\(...\)`
+- Display: `$$...$$` or `\[...\]`
+- Fenced: ` ```math ` code blocks
 
 ## Settings
 

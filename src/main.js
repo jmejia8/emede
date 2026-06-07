@@ -206,20 +206,76 @@ function showError(message) {
   errorStateEl.classList.remove("hidden");
 }
 
+async function waitForMathJax() {
+  if (window.MathJax?.typesetPromise) return;
+
+  await new Promise((resolve) => {
+    const deadline = Date.now() + 5000;
+    const tick = () => {
+      if (window.MathJax?.typesetPromise) {
+        resolve();
+        return;
+      }
+      if (Date.now() > deadline) {
+        console.warn("MathJax did not load in time");
+        resolve();
+        return;
+      }
+      requestAnimationFrame(tick);
+    };
+    tick();
+  });
+}
+
 async function typesetMath() {
-  if (!window.MathJax) return;
+  await waitForMathJax();
+  if (!window.MathJax?.typesetPromise) return;
 
-  if (window.MathJax.startup?.promise) {
-    await window.MathJax.startup.promise;
+  try {
+    await Promise.race([
+      window.MathJax.typesetPromise([contentEl]),
+      wait(12000),
+    ]);
+  } catch (err) {
+    console.warn("MathJax typesetting failed", err);
   }
+}
 
-  if (typeof window.MathJax.typesetClear === "function") {
+function scheduleTypesetMath() {
+  void typesetMath();
+}
+
+async function applyDocument(result, { initial = false, reload = false, openToken } = {}) {
+  if (openToken !== undefined && openToken !== activeOpenToken) return;
+
+  const scrollTop = reload ? document.documentElement.scrollTop : 0;
+
+  if (window.MathJax?.typesetClear) {
     window.MathJax.typesetClear([contentEl]);
   }
 
-  if (typeof window.MathJax.typesetPromise === "function") {
-    await window.MathJax.typesetPromise([contentEl]);
+  contentEl.innerHTML = result.html;
+  emptyStateEl.classList.add("hidden");
+  missingStateEl.classList.add("hidden");
+  errorStateEl.classList.add("hidden");
+
+  const win = getCurrentWindow();
+  await win.setTitle(`${result.title} — emede`);
+
+  if (!reload) {
+    requestAnimationFrame(() => {
+      if (openToken === undefined || openToken === activeOpenToken) {
+        loadingStateEl.classList.add("hidden");
+        contentEl.classList.add("visible");
+      }
+    });
   }
+
+  if (reload) {
+    document.documentElement.scrollTop = scrollTop;
+  }
+
+  scheduleTypesetMath();
 }
 
 function wait(ms) {
@@ -248,38 +304,13 @@ async function revealWindow() {
   }
 }
 
-async function prepareDocument() {
-  const mathReady = typesetMath().catch((err) => {
-    console.warn("MathJax typesetting failed", err);
-  });
-
-  // MathJax can occasionally stall during startup; never let it trap the reader behind the loader.
-  await Promise.race([mathReady, wait(1200)]);
-}
-
 async function openFile(path) {
   const openToken = ++activeOpenToken;
   showLoadingState();
 
   try {
     const result = await invoke("render_markdown", { path });
-    if (openToken !== activeOpenToken) return;
-
-    contentEl.innerHTML = result.html;
-    emptyStateEl.classList.add("hidden");
-    missingStateEl.classList.add("hidden");
-    errorStateEl.classList.add("hidden");
-
-    const win = getCurrentWindow();
-    await win.setTitle(`${result.title} — emede`);
-
-    await prepareDocument();
-    requestAnimationFrame(() => {
-      if (openToken === activeOpenToken) {
-        loadingStateEl.classList.add("hidden");
-        contentEl.classList.add("visible");
-      }
-    });
+    await applyDocument(result, { initial: true, openToken });
   } catch (err) {
     if (openToken !== activeOpenToken) return;
 
@@ -367,6 +398,19 @@ async function boot() {
   void listen("file-to-open", (event) => {
     if (event.payload) {
       openFile(event.payload);
+    }
+  });
+
+  void listen("document-updated", (event) => {
+    if (event.payload) {
+      void applyDocument(event.payload, { reload: true });
+    }
+  });
+
+  void listen("document-error", (event) => {
+    if (event.payload) {
+      showMissingFile(String(event.payload));
+      void getCurrentWindow().setTitle("emede");
     }
   });
 

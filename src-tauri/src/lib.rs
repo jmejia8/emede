@@ -1,10 +1,12 @@
-mod pandoc;
+mod markdown;
 mod settings;
+mod watcher;
 
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, Url, window::Color};
 use tauri_plugin_cli::CliExt;
 use tauri_plugin_opener::OpenerExt;
+use watcher::WatcherState;
 
 struct StartupFile(Mutex<Option<String>>);
 
@@ -57,8 +59,9 @@ pub fn run() {
                 .build(),
         )
         .manage(StartupFile(Mutex::new(None)))
+        .manage(WatcherState(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
-            pandoc::render_markdown,
+            markdown::render_markdown,
             settings::get_settings,
             settings::set_settings,
             get_startup_file,
