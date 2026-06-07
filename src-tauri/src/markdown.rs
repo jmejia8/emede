@@ -31,8 +31,86 @@ fn title_from_path(path: &Path) -> String {
         .to_string()
 }
 
+fn strip_bom(s: &str) -> &str {
+    s.strip_prefix('\u{FEFF}').unwrap_or(s)
+}
+
+fn split_front_matter(content: &str) -> Option<(&str, &str, &str)> {
+    let content = strip_bom(content);
+    let mut pos = 0;
+    let line_end = content[pos..]
+        .find('\n')
+        .map(|i| pos + i)
+        .unwrap_or(content.len());
+    let first_line = content[pos..line_end].trim_end().trim_end_matches('\r');
+    let (delimiter, lang) = match first_line {
+        "---" => ("---", "yaml"),
+        "~~~" => ("~~~", ""),
+        _ => return None,
+    };
+    if line_end >= content.len() {
+        return None;
+    }
+    pos = line_end + 1;
+
+    let preamble_start = pos;
+    let mut preamble_end = None;
+    let mut body_start = None;
+
+    while pos < content.len() {
+        let line_end = content[pos..]
+            .find('\n')
+            .map(|i| pos + i)
+            .unwrap_or(content.len());
+        let line = content[pos..line_end].trim_end().trim_end_matches('\r');
+        if line == delimiter {
+            preamble_end = Some(pos);
+            body_start = Some(if line_end < content.len() {
+                line_end + 1
+            } else {
+                content.len()
+            });
+            break;
+        }
+        pos = if line_end < content.len() {
+            line_end + 1
+        } else {
+            content.len()
+        };
+    }
+
+    let preamble_end = preamble_end?;
+    let body_start = body_start?;
+    let preamble = content[preamble_start..preamble_end].trim_end();
+    let body = &content[body_start..];
+
+    Some((preamble, lang, body))
+}
+
+fn title_from_front_matter(content: &str) -> Option<String> {
+    let (inner, _, _) = split_front_matter(content)?;
+    for line in inner.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix("title:") {
+            let title = rest.trim().trim_matches('"').trim_matches('\'');
+            if !title.is_empty() {
+                return Some(title.to_string());
+            }
+        }
+    }
+    None
+}
+
 fn title_from_markdown(content: &str, path: &Path) -> String {
-    for line in content.lines() {
+    if let Some(title) = title_from_front_matter(content) {
+        return title;
+    }
+
+    let body = split_front_matter(content)
+        .map(|(_, _, body)| body)
+        .unwrap_or(content);
+
+    for line in body.lines() {
         let trimmed = line.trim();
         if let Some(rest) = trimmed.strip_prefix("# ") {
             if !rest.is_empty() {
@@ -42,6 +120,21 @@ fn title_from_markdown(content: &str, path: &Path) -> String {
     }
 
     title_from_path(path)
+}
+
+/// Wrap YAML/metadata preamble (`---` or `~~~`) in a fenced code block.
+fn preprocess_front_matter(src: &str) -> String {
+    let Some((preamble, lang, body)) = split_front_matter(src) else {
+        return src.to_string();
+    };
+
+    let mut out = String::from("```");
+    out.push_str(lang);
+    out.push('\n');
+    out.push_str(preamble);
+    out.push_str("\n```\n\n");
+    out.push_str(body);
+    out
 }
 
 fn html_escape(s: &str) -> String {
@@ -257,7 +350,8 @@ pub fn render_markdown_inner(path: &str) -> Result<RenderResult, String> {
     }
 
     let raw = std::fs::read_to_string(&resolved).map_err(|e| e.to_string())?;
-    let with_fences = preprocess_math_fences(&raw);
+    let with_front_matter = preprocess_front_matter(&raw);
+    let with_fences = preprocess_math_fences(&with_front_matter);
     let preprocessed = preprocess_tex_delimiters(&with_fences);
     let title = title_from_markdown(&raw, &resolved);
 
@@ -340,6 +434,54 @@ mod tests {
             html.contains("id=\"section-two\""),
             "expected section-two heading id, got: {html}"
         );
+    }
+
+    #[test]
+    fn wraps_yaml_front_matter_in_code_block() {
+        let src = "---\ntitle: My Doc\nauthor: Alice\n---\n\n# Hello\n";
+        let preprocessed = preprocess_tex_delimiters(&preprocess_math_fences(&preprocess_front_matter(
+            src,
+        )));
+        let arena = Arena::new();
+        let options = comrak_options();
+        let root = parse_document(&arena, &preprocessed, &options);
+        let mut html = String::new();
+        MathJaxFormatter::format_document(root, &options, &mut html).unwrap();
+        assert!(
+            html.contains("title: My Doc") && html.contains("<pre>"),
+            "expected preamble content in code block, got: {html}"
+        );
+        assert!(
+            !html.contains("<hr"),
+            "preamble delimiters should not become horizontal rules, got: {html}"
+        );
+        assert!(html.contains("Hello</h1>"));
+    }
+
+    #[test]
+    fn wraps_tilde_front_matter_in_code_block() {
+        let src = "~~~\ntitle = \"My Doc\"\n~~~\n\nBody text.\n";
+        let preprocessed = preprocess_front_matter(src);
+        assert!(preprocessed.starts_with("```\n"));
+        assert!(preprocessed.contains("title = \"My Doc\""));
+        assert!(preprocessed.contains("Body text."));
+        assert!(!preprocessed.starts_with("~~~"));
+    }
+
+    #[test]
+    fn title_from_yaml_front_matter() {
+        let src = "---\ntitle: Lecture Notes\n---\n\n# Ignored Heading\n";
+        assert_eq!(
+            title_from_markdown(src, Path::new("notes.md")),
+            "Lecture Notes"
+        );
+    }
+
+    #[test]
+    fn ignores_unclosed_front_matter() {
+        let src = "---\ntitle: Broken\n\n# Still Works\n";
+        let preprocessed = preprocess_front_matter(src);
+        assert_eq!(preprocessed, src);
     }
 
     #[test]
