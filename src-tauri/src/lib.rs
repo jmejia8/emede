@@ -2,7 +2,7 @@ mod pandoc;
 mod settings;
 
 use std::sync::Mutex;
-use tauri::{AppHandle, Emitter, Manager, webview::PageLoadEvent, window::Color};
+use tauri::{AppHandle, Emitter, Manager, window::Color};
 use tauri_plugin_cli::CliExt;
 
 struct StartupFile(Mutex<Option<String>>);
@@ -29,13 +29,6 @@ pub fn run() {
             }
 
             Ok(())
-        })
-        .on_page_load(|webview, payload| {
-            if payload.event() == PageLoadEvent::Finished {
-                if let Some(window) = webview.get_webview_window(webview.label()) {
-                    let _ = window.show();
-                }
-            }
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

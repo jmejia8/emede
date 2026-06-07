@@ -225,6 +225,28 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function nextFrame() {
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
+
+let windowRevealed = false;
+
+// Reveal the window only once the theme is applied and the first state is painted,
+// so the user never sees the default light background flash before content.
+async function revealWindow() {
+  if (windowRevealed) return;
+  windowRevealed = true;
+
+  // Wait for a painted frame, but never block forever if frames are throttled while hidden.
+  await Promise.race([nextFrame().then(nextFrame), wait(150)]);
+
+  try {
+    await getCurrentWindow().show();
+  } catch (err) {
+    console.warn("Failed to show window", err);
+  }
+}
+
 async function prepareDocument() {
   const mathReady = typesetMath().catch((err) => {
     console.warn("MathJax typesetting failed", err);
@@ -322,15 +344,26 @@ async function boot() {
     }
   });
 
-  const startupFile = await startupFilePromise;
-  const settings = await settingsPromise;
-  applySettings(settings);
+  let startupFile = null;
+  try {
+    startupFile = await startupFilePromise;
+    const settings = await settingsPromise;
+    applySettings(settings);
+  } catch (err) {
+    console.warn("Startup initialization failed", err);
+  }
 
+  // Paint the first meaningful frame (loader or empty state) before the window appears.
   if (startupFile) {
     showLoadingState();
-    await openFile(startupFile);
   } else {
     showEmptyState();
+  }
+
+  await revealWindow();
+
+  if (startupFile) {
+    await openFile(startupFile);
   }
 }
 
