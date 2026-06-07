@@ -5,6 +5,7 @@ use comrak::{parse_document, Arena, Options};
 use serde::Serialize;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 #[derive(Serialize, Clone)]
 pub struct RenderResult {
@@ -22,6 +23,87 @@ fn resolve_path(path: &str) -> PathBuf {
             .unwrap_or_else(|_| PathBuf::from("."))
             .join(p)
     }
+}
+
+fn is_remote_url(src: &str) -> bool {
+    let lower = src.to_ascii_lowercase();
+    lower.starts_with("http://")
+        || lower.starts_with("https://")
+        || lower.starts_with("mailto:")
+        || lower.starts_with("tel:")
+        || lower.starts_with("data:")
+}
+
+/// Resolve an image `src` relative to the directory containing `markdown_path`.
+fn resolve_asset_path(markdown_path: &Path, src: &str) -> String {
+    if is_remote_url(src) {
+        return src.to_string();
+    }
+
+    let src_path = PathBuf::from(src);
+    let resolved = if src_path.is_absolute() {
+        src_path
+    } else {
+        markdown_path
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .join(src_path)
+    };
+
+    resolved
+        .canonicalize()
+        .unwrap_or(resolved)
+        .to_string_lossy()
+        .into_owned()
+}
+
+fn rewrite_img_tag_src(tag: &str, markdown_path: &Path) -> String {
+    let lower = tag.to_ascii_lowercase();
+    let Some(src_idx) = lower.find("src=") else {
+        return tag.to_string();
+    };
+
+    let after_src = &tag[src_idx + 4..];
+    let (quote, rest) = if let Some(rest) = after_src.strip_prefix('"') {
+        ('"', rest)
+    } else if let Some(rest) = after_src.strip_prefix('\'') {
+        ('\'', rest)
+    } else {
+        return tag.to_string();
+    };
+
+    let Some(end_quote) = rest.find(quote) else {
+        return tag.to_string();
+    };
+
+    let raw_src = &rest[..end_quote];
+    let resolved = resolve_asset_path(markdown_path, raw_src);
+    let prefix = &tag[..src_idx + 4 + 1];
+    format!("{prefix}{resolved}{quote}{}", &rest[end_quote + 1..])
+}
+
+/// Rewrite `src` attributes on embedded `<img>` tags in raw HTML blocks.
+fn rewrite_html_image_srcs(html: &str, markdown_path: &Path) -> String {
+    let mut result = String::with_capacity(html.len());
+    let lower_html = html.to_ascii_lowercase();
+    let mut search_from = 0;
+
+    while let Some(rel) = lower_html[search_from..].find("<img") {
+        let start = search_from + rel;
+        let Some(tag_end_rel) = html[start..].find('>') else {
+            result.push_str(&html[search_from..]);
+            return result;
+        };
+        let end = start + tag_end_rel + 1;
+
+        result.push_str(&html[search_from..start]);
+        let tag = &html[start..end];
+        result.push_str(&rewrite_img_tag_src(tag, markdown_path));
+        search_from = end;
+    }
+
+    result.push_str(&html[search_from..]);
+    result
 }
 
 fn title_from_path(path: &Path) -> String {
@@ -399,7 +481,8 @@ fn preprocess_tex_delimiters(src: &str) -> String {
     out
 }
 
-fn comrak_options() -> Options<'static> {
+fn comrak_options_for(markdown_path: &Path) -> Options<'static> {
+    let doc_path = markdown_path.to_path_buf();
     let mut options = Options::default();
     options.extension.math_dollars = true;
     options.extension.math_code = true;
@@ -410,6 +493,9 @@ fn comrak_options() -> Options<'static> {
     options.render.tasklist_classes = true;
     options.render.r#unsafe = true;
     options.extension.header_id_prefix = Some(String::new());
+    options.extension.image_url_rewriter = Some(Arc::new(move |url: &str| {
+        resolve_asset_path(&doc_path, url)
+    }));
     options
 }
 
@@ -444,12 +530,13 @@ pub fn render_markdown_inner(path: &str) -> Result<RenderResult, String> {
     let title = title_from_markdown(&raw, &resolved);
 
     let arena = Arena::new();
-    let options = comrak_options();
+    let options = comrak_options_for(&resolved);
     let root = parse_document(&arena, &preprocessed, &options);
 
     let mut html = String::new();
     MathJaxFormatter::format_document(root, &options, &mut html)
         .map_err(|e| format!("Failed to render markdown: {e}"))?;
+    let html = rewrite_html_image_srcs(&html, &resolved);
 
     Ok(RenderResult {
         html,
@@ -492,8 +579,9 @@ mod tests {
             "embedded HTML was stripped from README, got: {}",
             &result.html[..result.html.len().min(2000)]
         );
+        let expected_img = resolve_asset_path(Path::new(path), "src-tauri/icons/128x128.png");
         assert!(
-            result.html.contains(r#"<img src="src-tauri/icons/128x128.png""#)
+            result.html.contains(&format!(r#"<img src="{expected_img}""#))
                 && result.html.contains(r#"<h1 align="center">emede</h1>"#),
             "expected README header image and title HTML, got: {}",
             &result.html[..result.html.len().min(2000)]
@@ -505,7 +593,7 @@ mod tests {
         let src = "```bash\n# development\nnpm install\n```\n";
         let preprocessed = preprocess_tex_delimiters(&preprocess_math_fences(src));
         let arena = Arena::new();
-        let options = comrak_options();
+        let options = comrak_options_for(Path::new("test.md"));
         let root = parse_document(&arena, &preprocessed, &options);
         let mut html = String::new();
         MathJaxFormatter::format_document(root, &options, &mut html).unwrap();
@@ -525,7 +613,7 @@ mod tests {
             let src = "# Hello World\n\n## Section Two\n";
             let preprocessed = preprocess_tex_delimiters(&preprocess_math_fences(src));
             let arena = Arena::new();
-            let options = comrak_options();
+            let options = comrak_options_for(Path::new("test.md"));
             let root = parse_document(&arena, &preprocessed, &options);
             let mut html = String::new();
             MathJaxFormatter::format_document(root, &options, &mut html).unwrap();
@@ -548,7 +636,7 @@ mod tests {
             src,
         )));
         let arena = Arena::new();
-        let options = comrak_options();
+        let options = comrak_options_for(Path::new("test.md"));
         let root = parse_document(&arena, &preprocessed, &options);
         let mut html = String::new();
         MathJaxFormatter::format_document(root, &options, &mut html).unwrap();
@@ -611,7 +699,7 @@ mod tests {
         let preprocessed = preprocess_tex_delimiters(&preprocess_math_fences(src));
         assert!(preprocessed.contains("```javascript\nlisten(\"document-updated\");\n```"));
         let arena = Arena::new();
-        let options = comrak_options();
+        let options = comrak_options_for(Path::new("test.md"));
         let root = parse_document(&arena, &preprocessed, &options);
         let mut html = String::new();
         MathJaxFormatter::format_document(root, &options, &mut html).unwrap();
@@ -631,7 +719,7 @@ mod tests {
         let preprocessed = preprocess_tex_delimiters(&preprocess_math_fences(src));
         assert!(preprocessed.contains("```bash\nnpm test\n```"));
         let arena = Arena::new();
-        let options = comrak_options();
+        let options = comrak_options_for(Path::new("test.md"));
         let root = parse_document(&arena, &preprocessed, &options);
         let mut html = String::new();
         MathJaxFormatter::format_document(root, &options, &mut html).unwrap();
@@ -684,7 +772,7 @@ mod tests {
             let src = "Inline $E=mc^2$ and display:\n\n$$x^2$$\n";
             let preprocessed = preprocess_tex_delimiters(&preprocess_math_fences(src));
             let arena = Arena::new();
-            let options = comrak_options();
+            let options = comrak_options_for(Path::new("test.md"));
             let root = parse_document(&arena, &preprocessed, &options);
             let mut html = String::new();
             MathJaxFormatter::format_document(root, &options, &mut html).unwrap();
@@ -695,11 +783,83 @@ mod tests {
     }
 
     #[test]
+    fn resolves_markdown_image_paths_relative_to_file() {
+        let html = {
+            let src = "![logo](images/logo.png)\n";
+            let preprocessed = preprocess_tex_delimiters(&preprocess_math_fences(src));
+            let arena = Arena::new();
+            let options = comrak_options_for(Path::new("/home/asdf/foo/file.md"));
+            let root = parse_document(&arena, &preprocessed, &options);
+            let mut html = String::new();
+            MathJaxFormatter::format_document(root, &options, &mut html).unwrap();
+            html
+        };
+        assert!(
+            html.contains(r#"<img src="/home/asdf/foo/images/logo.png""#),
+            "expected markdown image resolved relative to file, got: {html}"
+        );
+    }
+
+    #[test]
+    fn resolves_embedded_html_image_paths_relative_to_file() {
+        let html = rewrite_html_image_srcs(
+            r#"<img src="images/image.png" alt="test">"#,
+            Path::new("/home/asdf/foo/file.md"),
+        );
+        assert_eq!(
+            html,
+            r#"<img src="/home/asdf/foo/images/image.png" alt="test">"#
+        );
+    }
+
+    #[test]
+    fn resolves_raw_html_images_but_not_html_code_blocks() {
+        let dir = std::env::temp_dir().join("emede-img-test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let md_path = dir.join("file.md");
+        std::fs::write(
+            &md_path,
+            "Raw HTML:\n\n<img src=\"images/raw.png\" alt=\"raw\">\n\n```html\n<img src=\"images/code.png\" alt=\"code\">\n```\n",
+        )
+        .expect("write temp markdown");
+
+        let result = render_markdown_inner(md_path.to_str().unwrap()).expect("render temp markdown");
+        let expected_raw = resolve_asset_path(&md_path, "images/raw.png");
+
+        assert!(
+            result.html.contains(&format!(r#"<img src="{expected_raw}""#)),
+            "expected raw HTML image to resolve, got: {}",
+            &result.html[..result.html.len().min(2000)]
+        );
+        assert!(
+            result.html.contains(r#"<img src="images/code.png""#)
+                || result.html.contains("&lt;img src=&quot;images/code.png&quot;"),
+            "expected fenced html code block to keep literal image path, got: {}",
+            &result.html[..result.html.len().min(2000)]
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn leaves_remote_image_urls_unchanged() {
+        let html = rewrite_html_image_srcs(
+            r#"<img src="https://example.com/pic.png" alt="remote">"#,
+            Path::new("/home/asdf/foo/file.md"),
+        );
+        assert_eq!(
+            html,
+            r#"<img src="https://example.com/pic.png" alt="remote">"#
+        );
+    }
+
+    #[test]
     fn renders_tasklist_with_classes() {
         let html = {
             let src = "- [ ] Todo\n- [x] Done\n";
             let arena = Arena::new();
-            let options = comrak_options();
+            let options = comrak_options_for(Path::new("test.md"));
             let root = parse_document(&arena, src, &options);
             let mut html = String::new();
             MathJaxFormatter::format_document(root, &options, &mut html).unwrap();

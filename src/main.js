@@ -4,7 +4,7 @@ import {
   renderKeybindingHelp,
 } from "./keybindings.js";
 
-const { invoke } = window.__TAURI__.core;
+const { invoke, convertFileSrc } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 const { getCurrentWindow } = window.__TAURI__.window;
 const { openUrl } = window.__TAURI__.opener;
@@ -379,6 +379,18 @@ function scheduleTypesetMath() {
   void typesetMath();
 }
 
+function isRemoteUrl(src) {
+  return /^(?:https?:|data:|mailto:|tel:)/i.test(src);
+}
+
+function rewriteLocalImageSrcs(root) {
+  for (const img of root.querySelectorAll("img[src]")) {
+    const src = img.getAttribute("src");
+    if (!src || isRemoteUrl(src)) continue;
+    img.src = convertFileSrc(src);
+  }
+}
+
 async function applyDocument(result, { initial = false, reload = false, openToken } = {}) {
   if (openToken !== undefined && openToken !== activeOpenToken) return;
 
@@ -389,6 +401,7 @@ async function applyDocument(result, { initial = false, reload = false, openToke
   }
 
   contentEl.innerHTML = result.html;
+  rewriteLocalImageSrcs(contentEl);
   emptyStateEl.classList.add("hidden");
   missingStateEl.classList.add("hidden");
   errorStateEl.classList.add("hidden");
