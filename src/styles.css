@@ -83,6 +83,10 @@ body {
   margin: 2em 0 0.75em;
 }
 
+body.frame-emede .prose :is(h1, h2, h3, h4, h5, h6) {
+  scroll-margin-top: calc(var(--titlebar-height) + 0.75rem);
+}
+
 .prose h1 {
   font-size: 2em;
   margin-top: 0;
