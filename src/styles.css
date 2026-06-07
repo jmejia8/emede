@@ -6,10 +6,10 @@
   --max-width: 65ch;
   --color-fg: #2c2c2c;
   --color-bg: #faf8f5;
-  --color-muted: #6b6b6b;
-  --color-link: #3d5a80;
-  --color-code-bg: #f0ebe3;
-  --color-border: #e8e2d9;
+  --color-muted: color-mix(in srgb, var(--color-fg) 52%, transparent);
+  --color-link: color-mix(in srgb, #3d5a80 72%, var(--color-fg));
+  --color-code-bg: color-mix(in srgb, var(--color-fg) 10%, var(--color-bg));
+  --color-border: color-mix(in srgb, var(--color-fg) 14%, var(--color-bg));
 }
 
 *,
