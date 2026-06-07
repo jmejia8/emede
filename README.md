@@ -26,13 +26,17 @@ emede notes/lecture.md
 
 ## Features
 
-- Read-only rendering — no editor, distraction-free layout
+- Read-only rendering — no editor, distraction-free reader layout
 - In-process Comrak markdown-to-HTML conversion (no external tools)
-- Live reload when an external editor saves the open file
+- GFM-style extensions: tables, task lists, strikethrough, autolinks
+- YAML/front matter shown as a fenced block; document title from `title:` or first `#` heading
 - Bundled MathJax for offline math rendering
-- Configurable font, text color, and background
-- Presets: Light, Sepia, Dark, Gruvbox
-- Settings stored in `~/.config/emede/settings.json`
+- Table of contents for documents with headings (expand/collapse sections)
+- External links open in the system browser
+- Custom titlebar or native system window decorations
+- Typography: separate body, title, and code fonts; font size and side margins
+- Color presets: Light, Sepia, Dark, Gruvbox; font presets for common type stacks
+- Settings persisted in `~/.config/emede/settings.json`
 
 ## Math syntax
 
