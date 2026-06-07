@@ -407,6 +407,7 @@ fn comrak_options() -> Options<'static> {
     options.extension.strikethrough = true;
     options.extension.autolink = true;
     options.extension.tasklist = true;
+    options.render.tasklist_classes = true;
     options.extension.header_id_prefix = Some(String::new());
     options
 }
@@ -673,5 +674,34 @@ mod tests {
         };
         assert!(html.contains("$E=mc^2$"));
         assert!(html.contains("$$\nx^2\n$$"));
+    }
+
+    #[test]
+    fn renders_tasklist_with_classes() {
+        let html = {
+            let src = "- [ ] Todo\n- [x] Done\n";
+            let arena = Arena::new();
+            let options = comrak_options();
+            let root = parse_document(&arena, src, &options);
+            let mut html = String::new();
+            MathJaxFormatter::format_document(root, &options, &mut html).unwrap();
+            html
+        };
+        assert!(
+            html.contains("class=\"contains-task-list\""),
+            "expected task list class on ul, got: {html}"
+        );
+        assert!(
+            html.contains("class=\"task-list-item\""),
+            "expected task list item class, got: {html}"
+        );
+        assert!(
+            html.contains("class=\"task-list-item-checkbox\""),
+            "expected task list checkbox class, got: {html}"
+        );
+        assert!(
+            html.contains("checked=\"\""),
+            "expected checked attribute on completed item, got: {html}"
+        );
     }
 }
