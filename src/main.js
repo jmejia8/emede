@@ -105,6 +105,7 @@ const FONT_PRESETS = {
 const contentEl = document.getElementById("content");
 const emptyStateEl = document.getElementById("empty-state");
 const errorStateEl = document.getElementById("error-state");
+const errorMessageEl = document.getElementById("error-message");
 const loadingStateEl = document.getElementById("loading-state");
 const missingStateEl = document.getElementById("missing-state");
 const missingMessageEl = document.getElementById("missing-message");
@@ -334,7 +335,7 @@ function showError(message) {
   loadingStateEl.classList.add("hidden");
   emptyStateEl.classList.add("hidden");
   missingStateEl.classList.add("hidden");
-  errorStateEl.textContent = message;
+  errorMessageEl.textContent = message;
   errorStateEl.classList.remove("hidden");
   clearToc();
 }

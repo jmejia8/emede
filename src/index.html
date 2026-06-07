@@ -72,6 +72,26 @@
 
       <div class="settings-body">
         <label>
+          Text color
+          <input id="setting-fg" type="color" />
+        </label>
+
+        <label>
+          Background
+          <input id="setting-bg" type="color" />
+        </label>
+
+        <div class="presets">
+          <span>Color presets</span>
+          <div class="preset-buttons">
+            <button type="button" data-preset="light">Light</button>
+            <button type="button" data-preset="sepia">Sepia</button>
+            <button type="button" data-preset="dark">Dark</button>
+            <button type="button" data-preset="gruvbox">Gruvbox</button>
+          </div>
+        </div>
+
+        <label>
           Body font
           <select id="setting-font"></select>
         </label>
@@ -132,35 +152,16 @@
           </select>
         </label>
 
-        <div class="keybindings-help">
-          <span>Shortcuts</span>
+        <details class="keybindings-help">
+          <summary>Shortcuts</summary>
           <div id="keybindings-help" class="keybindings-help-body"></div>
-        </div>
-
-        <label>
-          Text color
-          <input id="setting-fg" type="color" />
-        </label>
-
-        <label>
-          Background
-          <input id="setting-bg" type="color" />
-        </label>
-
-        <div class="presets">
-          <span>Color presets</span>
-          <div class="preset-buttons">
-            <button type="button" data-preset="light">Light</button>
-            <button type="button" data-preset="sepia">Sepia</button>
-            <button type="button" data-preset="dark">Dark</button>
-            <button type="button" data-preset="gruvbox">Gruvbox</button>
-          </div>
-        </div>
+        </details>
       </div>
     </aside>
 
     <main id="reader">
       <div id="loading-state" class="loading-state hidden" role="status" aria-live="polite" aria-label="Loading document">
+        <img src="assets/logo.png" alt="" class="state-logo" width="128" height="128" />
         <article class="dummy-document" aria-hidden="true">
           <div class="dummy-kicker"></div>
           <div class="dummy-title"></div>
@@ -178,17 +179,22 @@
       </div>
       <article id="content" class="prose"></article>
       <div id="empty-state" class="empty-state hidden">
+        <img src="assets/logo.png" alt="" class="state-logo" width="128" height="128" />
         <p class="empty-title">emede</p>
         <p class="empty-hint">Pass a markdown file:</p>
         <code>emede document.md</code>
       </div>
       <div id="missing-state" class="missing-state hidden">
+        <img src="assets/logo.png" alt="" class="state-logo" width="128" height="128" />
         <p class="missing-eyebrow">Document not found</p>
         <h1>That file is not on this shelf.</h1>
         <p id="missing-message" class="missing-message"></p>
         <p class="missing-hint">Check the path and try opening it again.</p>
       </div>
-      <div id="error-state" class="error-state hidden"></div>
+      <div id="error-state" class="error-state hidden">
+        <img src="assets/logo.png" alt="" class="state-logo" width="128" height="128" />
+        <p id="error-message" class="error-message"></p>
+      </div>
     </main>
   </body>
 </html>
