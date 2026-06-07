@@ -318,6 +318,73 @@ function ensureHeadingIds() {
   }
 }
 
+function buildTocTree(headings) {
+  const root = { level: 0, children: [] };
+  const stack = [root];
+
+  for (const heading of headings) {
+    const level = Number(heading.tagName[1]);
+    const node = {
+      level,
+      id: heading.id,
+      text: heading.textContent.trim(),
+      children: [],
+    };
+
+    while (stack.length > 1 && stack[stack.length - 1].level >= level) {
+      stack.pop();
+    }
+
+    stack[stack.length - 1].children.push(node);
+    stack.push(node);
+  }
+
+  return root.children;
+}
+
+function renderTocNode(node) {
+  const li = document.createElement("li");
+  li.className = `toc-item toc-level-${node.level}`;
+
+  const hasChildren = node.children.length > 0;
+  const row = document.createElement("div");
+  row.className = "toc-row";
+
+  if (hasChildren) {
+    const expand = document.createElement("button");
+    expand.type = "button";
+    expand.className = "toc-expand";
+    expand.setAttribute("aria-expanded", "true");
+    expand.setAttribute("aria-label", `Collapse “${node.text}”`);
+    expand.innerHTML = '<span class="toc-chevron" aria-hidden="true"></span>';
+    row.appendChild(expand);
+  } else {
+    const spacer = document.createElement("span");
+    spacer.className = "toc-spacer";
+    spacer.setAttribute("aria-hidden", "true");
+    row.appendChild(spacer);
+  }
+
+  const link = document.createElement("a");
+  link.href = `#${node.id}`;
+  link.textContent = node.text;
+  link.className = "toc-link";
+  row.appendChild(link);
+
+  li.appendChild(row);
+
+  if (hasChildren) {
+    const childList = document.createElement("ul");
+    childList.className = "toc-children";
+    for (const child of node.children) {
+      childList.appendChild(renderTocNode(child));
+    }
+    li.appendChild(childList);
+  }
+
+  return li;
+}
+
 function buildToc() {
   tocList.replaceChildren();
   ensureHeadingIds();
@@ -329,18 +396,29 @@ function buildToc() {
     return;
   }
 
-  const fragment = document.createDocumentFragment();
-  for (const heading of headings) {
-    const level = Number(heading.tagName[1]);
-    const link = document.createElement("a");
-    link.href = `#${heading.id}`;
-    link.textContent = heading.textContent.trim();
-    link.className = `toc-level-${level}`;
-    fragment.appendChild(link);
+  const tree = document.createElement("ul");
+  tree.className = "toc-tree";
+  for (const node of buildTocTree(headings)) {
+    tree.appendChild(renderTocNode(node));
   }
 
-  tocList.appendChild(fragment);
+  tocList.appendChild(tree);
   tocToggle.classList.remove("hidden");
+}
+
+function toggleTocSection(button) {
+  const item = button.closest(".toc-item");
+  const children = item?.querySelector(":scope > .toc-children");
+  if (!item || !children) return;
+
+  const expanded = button.getAttribute("aria-expanded") === "true";
+  const next = !expanded;
+  const label = item.querySelector(".toc-link")?.textContent?.trim() ?? "section";
+
+  button.setAttribute("aria-expanded", String(next));
+  button.setAttribute("aria-label", `${next ? "Collapse" : "Expand"} “${label}”`);
+  item.classList.toggle("toc-collapsed", !next);
+  children.hidden = !next;
 }
 
 function wait(ms) {
@@ -403,14 +481,22 @@ function wireToc() {
   tocClose.addEventListener("click", () => toggleToc(false));
 
   tocList.addEventListener("click", (event) => {
-    const link = event.target.closest("a[href^='#']");
+    const expandBtn = event.target.closest(".toc-expand");
+    if (expandBtn && tocList.contains(expandBtn)) {
+      event.preventDefault();
+      toggleTocSection(expandBtn);
+      return;
+    }
+
+    const link = event.target.closest("a.toc-link");
     if (!link || !tocList.contains(link)) return;
 
     event.preventDefault();
     const id = link.getAttribute("href").slice(1);
     const heading = contentEl.querySelector(`#${CSS.escape(id)}`);
     if (heading) {
-      heading.scrollIntoView({ behavior: "smooth", block: "start" });
+      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      heading.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
     }
     toggleToc(false);
   });
