@@ -63,6 +63,10 @@ const errorStateEl = document.getElementById("error-state");
 const loadingStateEl = document.getElementById("loading-state");
 const missingStateEl = document.getElementById("missing-state");
 const missingMessageEl = document.getElementById("missing-message");
+const tocPanel = document.getElementById("toc-panel");
+const tocToggle = document.getElementById("toc-toggle");
+const tocClose = document.getElementById("toc-close");
+const tocList = document.getElementById("toc-list");
 const settingsPanel = document.getElementById("settings-panel");
 const settingsToggle = document.getElementById("settings-toggle");
 const settingsClose = document.getElementById("settings-close");
@@ -156,6 +160,12 @@ function scheduleSave() {
   }, 250);
 }
 
+function clearToc() {
+  tocList.replaceChildren();
+  tocToggle.classList.add("hidden");
+  toggleToc(false);
+}
+
 function showEmptyState() {
   contentEl.innerHTML = "";
   contentEl.classList.remove("visible");
@@ -163,6 +173,7 @@ function showEmptyState() {
   emptyStateEl.classList.remove("hidden");
   missingStateEl.classList.add("hidden");
   errorStateEl.classList.add("hidden");
+  clearToc();
 }
 
 function showLoadingState() {
@@ -172,6 +183,7 @@ function showLoadingState() {
   emptyStateEl.classList.add("hidden");
   missingStateEl.classList.add("hidden");
   errorStateEl.classList.add("hidden");
+  clearToc();
 }
 
 function showMissingFile(message) {
@@ -182,6 +194,7 @@ function showMissingFile(message) {
   missingMessageEl.textContent = message.replace(/^File not found:\s*/, "");
   missingStateEl.classList.remove("hidden");
   errorStateEl.classList.add("hidden");
+  clearToc();
 }
 
 function showError(message) {
@@ -192,6 +205,7 @@ function showError(message) {
   missingStateEl.classList.add("hidden");
   errorStateEl.textContent = message;
   errorStateEl.classList.remove("hidden");
+  clearToc();
 }
 
 async function waitForMathJax() {
@@ -263,7 +277,70 @@ async function applyDocument(result, { initial = false, reload = false, openToke
     document.documentElement.scrollTop = scrollTop;
   }
 
+  buildToc();
   scheduleTypesetMath();
+}
+
+function slugify(text) {
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s-]/gu, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function headingId(heading) {
+  if (heading.id) return heading.id;
+  const anchor = heading.querySelector("a.anchor[id]");
+  if (anchor?.id) return anchor.id;
+  return "";
+}
+
+function ensureHeadingIds() {
+  const used = new Set();
+  for (const heading of contentEl.querySelectorAll("h1, h2, h3, h4")) {
+    let id = headingId(heading);
+    if (!id) {
+      id = slugify(heading.textContent);
+    }
+    if (!id) continue;
+
+    let unique = id;
+    let suffix = 2;
+    while (used.has(unique)) {
+      unique = `${id}-${suffix}`;
+      suffix += 1;
+    }
+    used.add(unique);
+    heading.id = unique;
+  }
+}
+
+function buildToc() {
+  tocList.replaceChildren();
+  ensureHeadingIds();
+
+  const headings = contentEl.querySelectorAll("h1, h2, h3, h4");
+  if (headings.length === 0) {
+    tocToggle.classList.add("hidden");
+    toggleToc(false);
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  for (const heading of headings) {
+    const level = Number(heading.tagName[1]);
+    const link = document.createElement("a");
+    link.href = `#${heading.id}`;
+    link.textContent = heading.textContent.trim();
+    link.className = `toc-level-${level}`;
+    fragment.appendChild(link);
+  }
+
+  tocList.appendChild(fragment);
+  tocToggle.classList.remove("hidden");
 }
 
 function wait(ms) {
@@ -313,6 +390,30 @@ function toggleSettings(open) {
   const show = open ?? settingsPanel.classList.contains("hidden");
   settingsPanel.classList.toggle("hidden", !show);
   settingsPanel.setAttribute("aria-hidden", String(!show));
+}
+
+function toggleToc(open) {
+  const show = open ?? tocPanel.classList.contains("hidden");
+  tocPanel.classList.toggle("hidden", !show);
+  tocPanel.setAttribute("aria-hidden", String(!show));
+}
+
+function wireToc() {
+  tocToggle.addEventListener("click", () => toggleToc(true));
+  tocClose.addEventListener("click", () => toggleToc(false));
+
+  tocList.addEventListener("click", (event) => {
+    const link = event.target.closest("a[href^='#']");
+    if (!link || !tocList.contains(link)) return;
+
+    event.preventDefault();
+    const id = link.getAttribute("href").slice(1);
+    const heading = contentEl.querySelector(`#${CSS.escape(id)}`);
+    if (heading) {
+      heading.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    toggleToc(false);
+  });
 }
 
 function wireExternalLinks() {
@@ -373,8 +474,9 @@ function wireSettings() {
       e.preventDefault();
       toggleSettings(true);
     }
-    if (e.key === "Escape" && !settingsPanel.classList.contains("hidden")) {
-      toggleSettings(false);
+    if (e.key === "Escape") {
+      if (!settingsPanel.classList.contains("hidden")) toggleSettings(false);
+      if (!tocPanel.classList.contains("hidden")) toggleToc(false);
     }
   });
 }
@@ -382,6 +484,7 @@ function wireSettings() {
 async function boot() {
   populateFontOptions();
   wireExternalLinks();
+  wireToc();
   wireSettings();
 
   const startupFilePromise = invoke("get_startup_file");

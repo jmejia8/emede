@@ -37,7 +37,19 @@
     <script type="module" src="main.js" defer></script>
   </head>
   <body>
-    <button id="settings-toggle" class="settings-toggle" title="Settings (Ctrl+,)" aria-label="Settings">
+    <button id="toc-toggle" class="reader-control toc-toggle hidden" title="Contents" aria-label="Table of contents">
+      &#9776;
+    </button>
+
+    <aside id="toc-panel" class="toc-panel hidden" aria-hidden="true">
+      <header class="toc-header">
+        <h2>Contents</h2>
+        <button id="toc-close" class="toc-close" aria-label="Close contents">&times;</button>
+      </header>
+      <nav id="toc-list" class="toc-body" aria-label="Table of contents"></nav>
+    </aside>
+
+    <button id="settings-toggle" class="reader-control settings-toggle" title="Settings (Ctrl+,)" aria-label="Settings">
       &#9881;
     </button>
 

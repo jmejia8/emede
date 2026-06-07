@@ -228,6 +228,7 @@ fn comrak_options() -> Options<'static> {
     options.extension.strikethrough = true;
     options.extension.autolink = true;
     options.extension.tasklist = true;
+    options.extension.header_id_prefix = Some(String::new());
     options
 }
 
@@ -316,6 +317,28 @@ mod tests {
         assert!(
             !html.contains("<h1"),
             "comment should not become a heading, got: {html}"
+        );
+    }
+
+    #[test]
+    fn renders_heading_ids() {
+        let html = {
+            let src = "# Hello World\n\n## Section Two\n";
+            let preprocessed = preprocess_tex_delimiters(&preprocess_math_fences(src));
+            let arena = Arena::new();
+            let options = comrak_options();
+            let root = parse_document(&arena, &preprocessed, &options);
+            let mut html = String::new();
+            MathJaxFormatter::format_document(root, &options, &mut html).unwrap();
+            html
+        };
+        assert!(
+            html.contains("id=\"hello-world\""),
+            "expected hello-world heading id, got: {html}"
+        );
+        assert!(
+            html.contains("id=\"section-two\""),
+            "expected section-two heading id, got: {html}"
         );
     }
 
