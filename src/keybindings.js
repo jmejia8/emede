@@ -1,3 +1,5 @@
+import { getScrollRoot, getScrollViewportHeight } from "./scroll.js";
+
 const KEYBINDING_MODES = new Set(["default", "vim", "emacs", "common"]);
 
 export const KEYBINDING_HELP = {
@@ -65,25 +67,26 @@ function lineHeightPx() {
 }
 
 function scrollByLines(lines) {
-  document.documentElement.scrollBy({
+  getScrollRoot().scrollBy({
     top: lines * lineHeightPx(),
     behavior: "auto",
   });
 }
 
 function scrollByViewport(fraction) {
-  document.documentElement.scrollBy({
-    top: window.innerHeight * fraction,
+  getScrollRoot().scrollBy({
+    top: getScrollViewportHeight() * fraction,
     behavior: "auto",
   });
 }
 
 function scrollToTop() {
-  document.documentElement.scrollTop = 0;
+  getScrollRoot().scrollTop = 0;
 }
 
 function scrollToBottom() {
-  document.documentElement.scrollTop = document.documentElement.scrollHeight;
+  const root = getScrollRoot();
+  root.scrollTop = root.scrollHeight;
 }
 
 function handleAppShortcuts(event, actions) {

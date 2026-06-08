@@ -3,6 +3,7 @@ import {
   normalizeKeybindingMode,
   renderKeybindingHelp,
 } from "./keybindings.js";
+import { getScrollRoot } from "./scroll.js";
 
 const { invoke, convertFileSrc } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
@@ -394,7 +395,8 @@ function rewriteLocalImageSrcs(root) {
 async function applyDocument(result, { initial = false, reload = false, openToken } = {}) {
   if (openToken !== undefined && openToken !== activeOpenToken) return;
 
-  const scrollTop = reload ? document.documentElement.scrollTop : 0;
+  const scrollRoot = getScrollRoot();
+  const scrollTop = reload ? scrollRoot.scrollTop : 0;
 
   if (window.MathJax?.typesetClear) {
     window.MathJax.typesetClear([contentEl]);
@@ -418,7 +420,7 @@ async function applyDocument(result, { initial = false, reload = false, openToke
   }
 
   if (reload) {
-    document.documentElement.scrollTop = scrollTop;
+    scrollRoot.scrollTop = scrollTop;
   }
 
   buildToc();
