@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "tauri": "tauri",
-    "postinstall": "mkdir -p src/vendor/mathjax && cp node_modules/mathjax/tex-chtml.js src/vendor/mathjax/"
+    "postinstall": "mkdir -p src/vendor/mathjax/mathjax-newcm-font && cp node_modules/mathjax/tex-chtml.js src/vendor/mathjax/ && cp node_modules/@mathjax/mathjax-newcm-font/chtml.js src/vendor/mathjax/mathjax-newcm-font/ && cp -r node_modules/@mathjax/mathjax-newcm-font/chtml src/vendor/mathjax/mathjax-newcm-font/"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2"
