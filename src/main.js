@@ -768,9 +768,11 @@ function wireSettings() {
     if (settingGpu.checked === initialGpuAccel) return;
 
     await window.__TAURI__.dialog.message(
-      "GPU acceleration change requires a restart to take effect. Please restart emede.",
+      "GPU acceleration change requires a restart to take effect. The application will now restart.",
       { title: "emede", kind: "info" },
     );
+
+    invoke("restart_app");
   });
 
   settingSize.addEventListener("input", () => {

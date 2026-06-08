@@ -84,6 +84,7 @@ pub fn run() {
             settings::get_settings,
             settings::set_settings,
             get_startup_file,
+            restart_app,
         ])
         .setup(|app| {
             capture_cli_file(app.handle());
@@ -106,6 +107,17 @@ pub fn run() {
 #[tauri::command]
 fn get_startup_file(state: tauri::State<StartupFile>) -> Option<String> {
     state.0.lock().ok()?.clone()
+}
+
+#[tauri::command]
+fn restart_app() {
+    let exe = std::env::current_exe().expect("failed to get current exe path");
+    let args: Vec<String> = std::env::args().collect();
+    std::process::Command::new(exe)
+        .args(args.iter().skip(1))
+        .spawn()
+        .expect("failed to restart app");
+    std::process::exit(0);
 }
 
 fn hex_to_color(hex: &str) -> Option<Color> {
