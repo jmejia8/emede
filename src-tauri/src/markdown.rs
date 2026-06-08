@@ -106,6 +106,20 @@ fn rewrite_html_image_srcs(html: &str, markdown_path: &Path) -> String {
     result
 }
 
+/// Sanitize rendered HTML to neutralize XSS from untrusted markdown
+/// (scripts, event handlers, `javascript:` URLs) while preserving the
+/// structural markup the reader relies on (heading ids for the TOC,
+/// `language-*` code classes, task-list checkboxes, image alignment).
+fn sanitize_html(html: &str) -> String {
+    ammonia::Builder::default()
+        .add_tags(["input"])
+        .add_generic_attributes(["class", "id", "align"])
+        .add_tag_attributes("input", ["type", "checked", "disabled"])
+        .url_relative(ammonia::UrlRelative::PassThrough)
+        .clean(html)
+        .to_string()
+}
+
 fn title_from_path(path: &Path) -> String {
     path.file_stem()
         .and_then(|s| s.to_str())
@@ -539,6 +553,7 @@ pub fn render_markdown_inner(path: &str) -> Result<RenderResult, String> {
     MathJaxFormatter::format_document(root, &options, &mut html)
         .map_err(|e| format!("Failed to render markdown: {e}"))?;
     let html = rewrite_html_image_srcs(&html, &resolved);
+    let html = sanitize_html(&html);
 
     Ok(RenderResult {
         html,
@@ -735,11 +750,7 @@ mod tests {
 
     #[test]
     fn plan_preprocess_has_javascript_fence() {
-        let path = "/home/jesus/.cursor/plans/Comrak notify migration-2fd7c3a9.plan.md";
-        if !Path::new(path).exists() {
-            return;
-        }
-        let raw = std::fs::read_to_string(path).unwrap();
+        let raw = "**New listener** in `boot()`:\n\n```javascript\nlisten(\"document-updated\", (event) => applyDocument(event.payload, { reload: true }));\n```\n";
         let preprocessed =
             preprocess_tex_delimiters(&preprocess_math_fences(&preprocess_front_matter(&raw)));
         assert!(
@@ -754,11 +765,18 @@ mod tests {
 
     #[test]
     fn renders_plan_style_code_blocks() {
-        let path = "/home/jesus/.cursor/plans/Comrak notify migration-2fd7c3a9.plan.md";
-        if !Path::new(path).exists() {
-            return;
-        }
-        let result = render_markdown_inner(path).expect("render plan");
+        let dir = std::env::temp_dir().join("emede-plan-test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let md_path = dir.join("plan.md");
+        std::fs::write(
+            &md_path,
+            "**New listener** in `boot()`:\n\n```javascript\nlisten(\"document-updated\", (event) => applyDocument(event.payload, { reload: true }));\n```\n",
+        )
+        .expect("write temp markdown");
+
+        let result =
+            render_markdown_inner(md_path.to_str().unwrap()).expect("render plan");
         assert!(
             result.html.contains("language-javascript") && result.html.contains("document-updated"),
             "javascript block missing; html snippet: {}",
@@ -768,6 +786,8 @@ mod tests {
             result.html.contains("<strong>New listener</strong>"),
             "expected bold listener heading text"
         );
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -840,11 +860,10 @@ mod tests {
             &result.html[..result.html.len().min(2000)]
         );
         assert!(
-            result.html.contains(r#"<img src="images/code.png""#)
-                || result
-                    .html
-                    .contains("&lt;img src=&quot;images/code.png&quot;"),
-            "expected fenced html code block to keep literal image path, got: {}",
+            result.html.contains("images/code.png")
+                && result.html.contains("&lt;img src=")
+                && !result.html.contains(r#"<img src="images/code.png""#),
+            "expected fenced html code block to keep image path as escaped literal text, got: {}",
             &result.html[..result.html.len().min(2000)]
         );
 
@@ -860,6 +879,32 @@ mod tests {
         assert_eq!(
             html,
             r#"<img src="https://example.com/pic.png" alt="remote">"#
+        );
+    }
+
+    #[test]
+    fn sanitizes_dangerous_html() {
+        let dirty = r#"<p>hello</p><script>alert(1)</script><img src="x" onerror="alert(2)"><a href="javascript:alert(3)">link</a>"#;
+        let clean = sanitize_html(dirty);
+        assert!(clean.contains("<p>hello</p>"), "kept benign content");
+        assert!(!clean.contains("<script"), "script tag stripped: {clean}");
+        assert!(!clean.contains("onerror"), "event handler stripped: {clean}");
+        assert!(!clean.contains("javascript:"), "js scheme stripped: {clean}");
+    }
+
+    #[test]
+    fn sanitize_preserves_structural_markup() {
+        let dirty = r#"<h1 id="title" align="center">T</h1><pre><code class="language-rust">fn main(){}</code></pre><ul class="contains-task-list"><li class="task-list-item"><input type="checkbox" disabled="" checked="" class="task-list-item-checkbox">done</li></ul>"#;
+        let clean = sanitize_html(dirty);
+        assert!(clean.contains(r#"id="title""#), "heading id kept: {clean}");
+        assert!(clean.contains(r#"align="center""#), "align kept: {clean}");
+        assert!(
+            clean.contains("language-rust"),
+            "code language class kept: {clean}"
+        );
+        assert!(
+            clean.contains("task-list-item-checkbox") && clean.contains("checked"),
+            "task list checkbox kept: {clean}"
         );
     }
 
