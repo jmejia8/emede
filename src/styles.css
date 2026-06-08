@@ -24,6 +24,7 @@
 html {
   font-size: 16px;
   overflow-x: clip;
+  color-scheme: light;
 }
 
 body {
@@ -874,7 +875,13 @@ body:has(.settings-panel:not(.hidden)) .settings-toggle {
   padding: 0.5rem 0.65rem;
   border: 1px solid var(--color-border);
   border-radius: 6px;
-  background: color-mix(in srgb, var(--color-bg) 90%, var(--color-fg));
+  background-color: color-mix(in srgb, var(--color-bg) 90%, var(--color-fg));
+  color: var(--color-fg);
+  color-scheme: inherit;
+}
+
+.settings-body select option {
+  background-color: var(--color-bg);
   color: var(--color-fg);
 }
 
