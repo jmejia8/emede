@@ -61,6 +61,7 @@ pub fn run() {
         )
         .plugin(tauri_plugin_cli::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri::plugin::Builder::<tauri::Wry, ()>::new("external-links")
                 .on_navigation(|webview, url| handle_navigation(webview.app_handle(), url))

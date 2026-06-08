@@ -14,6 +14,7 @@
     "core:window:allow-close",
     "cli:default",
     "opener:default",
+    "dialog:default",
     "window-state:default"
   ]
 }

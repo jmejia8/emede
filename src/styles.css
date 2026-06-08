@@ -348,6 +348,72 @@ body.frame-emede .prose :is(h1, h2, h3, h4, h5, h6) {
   font-size: 0.95rem;
 }
 
+.empty-or {
+  margin: 1.25rem 0 0.75rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--color-muted);
+  position: relative;
+}
+
+.open-file-btn {
+  display: inline-block;
+  margin: 0;
+  padding: 0.75rem 2.75rem;
+  border: 1px solid var(--color-fg);
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-fg);
+  font-family: sans-serif;
+  font-size: 0.9rem;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  position: relative;
+  transition:
+    background-color 0.22s ease,
+    color 0.22s ease,
+    transform 0.22s ease,
+    box-shadow 0.22s ease;
+}
+
+.open-file-btn::before {
+  content: "";
+  position: absolute;
+  top: -0.5rem;
+  left: 10%;
+  right: 10%;
+  height: 1px;
+  background: var(--color-muted);
+  opacity: 0.4;
+  transition: opacity 0.22s ease;
+}
+
+.open-file-btn:hover,
+.open-file-btn:focus-visible {
+  background: var(--color-fg);
+  color: var(--color-bg);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--color-fg) 18%, transparent);
+}
+
+.open-file-btn:hover::before,
+.open-file-btn:focus-visible::before {
+  opacity: 0.8;
+}
+
+.open-file-btn:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+.open-file-btn:focus-visible {
+  outline: 2px solid var(--color-link);
+  outline-offset: 2px;
+}
+
 .loading-state {
   position: relative;
   padding-top: 8vh;

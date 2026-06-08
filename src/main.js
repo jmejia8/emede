@@ -136,6 +136,7 @@ const titlebarTitle = document.getElementById("titlebar-title");
 const winMinimize = document.getElementById("win-minimize");
 const winMaximize = document.getElementById("win-maximize");
 const winClose = document.getElementById("win-close");
+const openFileBtn = document.getElementById("open-file-btn");
 
 let currentSettings = null;
 let saveTimer = null;
@@ -625,6 +626,22 @@ async function openFile(path) {
   }
 }
 
+async function handlePickAndOpenFile() {
+  try {
+    const selected = await invoke("plugin:dialog|open", {
+      options: {
+        multiple: false,
+        filters: [{ name: "Markdown", extensions: ["md"] }],
+      },
+    });
+    if (selected) {
+      await openFile(selected);
+    }
+  } catch (err) {
+    console.warn("Failed to open file dialog", err);
+  }
+}
+
 function toggleSettings(open) {
   const show = open ?? settingsPanel.classList.contains("hidden");
   settingsPanel.classList.toggle("hidden", !show);
@@ -801,6 +818,10 @@ async function boot() {
   wireTitlebar();
   wireSettings();
   wireKeybindings();
+
+  openFileBtn.addEventListener("click", () => {
+    void handlePickAndOpenFile();
+  });
 
   const startupFilePromise = invoke("get_startup_file");
   const settingsPromise = invoke("get_settings");
