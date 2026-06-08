@@ -18,6 +18,8 @@ pub struct Settings {
     pub window_frame: String,
     #[serde(default = "default_keybindings")]
     pub keybindings: String,
+    #[serde(default = "default_gpu_acceleration")]
+    pub gpu_acceleration: bool,
 }
 
 fn default_window_frame() -> String {
@@ -26,6 +28,10 @@ fn default_window_frame() -> String {
 
 fn default_keybindings() -> String {
     "default".into()
+}
+
+fn default_gpu_acceleration() -> bool {
+    false
 }
 
 fn default_font_inherit() -> String {
@@ -52,6 +58,7 @@ impl Default for Settings {
             margin: default_margin(),
             window_frame: default_window_frame(),
             keybindings: default_keybindings(),
+            gpu_acceleration: default_gpu_acceleration(),
         }
     }
 }

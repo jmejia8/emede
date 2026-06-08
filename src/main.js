@@ -131,6 +131,7 @@ const settingFg = document.getElementById("setting-fg");
 const settingBg = document.getElementById("setting-bg");
 const settingWindowFrame = document.getElementById("setting-window-frame");
 const settingKeybindings = document.getElementById("setting-keybindings");
+const settingGpu = document.getElementById("setting-gpu");
 const keybindingsHelp = document.getElementById("keybindings-help");
 const titlebarTitle = document.getElementById("titlebar-title");
 const winMinimize = document.getElementById("win-minimize");
@@ -139,6 +140,7 @@ const winClose = document.getElementById("win-close");
 const openFileBtn = document.getElementById("open-file-btn");
 
 let currentSettings = null;
+let initialGpuAccel = null;
 let saveTimer = null;
 let activeOpenToken = 0;
 
@@ -284,6 +286,7 @@ function applySettings(settings) {
   settingWindowFrame.value = normalizeWindowFrame(settings.window_frame);
   settingKeybindings.value = normalizeKeybindingMode(settings.keybindings);
   renderKeybindingHelp(keybindingsHelp, settings.keybindings);
+  settingGpu.checked = settings.gpu_acceleration;
   void applyWindowFrame(settings.window_frame);
 }
 
@@ -298,6 +301,7 @@ function settingsFromForm() {
     margin: `${Number(settingMargin.value)}%`,
     window_frame: settingWindowFrame.value,
     keybindings: settingKeybindings.value,
+    gpu_acceleration: settingGpu.checked,
   };
 }
 
@@ -758,6 +762,17 @@ function wireSettings() {
     renderKeybindingHelp(keybindingsHelp, settingKeybindings.value);
   });
 
+  settingGpu.addEventListener("change", async () => {
+    scheduleSave();
+    if (initialGpuAccel === null) return;
+    if (settingGpu.checked === initialGpuAccel) return;
+
+    await window.__TAURI__.dialog.message(
+      "GPU acceleration change requires a restart to take effect. Please restart emede.",
+      { title: "emede", kind: "info" },
+    );
+  });
+
   settingSize.addEventListener("input", () => {
     settingSizeLabel.textContent = `${Number(settingSize.value)}pt`;
   });
@@ -837,6 +852,7 @@ async function boot() {
     startupFile = await startupFilePromise;
     const settings = await settingsPromise;
     applySettings(settings);
+    initialGpuAccel = settings.gpu_acceleration;
   } catch (err) {
     console.warn("Startup initialization failed", err);
   }
