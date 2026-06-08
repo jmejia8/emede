@@ -503,6 +503,7 @@ body.frame-emede .prose :is(h1, h2, h3, h4, h5, h6) {
   background: var(--color-bg);
   border-bottom: 1px solid var(--color-border);
   color: var(--color-fg);
+  -webkit-user-select: none;
   user-select: none;
   transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
@@ -514,6 +515,8 @@ body.frame-emede .prose :is(h1, h2, h3, h4, h5, h6) {
   align-items: center;
   height: 100%;
   padding-inline: 0.75rem;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .titlebar-title {
@@ -523,6 +526,9 @@ body.frame-emede .prose :is(h1, h2, h3, h4, h5, h6) {
   font-family: var(--font-title);
   font-size: 0.85rem;
   color: var(--color-muted);
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: default;
 }
 
 .titlebar-controls {
