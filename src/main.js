@@ -117,6 +117,9 @@ const tocList = document.getElementById("toc-list");
 const settingsPanel = document.getElementById("settings-panel");
 const settingsToggle = document.getElementById("settings-toggle");
 const settingsClose = document.getElementById("settings-close");
+const aboutOverlay = document.getElementById("about-overlay");
+const aboutLink = document.getElementById("about-link");
+const aboutClose = document.getElementById("about-close");
 const settingFont = document.getElementById("setting-font");
 const settingFontTitle = document.getElementById("setting-font-title");
 const settingFontCode = document.getElementById("setting-font-code");
@@ -634,6 +637,13 @@ function toggleToc(open) {
   tocPanel.setAttribute("aria-hidden", String(!show));
 }
 
+function toggleAbout(open) {
+  const show = open ?? aboutOverlay.classList.contains("hidden");
+  aboutOverlay.classList.toggle("hidden", !show);
+  aboutOverlay.setAttribute("aria-hidden", String(!show));
+  document.body.classList.toggle("has-modal", show);
+}
+
 function toggleTocPanel() {
   toggleToc(tocPanel.classList.contains("hidden"));
 }
@@ -764,6 +774,12 @@ function wireSettings() {
       await invoke("set_settings", { settings });
     });
   });
+
+  aboutLink.addEventListener("click", () => toggleAbout(true));
+  aboutClose.addEventListener("click", () => toggleAbout(false));
+  aboutOverlay.addEventListener("click", (e) => {
+    if (e.target === aboutOverlay) toggleAbout(false);
+  });
 }
 
 function wireKeybindings() {
@@ -771,8 +787,10 @@ function wireKeybindings() {
     getKeybindingMode: () => currentSettings?.keybindings ?? settingKeybindings.value,
     toggleSettings,
     toggleToc: toggleTocPanel,
+    toggleAbout,
     settingsPanel,
     tocPanel,
+    aboutOverlay,
   });
 }
 

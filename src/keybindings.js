@@ -104,6 +104,10 @@ function handleAppShortcuts(event, actions) {
 
   if (event.key === "Escape") {
     let handled = false;
+    if (actions.aboutOverlay && !actions.aboutOverlay.classList.contains("hidden")) {
+      actions.toggleAbout(false);
+      handled = true;
+    }
     if (!actions.settingsPanel.classList.contains("hidden")) {
       actions.toggleSettings(false);
       handled = true;

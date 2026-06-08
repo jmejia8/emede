@@ -159,8 +159,23 @@
           <summary>Shortcuts</summary>
           <div id="keybindings-help" class="keybindings-help-body"></div>
         </details>
+
+        <button id="about-link" class="about-link" type="button">About emede</button>
       </div>
     </aside>
+
+    <div id="about-overlay" class="about-overlay hidden" aria-hidden="true">
+      <div id="about-modal" class="about-modal" role="dialog" aria-modal="true" aria-label="About emede">
+        <button id="about-close" class="about-close" type="button" aria-label="Close about">&times;</button>
+        <img src="assets/logo.png" alt="" class="about-logo" width="96" height="96" />
+        <h2 class="about-name">emede</h2>
+        <p class="about-version">v0.1.1</p>
+        <p class="about-desc">A distraction-free markdown reader</p>
+        <div class="about-divider"></div>
+        <p class="about-author">by <strong>jmejia8</strong></p>
+        <a href="https://github.com/jmejia8/emede" class="about-github" target="_blank" rel="noopener noreferrer">View on GitHub</a>
+      </div>
+    </div>
 
     <main id="reader">
       <div id="loading-state" class="loading-state hidden" role="status" aria-live="polite" aria-label="Loading document">
