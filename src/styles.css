@@ -83,6 +83,10 @@ body {
   margin: 2em 0 0.75em;
 }
 
+html:has(body.frame-emede) {
+  scrollbar-gutter: stable;
+}
+
 body.frame-emede .prose :is(h1, h2, h3, h4, h5, h6) {
   scroll-margin-top: calc(var(--titlebar-height) + 0.75rem);
 }
@@ -478,7 +482,7 @@ body.frame-emede .prose :is(h1, h2, h3, h4, h5, h6) {
   top: 0;
   left: 0;
   right: 0;
-  z-index: 25;
+  z-index: 40;
   display: flex;
   align-items: center;
   height: var(--titlebar-height);
@@ -544,6 +548,12 @@ body.frame-system .titlebar {
 
 body.frame-emede .reader-control {
   top: calc(var(--titlebar-height) + 1rem);
+}
+
+body.frame-emede .toc-panel,
+body.frame-emede .settings-panel {
+  top: var(--titlebar-height);
+  height: calc(100dvh - var(--titlebar-height));
 }
 
 .reader-control {
