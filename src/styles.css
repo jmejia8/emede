@@ -266,7 +266,8 @@ body.frame-emede .prose :is(h1, h2, h3, h4, h5, h6) {
 }
 
 .prose table {
-  width: 100%;
+  width: auto;
+  margin: 0 auto 1.25em;
   border-collapse: collapse;
   font-size: 0.95em;
 }
@@ -322,7 +323,7 @@ body.frame-emede .prose :is(h1, h2, h3, h4, h5, h6) {
 }
 
 .prose .table-wrapper table {
-  margin: 0;
+  margin: 0 auto;
   width: auto;
 }
 
