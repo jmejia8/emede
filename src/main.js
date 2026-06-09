@@ -132,6 +132,7 @@ const settingBg = document.getElementById("setting-bg");
 const settingWindowFrame = document.getElementById("setting-window-frame");
 const settingKeybindings = document.getElementById("setting-keybindings");
 const settingGpu = document.getElementById("setting-gpu");
+const settingJustify = document.getElementById("setting-justify");
 const keybindingsHelp = document.getElementById("keybindings-help");
 const titlebarTitle = document.getElementById("titlebar-title");
 const winMinimize = document.getElementById("win-minimize");
@@ -287,6 +288,8 @@ function applySettings(settings) {
   settingKeybindings.value = normalizeKeybindingMode(settings.keybindings);
   renderKeybindingHelp(keybindingsHelp, settings.keybindings);
   settingGpu.checked = settings.gpu_acceleration;
+  settingJustify.checked = settings.justify_text;
+  contentEl.classList.toggle("prose-justify", settings.justify_text);
   void applyWindowFrame(settings.window_frame);
 }
 
@@ -302,6 +305,7 @@ function settingsFromForm() {
     window_frame: settingWindowFrame.value,
     keybindings: settingKeybindings.value,
     gpu_acceleration: settingGpu.checked,
+    justify_text: settingJustify.checked,
   };
 }
 
@@ -772,6 +776,8 @@ function wireSettings() {
   settingKeybindings.addEventListener("change", () => {
     renderKeybindingHelp(keybindingsHelp, settingKeybindings.value);
   });
+
+  settingJustify.addEventListener("input", scheduleSave);
 
   settingGpu.addEventListener("change", async () => {
     scheduleSave();

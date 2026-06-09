@@ -64,6 +64,14 @@ body {
   opacity: 1;
 }
 
+.prose-justify {
+  text-align: justify;
+}
+
+.prose-justify :is(h1, h2, h3, h4, h5, h6) {
+  text-align: start;
+}
+
 .prose :first-child {
   margin-top: 0;
 }

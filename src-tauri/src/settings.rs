@@ -20,6 +20,8 @@ pub struct Settings {
     pub keybindings: String,
     #[serde(default = "default_gpu_acceleration")]
     pub gpu_acceleration: bool,
+    #[serde(default)]
+    pub justify_text: bool,
 }
 
 fn default_window_frame() -> String {
@@ -59,6 +61,7 @@ impl Default for Settings {
             window_frame: default_window_frame(),
             keybindings: default_keybindings(),
             gpu_acceleration: default_gpu_acceleration(),
+            justify_text: false,
         }
     }
 }
