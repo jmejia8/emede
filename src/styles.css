@@ -1038,6 +1038,30 @@ body:has(.settings-panel:not(.hidden)) .settings-toggle {
   background: color-mix(in srgb, var(--color-fg) 6%, transparent);
 }
 
+.preset-buttons button[data-preset="light"] {
+  background: #faf8f5;
+  color: #2c2c2c;
+  border-color: #d4d0c8;
+}
+
+.preset-buttons button[data-preset="sepia"] {
+  background: #f4ecd8;
+  color: #433422;
+  border-color: #d5c9b0;
+}
+
+.preset-buttons button[data-preset="dark"] {
+  background: #1a1a1a;
+  color: #d4d0c8;
+  border-color: #3a3a3a;
+}
+
+.preset-buttons button[data-preset="gruvbox"] {
+  background: #282828;
+  color: #ebdbb2;
+  border-color: #3c3836;
+}
+
 .keybindings-help {
   color: var(--color-fg);
 }
