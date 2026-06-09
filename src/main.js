@@ -413,6 +413,16 @@ function rewriteLocalImageSrcs(root) {
   }
 }
 
+function wrapTables(root) {
+  for (const table of root.querySelectorAll("table")) {
+    if (table.closest(".table-wrapper")) continue;
+    const wrapper = document.createElement("div");
+    wrapper.className = "table-wrapper";
+    table.parentNode.insertBefore(wrapper, table);
+    wrapper.appendChild(table);
+  }
+}
+
 async function applyDocument(result, { initial = false, reload = false, openToken } = {}) {
   if (openToken !== undefined && openToken !== activeOpenToken) return;
 
@@ -425,6 +435,7 @@ async function applyDocument(result, { initial = false, reload = false, openToke
 
   contentEl.innerHTML = result.html;
   rewriteLocalImageSrcs(contentEl);
+  wrapTables(contentEl);
   emptyStateEl.classList.add("hidden");
   missingStateEl.classList.add("hidden");
   errorStateEl.classList.add("hidden");

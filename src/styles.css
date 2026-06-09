@@ -280,7 +280,12 @@ body.frame-emede .prose :is(h1, h2, h3, h4, h5, h6) {
 }
 
 .prose th {
+  font-family: var(--font-title);
   background: transparent;
+}
+
+.prose tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--color-fg) 3%, var(--color-bg));
 }
 
 .prose thead tr:first-child th,
@@ -295,6 +300,30 @@ body.frame-emede .prose :is(h1, h2, h3, h4, h5, h6) {
 .prose tr:last-child th,
 .prose tr:last-child td {
   border-bottom-width: 2px;
+}
+
+.prose .table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 0 1.25em;
+}
+
+.prose .table-wrapper::-webkit-scrollbar {
+  height: 6px;
+}
+
+.prose .table-wrapper::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.prose .table-wrapper::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+
+.prose .table-wrapper table {
+  margin: 0;
+  width: auto;
 }
 
 .prose hr {
