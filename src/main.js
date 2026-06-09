@@ -141,6 +141,7 @@ const winClose = document.getElementById("win-close");
 const openFileBtn = document.getElementById("open-file-btn");
 
 let currentSettings = null;
+let initialFontSize = 12;
 let initialGpuAccel = null;
 let saveTimer = null;
 let activeOpenToken = 0;
@@ -833,12 +834,31 @@ function wireSettings() {
   });
 }
 
+function adjustFontSize(delta) {
+  const currentPt = toPt(currentSettings?.font_size, 12);
+  const newPt = Math.min(32, Math.max(8, currentPt + delta));
+  settingSize.value = newPt;
+  settingSizeLabel.textContent = `${newPt}pt`;
+  applySettings(settingsFromForm());
+  scheduleSave();
+}
+
+function resetFontSize() {
+  const pt = initialFontSize;
+  settingSize.value = pt;
+  settingSizeLabel.textContent = `${pt}pt`;
+  applySettings(settingsFromForm());
+  scheduleSave();
+}
+
 function wireKeybindings() {
   createKeybindingController({
     getKeybindingMode: () => currentSettings?.keybindings ?? settingKeybindings.value,
     toggleSettings,
     toggleToc: toggleTocPanel,
     toggleAbout,
+    adjustFontSize,
+    resetFontSize,
     settingsPanel,
     tocPanel,
     aboutOverlay,
@@ -871,6 +891,7 @@ async function boot() {
     startupFile = await startupFilePromise;
     const settings = await settingsPromise;
     applySettings(settings);
+    initialFontSize = toPt(settings.font_size, 12);
     initialGpuAccel = settings.gpu_acceleration;
   } catch (err) {
     console.warn("Startup initialization failed", err);

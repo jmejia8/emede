@@ -5,6 +5,7 @@ const KEYBINDING_MODES = new Set(["default", "vim", "emacs", "common"]);
 export const KEYBINDING_HELP = {
   default: [
     ["Ctrl+,", "Open settings"],
+    ["Ctrl++ / Ctrl+- / Ctrl+0", "Increase / decrease / reset font size"],
     ["Ctrl+Shift+T", "Toggle table of contents"],
     ["Escape", "Close panels"],
   ],
@@ -17,6 +18,7 @@ export const KEYBINDING_HELP = {
     ["gg", "Go to top"],
     ["G", "Go to bottom"],
     ["Ctrl+,", "Open settings"],
+    ["Ctrl++ / Ctrl+- / Ctrl+0", "Increase / decrease / reset font size"],
     ["Ctrl+Shift+T", "Toggle table of contents"],
     ["Escape", "Close panels"],
   ],
@@ -26,6 +28,7 @@ export const KEYBINDING_HELP = {
     ["Alt+v", "Page up"],
     ["Ctrl+Home / Ctrl+End", "Go to top / bottom"],
     ["Ctrl+,", "Open settings"],
+    ["Ctrl++ / Ctrl+- / Ctrl+0", "Increase / decrease / reset font size"],
     ["Ctrl+Shift+T", "Toggle table of contents"],
     ["Escape", "Close panels"],
   ],
@@ -35,6 +38,7 @@ export const KEYBINDING_HELP = {
     ["Shift+Space", "Page up"],
     ["Ctrl+Home / Ctrl+End", "Go to top / bottom"],
     ["Ctrl+,", "Open settings"],
+    ["Ctrl++ / Ctrl+- / Ctrl+0", "Increase / decrease / reset font size"],
     ["Ctrl+Shift+T", "Toggle table of contents"],
     ["Escape", "Close panels"],
   ],
@@ -90,6 +94,24 @@ function scrollToBottom() {
 }
 
 function handleAppShortcuts(event, actions) {
+  if (event.ctrlKey && (event.key === "=" || event.key === "+")) {
+    event.preventDefault();
+    actions.adjustFontSize(1);
+    return true;
+  }
+
+  if (event.ctrlKey && event.key === "-") {
+    event.preventDefault();
+    actions.adjustFontSize(-1);
+    return true;
+  }
+
+  if (event.ctrlKey && event.key === "0") {
+    event.preventDefault();
+    actions.resetFontSize();
+    return true;
+  }
+
   if (event.ctrlKey && event.key === ",") {
     event.preventDefault();
     actions.toggleSettings(true);
