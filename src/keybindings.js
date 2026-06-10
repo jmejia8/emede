@@ -4,12 +4,14 @@ const KEYBINDING_MODES = new Set(["default", "vim", "emacs", "common"]);
 
 export const KEYBINDING_HELP = {
   default: [
+    ["Ctrl+F", "Find in page"],
     ["Ctrl+,", "Open settings"],
     ["Ctrl++ / Ctrl+- / Ctrl+0", "Increase / decrease / reset font size"],
     ["Ctrl+Shift+T", "Toggle table of contents"],
     ["Escape", "Close panels"],
   ],
   vim: [
+    ["Ctrl+F", "Find in page"],
     ["j / k", "Scroll down / up one line"],
     ["d / u", "Half page down / up"],
     ["f / b / Space", "Page down / page up / page down"],
@@ -23,6 +25,7 @@ export const KEYBINDING_HELP = {
     ["Escape", "Close panels"],
   ],
   emacs: [
+    ["Ctrl+F", "Find in page"],
     ["Ctrl+n / Ctrl+p", "Scroll down / up one line"],
     ["Ctrl+v", "Page down"],
     ["Alt+v", "Page up"],
@@ -33,6 +36,7 @@ export const KEYBINDING_HELP = {
     ["Escape", "Close panels"],
   ],
   common: [
+    ["Ctrl+F", "Find in page"],
     ["j / k", "Scroll down / up one line"],
     ["Space", "Page down"],
     ["Shift+Space", "Page up"],
@@ -126,6 +130,10 @@ function handleAppShortcuts(event, actions) {
 
   if (event.key === "Escape") {
     let handled = false;
+    if (actions.searchPanel && !actions.searchPanel.classList.contains("hidden")) {
+      if (actions.toggleSearch) actions.toggleSearch(false);
+      handled = true;
+    }
     if (actions.aboutOverlay && !actions.aboutOverlay.classList.contains("hidden")) {
       actions.toggleAbout(false);
       handled = true;
@@ -346,6 +354,13 @@ export function createKeybindingController(actions) {
 
   document.addEventListener("keydown", (event) => {
     if (event.defaultPrevented || event.isComposing) return;
+
+    if ((event.ctrlKey || event.metaKey) && event.key === "f") {
+      event.preventDefault();
+      if (actions.toggleSearch) actions.toggleSearch();
+      return;
+    }
+
     if (isTypingTarget(event.target)) return;
 
     if (handleAppShortcuts(event, actions)) return;

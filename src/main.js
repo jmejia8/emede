@@ -1,3 +1,4 @@
+import { FindInPage } from "./find.js";
 import {
   createKeybindingController,
   normalizeKeybindingMode,
@@ -199,6 +200,12 @@ const titlebarTitle = document.getElementById("titlebar-title");
 const winMinimize = document.getElementById("win-minimize");
 const winMaximize = document.getElementById("win-maximize");
 const winClose = document.getElementById("win-close");
+const searchBar = document.getElementById("search-bar");
+const searchInput = document.getElementById("search-input");
+const searchCounter = document.getElementById("search-counter");
+const searchPrev = document.getElementById("search-prev");
+const searchNext = document.getElementById("search-next");
+const searchClose = document.getElementById("search-close");
 const openFileBtn = document.getElementById("open-file-btn");
 
 let currentSettings = null;
@@ -209,6 +216,7 @@ let saveTimer = null;
 let activeOpenToken = 0;
 let isRestoringViewState = false;
 let colorTemplates = [];
+let findInPage;
 
 function populateFontSelect(select, { includeInherit = false, groups = FONT_GROUPS } = {}) {
   select.replaceChildren();
@@ -855,6 +863,7 @@ async function revealWindow() {
 }
 
 async function openFile(path) {
+  toggleSearch(false);
   flushViewState(currentDocPath, contentEl);
   const openToken = ++activeOpenToken;
   showLoadingState();
@@ -933,6 +942,21 @@ function toggleAbout(open) {
   aboutOverlay.classList.toggle("hidden", !show);
   aboutOverlay.setAttribute("aria-hidden", String(!show));
   document.body.classList.toggle("has-modal", show);
+}
+
+function toggleSearch(open) {
+  const show = open ?? searchBar.classList.contains("hidden");
+  searchBar.classList.toggle("hidden", !show);
+  searchBar.setAttribute("aria-hidden", String(!show));
+  if (show) {
+    searchInput.focus();
+    searchInput.select();
+  } else {
+    searchInput.blur();
+    if (findInPage) findInPage.stop();
+    searchInput.value = "";
+    searchCounter.textContent = "";
+  }
 }
 
 function toggleTocPanel() {
@@ -1118,17 +1142,78 @@ function wireViewState() {
   });
 }
 
+function updateSearchCounter() {
+  if (!findInPage) return;
+  const count = findInPage.matchCount;
+  const current = findInPage.currentMatchNumber;
+  searchCounter.textContent = count > 0 ? `${current}/${count}` : count === 0 ? "0/0" : "";
+}
+
+function submitSearch(forward = true) {
+  const query = searchInput.value.trim();
+  if (findInPage.query !== query) {
+    findInPage.find(searchInput.value);
+  } else if (findInPage.matchCount > 0) {
+    if (forward) findInPage.next();
+    else findInPage.prev();
+  } else {
+    findInPage.find(searchInput.value);
+  }
+  updateSearchCounter();
+}
+
+function wireSearch() {
+  findInPage = new FindInPage(contentEl);
+
+  searchInput.addEventListener("input", () => {
+    const query = searchInput.value.trim();
+    if (findInPage.query && findInPage.query !== query) {
+      findInPage.stop();
+      updateSearchCounter();
+    }
+  });
+
+  searchInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      submitSearch(true);
+      event.stopPropagation();
+      return;
+    }
+    if (event.key === "Enter" && event.shiftKey) {
+      event.preventDefault();
+      submitSearch(false);
+      event.stopPropagation();
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      toggleSearch(false);
+      event.stopPropagation();
+      return;
+    }
+  });
+
+  searchPrev.addEventListener("click", () => submitSearch(false));
+
+  searchNext.addEventListener("click", () => submitSearch(true));
+
+  searchClose.addEventListener("click", () => toggleSearch(false));
+}
+
 function wireKeybindings() {
   createKeybindingController({
     getKeybindingMode: () => currentSettings?.keybindings ?? settingKeybindings.value,
     toggleSettings,
     toggleToc: toggleTocPanel,
     toggleAbout,
+    toggleSearch,
     adjustFontSize,
     resetFontSize,
     settingsPanel,
     tocPanel,
     aboutOverlay,
+    searchPanel: searchBar,
   });
 }
 
@@ -1140,6 +1225,7 @@ async function boot() {
   wireTitlebar();
   wireSettings();
   wireViewState();
+  wireSearch();
   wireKeybindings();
 
   openFileBtn.addEventListener("click", () => {

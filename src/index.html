@@ -178,6 +178,17 @@
       </div>
     </aside>
 
+    <div id="search-bar" class="search-bar hidden" aria-hidden="true" role="search">
+      <div class="search-bar-inner">
+        <span class="search-icon" aria-hidden="true">&#128269;</span>
+        <input id="search-input" type="text" class="search-input" placeholder="Find in page…" spellcheck="false" />
+        <span id="search-counter" class="search-counter" aria-live="polite"></span>
+        <button id="search-prev" class="search-btn" type="button" aria-label="Previous match">&uarr;</button>
+        <button id="search-next" class="search-btn" type="button" aria-label="Next match">&darr;</button>
+        <button id="search-close" class="search-btn search-btn-close" type="button" aria-label="Close search">&times;</button>
+      </div>
+    </div>
+
     <div id="about-overlay" class="about-overlay hidden" aria-hidden="true">
       <div id="about-modal" class="about-modal" role="dialog" aria-modal="true" aria-label="About emede">
         <button id="about-close" class="about-close" type="button" aria-label="Close about">&times;</button>
