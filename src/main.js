@@ -10,7 +10,6 @@ import {
   flushViewStateAsync,
   getScrollEventTarget,
   loadViewState,
-  saveViewState,
 } from "./viewstate.js";
 
 const { invoke, convertFileSrc } = window.__TAURI__.core;
@@ -1092,15 +1091,6 @@ function resetFontSize() {
 }
 
 function wireViewState() {
-  const onScroll = () => {
-    if (isRestoringViewState || !currentDocPath) return;
-    saveViewState(currentDocPath, getScrollRoot(), contentEl);
-  };
-
-  getScrollEventTarget().addEventListener("scroll", onScroll, { passive: true });
-  document.getElementById("reader")?.addEventListener("scroll", onScroll, { passive: true });
-  window.addEventListener("scroll", onScroll, { passive: true });
-
   let closingAfterFlush = false;
   void getCurrentWindow().onCloseRequested(async (event) => {
     if (closingAfterFlush) return;
