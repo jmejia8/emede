@@ -946,16 +946,24 @@ function toggleAbout(open) {
 
 function toggleSearch(open) {
   const show = open ?? searchBar.classList.contains("hidden");
-  searchBar.classList.toggle("hidden", !show);
-  searchBar.setAttribute("aria-hidden", String(!show));
   if (show) {
-    searchInput.focus();
-    searchInput.select();
+    searchBar.classList.remove("hidden", "search-bar--closing");
+    searchBar.setAttribute("aria-hidden", "false");
+    requestAnimationFrame(() => {
+      searchInput.focus();
+      searchInput.select();
+    });
   } else {
+    searchBar.classList.add("search-bar--closing");
+    searchBar.setAttribute("aria-hidden", "true");
     searchInput.blur();
-    if (findInPage) findInPage.stop();
-    searchInput.value = "";
-    searchCounter.textContent = "";
+    setTimeout(() => {
+      searchBar.classList.add("hidden");
+      searchBar.classList.remove("search-bar--closing");
+      if (findInPage) findInPage.stop();
+      searchInput.value = "";
+      searchCounter.textContent = "";
+    }, 200);
   }
 }
 
@@ -1146,7 +1154,16 @@ function updateSearchCounter() {
   if (!findInPage) return;
   const count = findInPage.matchCount;
   const current = findInPage.currentMatchNumber;
-  searchCounter.textContent = count > 0 ? `${current}/${count}` : count === 0 ? "0/0" : "";
+  const hasQuery = findInPage.query.length > 0;
+  if (hasQuery && count === 0) {
+    searchCounter.textContent = "0/0";
+    searchCounter.classList.add("search-counter--none");
+  } else {
+    searchCounter.classList.remove("search-counter--none");
+    searchCounter.textContent = count > 0 ? `${current}/${count}` : "";
+  }
+  searchCounter.classList.remove("search-counter--bump");
+  requestAnimationFrame(() => searchCounter.classList.add("search-counter--bump"));
 }
 
 function submitSearch(forward = true) {

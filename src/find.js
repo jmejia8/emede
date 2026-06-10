@@ -179,7 +179,8 @@ export class FindInPage {
     }
     const active = this.matches[this.activeIndex];
     if (active) {
-      active.scrollIntoView({ block: 'center', behavior: 'auto' });
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      active.scrollIntoView({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
     }
   }
 
