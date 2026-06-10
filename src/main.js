@@ -10,6 +10,7 @@ import {
   flushViewStateAsync,
   getScrollEventTarget,
   loadViewState,
+  saveViewState,
 } from "./viewstate.js";
 
 const { invoke, convertFileSrc } = window.__TAURI__.core;
@@ -632,9 +633,14 @@ async function restoreSavedViewState(viewState, openToken) {
     await nextFrame();
     if (openToken !== undefined && openToken !== activeOpenToken) return;
     applyViewState(scrollRoot, contentEl, viewState);
+
+    const scrollBeforeMath = scrollRoot.scrollTop;
     await typesetMath();
     if (openToken !== undefined && openToken !== activeOpenToken) return;
-    applyViewState(scrollRoot, contentEl, viewState);
+
+    if (scrollRoot.scrollTop === scrollBeforeMath) {
+      applyViewState(scrollRoot, contentEl, viewState);
+    }
   } finally {
     isRestoringViewState = false;
   }
