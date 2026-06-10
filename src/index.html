@@ -84,14 +84,16 @@
           <input id="setting-bg" type="color" />
         </label>
 
-        <div class="presets">
-          <span>Color presets</span>
-          <div class="preset-buttons">
-            <button type="button" data-preset="light">Light</button>
-            <button type="button" data-preset="sepia">Sepia</button>
-            <button type="button" data-preset="dark">Dark</button>
-            <button type="button" data-preset="gruvbox">Gruvbox</button>
-          </div>
+        <div class="presets color-templates">
+          <span>Color templates</span>
+          <div id="color-template-list" class="preset-buttons color-template-buttons"></div>
+          <button id="import-color-template" class="template-import-btn" type="button">Import CSS template</button>
+          <p id="color-template-status" class="setting-note">
+            Required: <code>--color-fg</code>, <code>--color-bg</code>. Optional:
+            <code>--color-title</code>, <code>--color-bold</code>, <code>--color-italic</code>,
+            <code>--color-quote</code>, <code>--color-link</code>, <code>--color-code</code>,
+            <code>--color-code-bg</code>, <code>--color-border</code>, <code>--color-muted</code>.
+          </p>
         </div>
 
         <label>

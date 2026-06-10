@@ -51,24 +51,74 @@ const CODE_FONT_GROUPS = FONT_GROUPS.filter((group) => group.label === "Monospac
 
 const DEFAULT_MARGIN_PERCENT = 10;
 
-const PRESETS = {
-  light: {
-    color_fg: "#2c2c2c",
-    color_bg: "#faf8f5",
+const BUNDLED_COLOR_TEMPLATES = [
+  {
+    id: "light",
+    label: "Light",
+    path: "themes/light.css",
   },
-  sepia: {
-    color_fg: "#433422",
-    color_bg: "#f4ecd8",
+  {
+    id: "sepia",
+    label: "Sepia",
+    path: "themes/sepia.css",
   },
-  dark: {
-    color_fg: "#d4d0c8",
-    color_bg: "#1a1a1a",
+  {
+    id: "dark",
+    label: "Dark",
+    path: "themes/dark.css",
   },
-  gruvbox: {
-    color_fg: "#ebdbb2",
-    color_bg: "#282828",
+  {
+    id: "gruvbox",
+    label: "Gruvbox",
+    path: "themes/gruvbox.css",
   },
+  {
+    id: "things-light",
+    label: "Things",
+    path: "themes/things-light.css",
+  },
+  {
+    id: "nord-light",
+    label: "Nord",
+    path: "themes/nord-light.css",
+  },
+  {
+    id: "dracula-dark",
+    label: "Dracula",
+    path: "themes/dracula-dark.css",
+  },
+  {
+    id: "catppuccin-mocha",
+    label: "Moca",
+    path: "themes/catppuccin-mocha.css",
+  },
+];
+
+const COLOR_TEMPLATE_PROPERTIES = {
+  "--color-fg": { setting: "color_fg", css: "--color-fg", required: true },
+  "--emede-color-fg": { setting: "color_fg", css: "--color-fg", required: true },
+  "--color-bg": { setting: "color_bg", css: "--color-bg", required: true },
+  "--emede-color-bg": { setting: "color_bg", css: "--color-bg", required: true },
+  "--color-title": { setting: "color_title", css: "--color-title" },
+  "--color-heading": { setting: "color_title", css: "--color-title" },
+  "--color-headings": { setting: "color_title", css: "--color-title" },
+  "--color-bold": { setting: "color_bold", css: "--color-bold" },
+  "--color-strong": { setting: "color_bold", css: "--color-bold" },
+  "--color-italic": { setting: "color_italic", css: "--color-italic" },
+  "--color-em": { setting: "color_italic", css: "--color-italic" },
+  "--color-quote": { setting: "color_quote", css: "--color-quote" },
+  "--color-blockquote": { setting: "color_quote", css: "--color-quote" },
+  "--color-link": { setting: "color_link", css: "--color-link" },
+  "--color-code": { setting: "color_code", css: "--color-code" },
+  "--color-code-bg": { setting: "color_code_bg", css: "--color-code-bg" },
+  "--color-border": { setting: "color_border", css: "--color-border" },
+  "--color-muted": { setting: "color_muted", css: "--color-muted" },
 };
+
+const OPTIONAL_COLOR_TEMPLATE_SETTINGS = Object.values(COLOR_TEMPLATE_PROPERTIES)
+  .filter((property) => !property.required)
+  .map((property) => property.setting)
+  .filter((setting, index, settings) => settings.indexOf(setting) === index);
 
 const FONT_PRESETS = {
   default: {
@@ -129,6 +179,9 @@ const settingMargin = document.getElementById("setting-margin");
 const settingMarginLabel = document.getElementById("setting-margin-label");
 const settingFg = document.getElementById("setting-fg");
 const settingBg = document.getElementById("setting-bg");
+const colorTemplateList = document.getElementById("color-template-list");
+const importColorTemplateBtn = document.getElementById("import-color-template");
+const colorTemplateStatus = document.getElementById("color-template-status");
 const settingWindowFrame = document.getElementById("setting-window-frame");
 const settingKeybindings = document.getElementById("setting-keybindings");
 const settingGpu = document.getElementById("setting-gpu");
@@ -145,6 +198,7 @@ let initialFontSize = 12;
 let initialGpuAccel = null;
 let saveTimer = null;
 let activeOpenToken = 0;
+let colorTemplates = [];
 
 function populateFontSelect(select, { includeInherit = false, groups = FONT_GROUPS } = {}) {
   select.replaceChildren();
@@ -257,6 +311,125 @@ function isDarkColor(hex) {
   return luminance < 0.5;
 }
 
+function normalizeCssColor(value) {
+  const color = value.trim();
+  if (!color || !CSS.supports("color", color)) return null;
+
+  const context =
+    normalizeCssColor.context ||
+    (normalizeCssColor.context = document.createElement("canvas").getContext("2d"));
+  context.fillStyle = "#000000";
+  context.fillStyle = color;
+
+  const normalized = context.fillStyle.toLowerCase();
+  if (/^#[0-9a-f]{6}$/.test(normalized)) return normalized;
+
+  const rgb = normalized.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*(1|1\.0|1\.00))?\)$/);
+  if (!rgb) return null;
+
+  return `#${rgb
+    .slice(1, 4)
+    .map((channel) => Number(channel).toString(16).padStart(2, "0"))
+    .join("")}`;
+}
+
+function extractColorTemplate(cssText, label) {
+  const colors = {};
+  const declarationPattern = /(--(?:emede-)?color-[a-z-]+)\s*:\s*([^;}{]+)\s*(?:;|$)/gi;
+
+  for (const match of cssText.matchAll(declarationPattern)) {
+    const property = COLOR_TEMPLATE_PROPERTIES[match[1].toLowerCase()];
+    const color = normalizeCssColor(match[2]);
+    if (property && color) {
+      colors[property.setting] = color;
+    }
+  }
+
+  if (!colors.color_fg || !colors.color_bg) {
+    throw new Error("CSS template must define valid --color-fg and --color-bg colors.");
+  }
+
+  return {
+    id: `imported-${Date.now()}`,
+    label,
+    colors,
+    imported: true,
+  };
+}
+
+async function loadBundledColorTemplates() {
+  const templates = [];
+
+  for (const bundledTemplate of BUNDLED_COLOR_TEMPLATES) {
+    try {
+      const response = await fetch(bundledTemplate.path);
+      if (!response.ok) {
+        throw new Error(`Failed to load ${bundledTemplate.path}`);
+      }
+
+      const cssText = await response.text();
+      templates.push({
+        ...extractColorTemplate(cssText, bundledTemplate.label),
+        id: bundledTemplate.id,
+        imported: true,
+      });
+    } catch (err) {
+      console.warn("Failed to load bundled color template", bundledTemplate.path, err);
+    }
+  }
+
+  colorTemplates = templates;
+}
+
+function colorTemplateExtrasFromSettings(settings) {
+  const extras = {};
+  for (const settingKey of OPTIONAL_COLOR_TEMPLATE_SETTINGS) {
+    if (settings?.[settingKey]) {
+      extras[settingKey] = settings[settingKey];
+    }
+  }
+  return extras;
+}
+
+function colorTemplateLabelFromPath(path) {
+  const fileName = String(path).split(/[\\/]/).pop() || "Imported CSS";
+  return fileName.replace(/\.css$/i, "");
+}
+
+function renderColorTemplates() {
+  colorTemplateList.replaceChildren();
+
+  for (const template of colorTemplates) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = template.label;
+    button.style.color = template.colors.color_fg;
+    button.style.background = template.colors.color_bg;
+    button.style.borderColor = template.colors.color_fg;
+    button.addEventListener("click", () => {
+      void applyColorTemplate(template);
+    });
+    colorTemplateList.appendChild(button);
+  }
+}
+
+async function applyColorTemplate(template) {
+  const baseSettings = currentSettings || settingsFromForm();
+  const settings = {
+    ...baseSettings,
+    ...template.colors,
+  };
+
+  if (!template.imported) {
+    for (const settingKey of OPTIONAL_COLOR_TEMPLATE_SETTINGS) {
+      delete settings[settingKey];
+    }
+  }
+
+  applySettings(settings);
+  await invoke("set_settings", { settings });
+}
+
 function applySettings(settings) {
   currentSettings = settings;
   const sizePt = toPt(settings.font_size, 12);
@@ -272,6 +445,14 @@ function applySettings(settings) {
   document.documentElement.style.setProperty("--reader-margin", `${marginPercent}%`);
   document.documentElement.style.setProperty("--color-fg", settings.color_fg);
   document.documentElement.style.setProperty("--color-bg", settings.color_bg);
+  for (const property of Object.values(COLOR_TEMPLATE_PROPERTIES)) {
+    if (property.required) continue;
+    if (settings[property.setting]) {
+      document.documentElement.style.setProperty(property.css, settings[property.setting]);
+    } else {
+      document.documentElement.style.removeProperty(property.css);
+    }
+  }
   document.documentElement.style.colorScheme = isDarkColor(settings.color_bg)
     ? "dark"
     : "light";
@@ -296,6 +477,7 @@ function applySettings(settings) {
 
 function settingsFromForm() {
   return {
+    ...colorTemplateExtrasFromSettings(currentSettings),
     font_family: settingFont.value || DEFAULT_FONT,
     font_title: settingFontTitle.value,
     font_code: settingFontCode.value || DEFAULT_FONT_CODE,
@@ -662,6 +844,34 @@ async function handlePickAndOpenFile() {
   }
 }
 
+async function handleImportColorTemplate() {
+  colorTemplateStatus.textContent =
+    "Reading CSS template colors.";
+
+  try {
+    const selected = await invoke("plugin:dialog|open", {
+      options: {
+        multiple: false,
+        filters: [{ name: "CSS", extensions: ["css"] }],
+      },
+    });
+    if (!selected) return;
+
+    const cssText = await invoke("read_color_template", { path: selected });
+    const template = extractColorTemplate(cssText, colorTemplateLabelFromPath(selected));
+    colorTemplates = [
+      ...colorTemplates.filter((candidate) => candidate.id !== template.id),
+      template,
+    ];
+    renderColorTemplates();
+    await applyColorTemplate(template);
+    colorTemplateStatus.textContent = `Imported ${template.label}.`;
+  } catch (err) {
+    console.warn("Failed to import color template", err);
+    colorTemplateStatus.textContent = String(err);
+  }
+}
+
 function toggleSettings(open) {
   const show = open ?? settingsPanel.classList.contains("hidden");
   settingsPanel.classList.toggle("hidden", !show);
@@ -759,6 +969,10 @@ function wireTitlebar() {
 function wireSettings() {
   settingsToggle.addEventListener("click", () => toggleSettings(true));
   settingsClose.addEventListener("click", () => toggleSettings(false));
+  renderColorTemplates();
+  importColorTemplateBtn.addEventListener("click", () => {
+    void handleImportColorTemplate();
+  });
 
   [
     settingFont,
@@ -799,19 +1013,6 @@ function wireSettings() {
 
   settingMargin.addEventListener("input", () => {
     settingMarginLabel.textContent = `${Number(settingMargin.value)}%`;
-  });
-
-  document.querySelectorAll("[data-preset]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const preset = PRESETS[btn.dataset.preset];
-      if (!preset) return;
-      const settings = {
-        ...(currentSettings || settingsFromForm()),
-        ...preset,
-      };
-      applySettings(settings);
-      await invoke("set_settings", { settings });
-    });
   });
 
   document.querySelectorAll("[data-font-preset]").forEach((btn) => {
@@ -867,6 +1068,7 @@ function wireKeybindings() {
 
 async function boot() {
   populateFontOptions();
+  await loadBundledColorTemplates();
   wireExternalLinks();
   wireToc();
   wireTitlebar();

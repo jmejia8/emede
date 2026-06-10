@@ -12,6 +12,24 @@ pub struct Settings {
     pub font_size: String,
     pub color_fg: String,
     pub color_bg: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color_title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color_bold: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color_italic: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color_quote: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color_link: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color_code: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color_code_bg: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color_border: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color_muted: Option<String>,
     #[serde(default = "default_margin")]
     pub margin: String,
     #[serde(default = "default_window_frame")]
@@ -57,6 +75,15 @@ impl Default for Settings {
             font_size: "12pt".into(),
             color_fg: "#2c2c2c".into(),
             color_bg: "#faf8f5".into(),
+            color_title: None,
+            color_bold: None,
+            color_italic: None,
+            color_quote: None,
+            color_link: None,
+            color_code: None,
+            color_code_bg: None,
+            color_border: None,
+            color_muted: None,
             margin: default_margin(),
             window_frame: default_window_frame(),
             keybindings: default_keybindings(),
@@ -102,4 +129,16 @@ pub fn get_settings() -> Settings {
 #[tauri::command]
 pub fn set_settings(settings: Settings) -> Result<(), String> {
     save_settings(&settings)
+}
+
+#[tauri::command]
+pub fn read_color_template(path: String) -> Result<String, String> {
+    let path = PathBuf::from(path);
+    let metadata = fs::metadata(&path).map_err(|e| e.to_string())?;
+
+    if metadata.len() > 256 * 1024 {
+        return Err("CSS template is too large".into());
+    }
+
+    fs::read_to_string(path).map_err(|e| e.to_string())
 }

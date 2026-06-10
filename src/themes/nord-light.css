@@ -1,0 +1,16 @@
+/* Nord Light — tuned for immersive, distraction-free reading.
+   Emphasis comes from weight/slant; a single frost accent is kept for
+   titles and links, while body text stays calm and monochrome. */
+:root {
+  --color-fg: #2e3440;
+  --color-bg: #fbfcfe;
+  --color-title: #5e81ac;
+  --color-bold: #2e3440;
+  --color-italic: #2e3440;
+  --color-quote: #4c566a;
+  --color-link: #5e81ac;
+  --color-code: #434c5e;
+  --color-code-bg: #eceff4;
+  --color-border: #d8dee9;
+  --color-muted: #5b6678;
+}

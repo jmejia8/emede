@@ -12,6 +12,11 @@
   --color-link: color-mix(in srgb, #3d5a80 72%, var(--color-fg));
   --color-code-bg: color-mix(in srgb, var(--color-fg) 10%, var(--color-bg));
   --color-border: color-mix(in srgb, var(--color-fg) 14%, var(--color-bg));
+  --color-title: var(--color-fg);
+  --color-bold: var(--color-fg);
+  --color-italic: var(--color-fg);
+  --color-quote: var(--color-muted);
+  --color-code: var(--color-fg);
   --titlebar-height: 2.25rem;
 }
 
@@ -89,6 +94,7 @@ body {
   font-family: var(--font-title);
   line-height: 1.25;
   font-weight: 600;
+  color: var(--color-title);
   margin: 2em 0 0.75em;
 }
 
@@ -237,16 +243,25 @@ body.frame-emede .prose :is(h1, h2, h3, h4, h5, h6) {
   opacity: 0.85;
 }
 
+.prose strong {
+  color: var(--color-bold);
+}
+
+.prose em {
+  color: var(--color-italic);
+}
+
 .prose blockquote {
   margin-left: 0;
   padding: 0.5em 0 0.5em 1.25em;
   border-left: 3px solid var(--color-border);
-  color: var(--color-muted);
+  color: var(--color-quote);
 }
 
 .prose code {
   font-family: var(--font-code);
   font-size: 0.88em;
+  color: var(--color-code);
   background: var(--color-code-bg);
   padding: 0.15em 0.35em;
   border-radius: 4px;
@@ -1023,7 +1038,8 @@ body:has(.settings-panel:not(.hidden)) .settings-toggle {
   margin-top: 0.4rem;
 }
 
-.preset-buttons button {
+.preset-buttons button,
+.template-import-btn {
   flex: 1;
   padding: 0.45rem 0.5rem;
   border: 1px solid var(--color-border);
@@ -1034,32 +1050,26 @@ body:has(.settings-panel:not(.hidden)) .settings-toggle {
   font: inherit;
 }
 
-.preset-buttons button:hover {
+.preset-buttons button:hover,
+.template-import-btn:hover {
   background: color-mix(in srgb, var(--color-fg) 6%, transparent);
 }
 
-.preset-buttons button[data-preset="light"] {
-  background: #faf8f5;
-  color: #2c2c2c;
-  border-color: #d4d0c8;
+.template-import-btn {
+  width: 100%;
+  margin-top: 0.65rem;
 }
 
-.preset-buttons button[data-preset="sepia"] {
-  background: #f4ecd8;
-  color: #433422;
-  border-color: #d5c9b0;
+.setting-note {
+  margin: 0.5rem 0 0;
+  color: var(--color-muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
 }
 
-.preset-buttons button[data-preset="dark"] {
-  background: #1a1a1a;
-  color: #d4d0c8;
-  border-color: #3a3a3a;
-}
-
-.preset-buttons button[data-preset="gruvbox"] {
-  background: #282828;
-  color: #ebdbb2;
-  border-color: #3c3836;
+.setting-note code {
+  font-family: var(--font-code);
+  font-size: 0.92em;
 }
 
 .keybindings-help {

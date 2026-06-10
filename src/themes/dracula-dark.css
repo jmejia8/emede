@@ -1,0 +1,17 @@
+/* Dracula Dark — tuned for immersive, distraction-free reading.
+   Bold/italic stay in the foreground tone so prose reads calmly; the
+   purple accent is reserved for titles and links, and code uses a softer
+   green to avoid neon glare on dark backgrounds. */
+:root {
+  --color-fg: #f8f8f2;
+  --color-bg: #282a37;
+  --color-title: #bd93f9;
+  --color-bold: #f8f8f2;
+  --color-italic: #f8f8f2;
+  --color-quote: #9aa6d1;
+  --color-link: #bd93f9;
+  --color-code: #a3e9b4;
+  --color-code-bg: #21222c;
+  --color-border: #44475a;
+  --color-muted: #a0aac8;
+}

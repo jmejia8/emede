@@ -1,0 +1,14 @@
+/* emede Gruvbox template. */
+:root {
+  --color-fg: #ebdbb2;
+  --color-bg: #282828;
+  --color-title: #ebdbb2;
+  --color-bold: #ebdbb2;
+  --color-italic: #ebdbb2;
+  --color-quote: #ebdbb2;
+  --color-link: #ebdbb2;
+  --color-code: #ebdbb2;
+  --color-code-bg: #3c3836;
+  --color-border: #504945;
+  --color-muted: #ebdbb2;
+}

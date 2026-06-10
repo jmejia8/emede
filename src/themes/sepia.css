@@ -1,0 +1,14 @@
+/* emede Sepia template. */
+:root {
+  --color-fg: #433422;
+  --color-bg: #f4ecd8;
+  --color-title: #433422;
+  --color-bold: #433422;
+  --color-italic: #433422;
+  --color-quote: #433422;
+  --color-link: #433422;
+  --color-code: #433422;
+  --color-code-bg: #e2dac6;
+  --color-border: #d8ccb2;
+  --color-muted: #433422;
+}

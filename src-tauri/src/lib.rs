@@ -83,6 +83,7 @@ pub fn run() {
             markdown::render_markdown,
             settings::get_settings,
             settings::set_settings,
+            settings::read_color_template,
             get_startup_file,
             restart_app,
         ])

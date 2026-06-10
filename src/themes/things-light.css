@@ -1,0 +1,17 @@
+/* Things Light — tuned for immersive, distraction-free reading.
+   The signature blue is kept for titles and links only; bold/italic and
+   inline code stay in the foreground tone so the page reads as calm prose
+   rather than syntax-highlighted text. */
+:root {
+  --color-fg: #26272b;
+  --color-bg: #ffffff;
+  --color-title: #1b61c2;
+  --color-bold: #26272b;
+  --color-italic: #26272b;
+  --color-quote: #5b5d63;
+  --color-link: #1b61c2;
+  --color-code: #3f4147;
+  --color-code-bg: #f5f6f8;
+  --color-border: #d8dadd;
+  --color-muted: #62646a;
+}

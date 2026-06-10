@@ -1,0 +1,17 @@
+/* Catppuccin Mocha — tuned for immersive, distraction-free reading.
+   Body emphasis relies on weight/slant; mauve titles and blue links carry
+   the accent, quotes are softly muted, and inline code uses a calm teal
+   instead of high-glare yellow. */
+:root {
+  --color-fg: #cdd6f4;
+  --color-bg: #1e1e2e;
+  --color-title: #cba6f7;
+  --color-bold: #cdd6f4;
+  --color-italic: #cdd6f4;
+  --color-quote: #9399b2;
+  --color-link: #89b4fa;
+  --color-code: #94e2d5;
+  --color-code-bg: #313244;
+  --color-border: #45475a;
+  --color-muted: #a6adc8;
+}
