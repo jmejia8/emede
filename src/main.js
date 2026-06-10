@@ -4,6 +4,14 @@ import {
   renderKeybindingHelp,
 } from "./keybindings.js";
 import { getScrollRoot } from "./scroll.js";
+import {
+  applyViewState,
+  flushViewState,
+  flushViewStateAsync,
+  getScrollEventTarget,
+  loadViewState,
+  saveViewState,
+} from "./viewstate.js";
 
 const { invoke, convertFileSrc } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
@@ -194,10 +202,12 @@ const winClose = document.getElementById("win-close");
 const openFileBtn = document.getElementById("open-file-btn");
 
 let currentSettings = null;
+let currentDocPath = null;
 let initialFontSize = 12;
 let initialGpuAccel = null;
 let saveTimer = null;
 let activeOpenToken = 0;
+let isRestoringViewState = false;
 let colorTemplates = [];
 
 function populateFontSelect(select, { includeInherit = false, groups = FONT_GROUPS } = {}) {
@@ -508,6 +518,7 @@ function clearToc() {
 }
 
 function showEmptyState() {
+  currentDocPath = null;
   contentEl.innerHTML = "";
   contentEl.classList.remove("visible");
   loadingStateEl.classList.add("hidden");
@@ -528,6 +539,7 @@ function showLoadingState() {
 }
 
 function showMissingFile(message) {
+  currentDocPath = null;
   contentEl.innerHTML = "";
   contentEl.classList.remove("visible");
   loadingStateEl.classList.add("hidden");
@@ -539,6 +551,7 @@ function showMissingFile(message) {
 }
 
 function showError(message) {
+  currentDocPath = null;
   contentEl.innerHTML = "";
   contentEl.classList.remove("visible");
   loadingStateEl.classList.add("hidden");
@@ -610,11 +623,30 @@ function wrapTables(root) {
   }
 }
 
+async function restoreSavedViewState(viewState, openToken) {
+  if (!viewState || (openToken !== undefined && openToken !== activeOpenToken)) return;
+
+  isRestoringViewState = true;
+  try {
+    const scrollRoot = getScrollRoot();
+    applyViewState(scrollRoot, contentEl, viewState);
+    await nextFrame();
+    if (openToken !== undefined && openToken !== activeOpenToken) return;
+    applyViewState(scrollRoot, contentEl, viewState);
+    await typesetMath();
+    if (openToken !== undefined && openToken !== activeOpenToken) return;
+    applyViewState(scrollRoot, contentEl, viewState);
+  } finally {
+    isRestoringViewState = false;
+  }
+}
+
 async function applyDocument(result, { initial = false, reload = false, openToken } = {}) {
   if (openToken !== undefined && openToken !== activeOpenToken) return;
 
   const scrollRoot = getScrollRoot();
   const scrollTop = reload ? scrollRoot.scrollTop : 0;
+  const savedViewState = reload ? null : await loadViewState(result.path);
 
   if (window.MathJax?.typesetClear) {
     window.MathJax.typesetClear([contentEl]);
@@ -626,6 +658,7 @@ async function applyDocument(result, { initial = false, reload = false, openToke
   emptyStateEl.classList.add("hidden");
   missingStateEl.classList.add("hidden");
   errorStateEl.classList.add("hidden");
+  currentDocPath = result.path;
 
   await setWindowTitle(formatWindowTitle(result.title));
 
@@ -638,12 +671,16 @@ async function applyDocument(result, { initial = false, reload = false, openToke
     });
   }
 
+  buildToc();
+
   if (reload) {
     scrollRoot.scrollTop = scrollTop;
+    scheduleTypesetMath();
+  } else if (savedViewState) {
+    void restoreSavedViewState(savedViewState, openToken);
+  } else {
+    scheduleTypesetMath();
   }
-
-  buildToc();
-  scheduleTypesetMath();
 }
 
 function slugify(text) {
@@ -813,6 +850,7 @@ async function revealWindow() {
 }
 
 async function openFile(path) {
+  flushViewState(currentDocPath, contentEl);
   const openToken = ++activeOpenToken;
   showLoadingState();
 
@@ -822,6 +860,7 @@ async function openFile(path) {
   } catch (err) {
     if (openToken !== activeOpenToken) return;
 
+    currentDocPath = null;
     showMissingFile(String(err));
 
     await setWindowTitle("emede");
@@ -1052,6 +1091,37 @@ function resetFontSize() {
   scheduleSave();
 }
 
+function wireViewState() {
+  const onScroll = () => {
+    if (isRestoringViewState || !currentDocPath) return;
+    saveViewState(currentDocPath, getScrollRoot(), contentEl);
+  };
+
+  getScrollEventTarget().addEventListener("scroll", onScroll, { passive: true });
+  document.getElementById("reader")?.addEventListener("scroll", onScroll, { passive: true });
+  window.addEventListener("scroll", onScroll, { passive: true });
+
+  let closingAfterFlush = false;
+  void getCurrentWindow().onCloseRequested(async (event) => {
+    if (closingAfterFlush) return;
+    event.preventDefault();
+    closingAfterFlush = true;
+    try {
+      if (currentDocPath) {
+        await flushViewStateAsync(currentDocPath, contentEl);
+      }
+    } catch (err) {
+      console.warn("Failed to flush view state on close", err);
+    }
+    try {
+      await getCurrentWindow().close();
+    } catch (err) {
+      console.warn("Failed to close window", err);
+      closingAfterFlush = false;
+    }
+  });
+}
+
 function wireKeybindings() {
   createKeybindingController({
     getKeybindingMode: () => currentSettings?.keybindings ?? settingKeybindings.value,
@@ -1073,6 +1143,7 @@ async function boot() {
   wireToc();
   wireTitlebar();
   wireSettings();
+  wireViewState();
   wireKeybindings();
 
   openFileBtn.addEventListener("click", () => {

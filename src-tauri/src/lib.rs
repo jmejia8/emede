@@ -1,5 +1,6 @@
 mod markdown;
 mod settings;
+mod view_state;
 
 use std::sync::Mutex;
 use tauri::{window::Color, AppHandle, Emitter, Manager, Url};
@@ -84,6 +85,8 @@ pub fn run() {
             settings::get_settings,
             settings::set_settings,
             settings::read_color_template,
+            view_state::get_view_state,
+            view_state::set_view_state,
             get_startup_file,
             restart_app,
         ])
