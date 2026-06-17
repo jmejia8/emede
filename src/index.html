@@ -234,6 +234,14 @@
         <code>emede document.md</code>
         <p class="empty-or">or</p>
         <button type="button" id="open-file-btn" class="open-file-btn">Open File</button>
+        <p class="empty-or">or</p>
+        <details id="open-path-details" class="open-path-details">
+          <summary class="open-path-toggle">Enter path or URL</summary>
+          <form id="open-path-form" class="open-path-form" novalidate>
+            <input id="open-path-input" type="text" class="open-path-input" placeholder="/absolute/path/to/file.md  or  https://…" spellcheck="false" autocomplete="off" />
+            <button type="submit" class="open-path-submit">Open</button>
+          </form>
+        </details>
       </div>
       <div id="missing-state" class="missing-state hidden">
         <img src="assets/logo.png" alt="" class="state-logo" width="128" height="128" />
@@ -247,5 +255,10 @@
         <p id="error-message" class="error-message"></p>
       </div>
     </main>
+    <div id="drag-overlay" class="drag-overlay" aria-hidden="true">
+      <div class="drag-overlay-inner">
+        <p class="drag-overlay-text">Drop to open</p>
+      </div>
+    </div>
   </body>
 </html>

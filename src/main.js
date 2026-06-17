@@ -207,6 +207,10 @@ const searchPrev = document.getElementById("search-prev");
 const searchNext = document.getElementById("search-next");
 const searchClose = document.getElementById("search-close");
 const openFileBtn = document.getElementById("open-file-btn");
+const openPathDetails = document.getElementById("open-path-details");
+const openPathForm = document.getElementById("open-path-form");
+const openPathInput = document.getElementById("open-path-input");
+const dragOverlay = document.getElementById("drag-overlay");
 
 let currentSettings = null;
 let currentDocPath = null;
@@ -881,6 +885,37 @@ async function openFile(path) {
   }
 }
 
+async function openFromUrl(url) {
+  toggleSearch(false);
+  flushViewState(currentDocPath, contentEl);
+  const openToken = ++activeOpenToken;
+  showLoadingState();
+
+  try {
+    const result = await invoke("render_markdown_url", { url });
+    await applyDocument(result, { initial: true, openToken });
+  } catch (err) {
+    if (openToken !== activeOpenToken) return;
+    currentDocPath = null;
+    showError(String(err));
+    await setWindowTitle("emede");
+  }
+}
+
+function isUrl(value) {
+  return /^https?:\/\//i.test(value.trim());
+}
+
+async function openFromInput(value) {
+  const trimmed = value.trim();
+  if (!trimmed) return;
+  if (isUrl(trimmed)) {
+    await openFromUrl(trimmed);
+  } else {
+    await openFile(trimmed);
+  }
+}
+
 async function handlePickAndOpenFile() {
   try {
     const selected = await invoke("plugin:dialog|open", {
@@ -1218,6 +1253,38 @@ function wireSearch() {
   searchClose.addEventListener("click", () => toggleSearch(false));
 }
 
+function wireOpenPath() {
+  openPathForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    void openFromInput(openPathInput.value);
+  });
+}
+
+function wireDragDrop() {
+  const win = getCurrentWindow();
+
+  void win.onDragDropEvent((event) => {
+    const { type } = event.payload;
+
+    if (type === "enter" || type === "over") {
+      dragOverlay.classList.add("drag-active");
+      dragOverlay.setAttribute("aria-hidden", "false");
+      return;
+    }
+
+    dragOverlay.classList.remove("drag-active");
+    dragOverlay.setAttribute("aria-hidden", "true");
+
+    if (type === "drop") {
+      const paths = event.payload.paths ?? [];
+      const mdPath = paths.find((p) => /\.md$/i.test(p)) ?? paths[0];
+      if (mdPath) {
+        void openFile(mdPath);
+      }
+    }
+  });
+}
+
 function wireKeybindings() {
   createKeybindingController({
     getKeybindingMode: () => currentSettings?.keybindings ?? settingKeybindings.value,
@@ -1243,6 +1310,8 @@ async function boot() {
   wireSettings();
   wireViewState();
   wireSearch();
+  wireOpenPath();
+  wireDragDrop();
   wireKeybindings();
 
   openFileBtn.addEventListener("click", () => {

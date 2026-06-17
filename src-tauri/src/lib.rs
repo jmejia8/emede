@@ -82,6 +82,7 @@ pub fn run() {
         .manage(StartupFile(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             markdown::render_markdown,
+            markdown::render_markdown_url,
             settings::get_settings,
             settings::set_settings,
             settings::read_color_template,

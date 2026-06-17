@@ -467,6 +467,137 @@ body.frame-emede .prose :is(h1, h2, h3, h4, h5, h6) {
   outline-offset: 2px;
 }
 
+/* ── open-path collapsible ─────────────────────────────────────────────── */
+
+.open-path-details {
+  margin-top: 0;
+  text-align: center;
+}
+
+.open-path-toggle {
+  display: inline-block;
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--color-muted);
+  user-select: none;
+  transition: color 0.18s ease;
+}
+
+.open-path-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.open-path-toggle:hover {
+  color: var(--color-fg);
+}
+
+.open-path-toggle::after {
+  content: " ↓";
+  font-size: 0.7rem;
+}
+
+.open-path-details[open] .open-path-toggle::after {
+  content: " ↑";
+}
+
+.open-path-form {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+  max-width: 30rem;
+  margin-inline: auto;
+}
+
+.open-path-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-code);
+  font-size: 0.78rem;
+  outline: none;
+  transition: border-color 0.18s ease;
+}
+
+.open-path-input:focus {
+  border-color: var(--color-fg);
+}
+
+.open-path-input::placeholder {
+  color: var(--color-muted);
+  opacity: 0.6;
+}
+
+.open-path-submit {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--color-fg);
+  background: transparent;
+  color: var(--color-fg);
+  font-family: sans-serif;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.open-path-submit:hover,
+.open-path-submit:focus-visible {
+  background: var(--color-fg);
+  color: var(--color-bg);
+}
+
+.open-path-submit:focus-visible {
+  outline: 2px solid var(--color-link);
+  outline-offset: 2px;
+}
+
+/* ── drag-and-drop overlay ─────────────────────────────────────────────── */
+
+.drag-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--color-bg) 88%, transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.drag-overlay.drag-active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.drag-overlay-inner {
+  border: 2px dashed var(--color-fg);
+  padding: 3rem 5rem;
+  text-align: center;
+  opacity: 0.65;
+}
+
+.drag-overlay-text {
+  margin: 0;
+  font-size: 1rem;
+  font-family: sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--color-fg);
+}
+
 .loading-state {
   position: relative;
   padding-top: 8vh;

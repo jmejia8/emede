@@ -567,6 +567,39 @@ pub fn render_markdown(path: String) -> Result<RenderResult, String> {
     render_markdown_inner(&path)
 }
 
+pub fn render_markdown_from_str(content: &str, source_path: &Path, source_id: &str) -> Result<RenderResult, String> {
+    let title = title_from_markdown(content, source_path);
+    let with_front_matter = preprocess_front_matter(content);
+    let with_fences = preprocess_math_fences(&with_front_matter);
+    let preprocessed = preprocess_tex_delimiters(&with_fences);
+
+    let arena = Arena::new();
+    let options = comrak_options_for(source_path);
+    let root = parse_document(&arena, &preprocessed, &options);
+
+    let mut html = String::new();
+    MathJaxFormatter::format_document(root, &options, &mut html)
+        .map_err(|e| format!("Failed to render markdown: {e}"))?;
+    let html = sanitize_html(&html);
+
+    Ok(RenderResult {
+        html,
+        title,
+        path: source_id.to_string(),
+    })
+}
+
+#[tauri::command]
+pub fn render_markdown_url(url: String) -> Result<RenderResult, String> {
+    let response = ureq::get(&url)
+        .call()
+        .map_err(|e| format!("Failed to fetch URL: {e}"))?;
+    let content = response
+        .into_string()
+        .map_err(|e| format!("Failed to read response body: {e}"))?;
+    render_markdown_from_str(&content, Path::new("."), &url)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
