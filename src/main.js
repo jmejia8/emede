@@ -467,6 +467,7 @@ function applySettings(settings) {
   document.documentElement.style.setProperty("--reader-margin", `${marginPercent}%`);
   document.documentElement.style.setProperty("--color-fg", settings.color_fg);
   document.documentElement.style.setProperty("--color-bg", settings.color_bg);
+  localStorage.setItem("emede-color-bg", settings.color_bg);
   for (const property of Object.values(COLOR_TEMPLATE_PROPERTIES)) {
     if (property.required) continue;
     if (settings[property.setting]) {

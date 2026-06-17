@@ -4,11 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>emede</title>
+    <script>
+      (function () {
+        var bg = localStorage.getItem("emede-color-bg");
+        if (bg) document.documentElement.style.setProperty("--color-bg", bg);
+      })();
+    </script>
     <style>
       html,
       body {
         margin: 0;
-        background-color: #faf8f5;
+        background-color: var(--color-bg, #faf8f5);
         color: #2c2c2c;
       }
     </style>
