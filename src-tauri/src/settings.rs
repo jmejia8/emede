@@ -40,6 +40,8 @@ pub struct Settings {
     pub gpu_acceleration: bool,
     #[serde(default)]
     pub justify_text: bool,
+    #[serde(default = "default_mermaid_diagrams")]
+    pub mermaid_diagrams: bool,
 }
 
 fn default_window_frame() -> String {
@@ -52,6 +54,10 @@ fn default_keybindings() -> String {
 
 fn default_gpu_acceleration() -> bool {
     false
+}
+
+fn default_mermaid_diagrams() -> bool {
+    true
 }
 
 fn default_font_inherit() -> String {
@@ -89,6 +95,7 @@ impl Default for Settings {
             keybindings: default_keybindings(),
             gpu_acceleration: default_gpu_acceleration(),
             justify_text: false,
+            mermaid_diagrams: default_mermaid_diagrams(),
         }
     }
 }

@@ -288,6 +288,17 @@ body.frame-emede .prose :is(h1, h2, h3, h4, h5, h6) {
   border-radius: 4px;
 }
 
+.prose .mermaid {
+  text-align: center;
+  margin: 1.5em 0;
+  overflow-x: auto;
+}
+
+.prose .mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
 .prose table {
   width: auto;
   margin: 0 auto 1.25em;

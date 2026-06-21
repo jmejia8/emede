@@ -195,6 +195,7 @@ const settingWindowFrame = document.getElementById("setting-window-frame");
 const settingKeybindings = document.getElementById("setting-keybindings");
 const settingGpu = document.getElementById("setting-gpu");
 const settingJustify = document.getElementById("setting-justify");
+const settingMermaid = document.getElementById("setting-mermaid");
 const keybindingsHelp = document.getElementById("keybindings-help");
 const titlebarTitle = document.getElementById("titlebar-title");
 const winMinimize = document.getElementById("win-minimize");
@@ -494,8 +495,10 @@ function applySettings(settings) {
   renderKeybindingHelp(keybindingsHelp, settings.keybindings);
   settingGpu.checked = settings.gpu_acceleration;
   settingJustify.checked = settings.justify_text;
+  settingMermaid.checked = settings.mermaid_diagrams ?? true;
   contentEl.classList.toggle("prose-justify", settings.justify_text);
   void applyWindowFrame(settings.window_frame);
+  scheduleMermaid();
 }
 
 function settingsFromForm() {
@@ -512,6 +515,7 @@ function settingsFromForm() {
     keybindings: settingKeybindings.value,
     gpu_acceleration: settingGpu.checked,
     justify_text: settingJustify.checked,
+    mermaid_diagrams: settingMermaid.checked,
   };
 }
 
@@ -614,6 +618,119 @@ function scheduleTypesetMath() {
   void typesetMath();
 }
 
+let mermaidScriptLoaded = false;
+
+async function ensureMermaidLoaded() {
+  if (window.mermaid) return true;
+  if (mermaidScriptLoaded) {
+    const deadline = Date.now() + 5000;
+    while (!window.mermaid && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    return !!window.mermaid;
+  }
+  mermaidScriptLoaded = true;
+  return new Promise((resolve) => {
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js";
+    script.onload = () => resolve(true);
+    script.onerror = () => {
+      mermaidScriptLoaded = false;
+      console.warn("Failed to load Mermaid from CDN");
+      resolve(false);
+    };
+    document.head.appendChild(script);
+  });
+}
+
+async function renderMermaid() {
+  if (!currentSettings?.mermaid_diagrams) return;
+  const blocks = contentEl.querySelectorAll("pre > code.language-mermaid");
+  const rendered = contentEl.querySelectorAll("div.mermaid[data-mermaid-source]");
+  if (blocks.length === 0 && rendered.length === 0) return;
+
+  const loaded = await ensureMermaidLoaded();
+  if (!loaded || !window.mermaid) return;
+
+  const style = getComputedStyle(document.documentElement);
+  const get = (v) => style.getPropertyValue(v).trim();
+  const fontFamily = get("--font-serif");
+  const fg = get("--color-fg");
+  const bg = get("--color-bg");
+  const border = get("--color-border");
+  const codeBg = get("--color-code-bg");
+  const link = get("--color-link");
+  const title = get("--color-title") || fg;
+  window.mermaid.initialize({
+    startOnLoad: false,
+    theme: "base",
+    themeVariables: {
+      fontFamily: fontFamily || undefined,
+      background: bg,
+      primaryColor: codeBg,
+      primaryTextColor: fg,
+      primaryBorderColor: border,
+      secondaryColor: codeBg,
+      tertiaryColor: bg,
+      lineColor: border,
+      mainBkg: codeBg,
+      nodeBorder: border,
+      clusterBkg: codeBg,
+      clusterBorder: border,
+      titleColor: title,
+      edgeLabelBackground: bg,
+      nodeTextColor: fg,
+      labelColor: fg,
+      // sequence diagrams
+      actorBkg: codeBg,
+      actorBorder: border,
+      actorTextColor: fg,
+      actorLineColor: border,
+      signalColor: fg,
+      signalTextColor: fg,
+      labelBoxBkgColor: codeBg,
+      labelBoxBorderColor: border,
+      labelTextColor: fg,
+      loopTextColor: fg,
+      noteBkgColor: codeBg,
+      noteBorderColor: border,
+      noteTextColor: fg,
+      activationBkgColor: codeBg,
+      activationBorderColor: border,
+      // links
+      linkColor: link,
+    },
+  });
+
+  const nodes = [];
+  for (const code of blocks) {
+    const pre = code.parentElement;
+    const div = document.createElement("div");
+    div.className = "mermaid";
+    div.dataset.mermaidSource = code.textContent;
+    div.textContent = code.textContent;
+    pre.replaceWith(div);
+    nodes.push(div);
+  }
+  for (const div of rendered) {
+    const source = div.dataset.mermaidSource;
+    div.removeAttribute("data-processed");
+    div.textContent = source;
+    div.dataset.mermaidSource = source;
+    nodes.push(div);
+  }
+
+  try {
+    await window.mermaid.run({ nodes });
+  } catch (err) {
+    console.warn("Mermaid rendering failed", err);
+  }
+}
+
+function scheduleMermaid() {
+  void renderMermaid();
+}
+
 function isRemoteUrl(src) {
   return /^(?:https?:|data:|mailto:|tel:)/i.test(src);
 }
@@ -693,10 +810,13 @@ async function applyDocument(result, { initial = false, reload = false, openToke
 
   if (reload) {
     scrollRoot.scrollTop = scrollTop;
+    scheduleMermaid();
     scheduleTypesetMath();
   } else if (savedViewState) {
+    scheduleMermaid();
     void restoreSavedViewState(savedViewState, openToken);
   } else {
+    scheduleMermaid();
     scheduleTypesetMath();
   }
 }
@@ -1105,6 +1225,7 @@ function wireSettings() {
   });
 
   settingJustify.addEventListener("input", scheduleSave);
+  settingMermaid.addEventListener("input", scheduleSave);
 
   settingGpu.addEventListener("change", async () => {
     scheduleSave();
