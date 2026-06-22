@@ -175,6 +175,7 @@ const tocClose = document.getElementById("toc-close");
 const tocList = document.getElementById("toc-list");
 const settingsPanel = document.getElementById("settings-panel");
 const settingsToggle = document.getElementById("settings-toggle");
+const printToggle = document.getElementById("print-toggle");
 const settingsClose = document.getElementById("settings-close");
 const aboutOverlay = document.getElementById("about-overlay");
 const aboutLink = document.getElementById("about-link");
@@ -1416,6 +1417,7 @@ function wireKeybindings() {
     toggleSearch,
     adjustFontSize,
     resetFontSize,
+    print: () => window.print(),
     settingsPanel,
     tocPanel,
     aboutOverlay,
@@ -1429,6 +1431,19 @@ async function boot() {
   wireExternalLinks();
   wireToc();
   wireTitlebar();
+  printToggle.addEventListener("click", () => window.print());
+  let savedPrintFontSize = null;
+  window.addEventListener("beforeprint", () => {
+    savedPrintFontSize = document.documentElement.style.getPropertyValue("--font-size");
+    const current = toPt(savedPrintFontSize, 12);
+    document.documentElement.style.setProperty("--font-size", `${Math.max(4, Math.round(current / 2))}pt`);
+  });
+  window.addEventListener("afterprint", () => {
+    if (savedPrintFontSize !== null) {
+      document.documentElement.style.setProperty("--font-size", savedPrintFontSize);
+      savedPrintFontSize = null;
+    }
+  });
   wireSettings();
   wireViewState();
   wireSearch();

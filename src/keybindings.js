@@ -5,6 +5,7 @@ const KEYBINDING_MODES = new Set(["default", "vim", "emacs", "common"]);
 export const KEYBINDING_HELP = {
   default: [
     ["Ctrl+F", "Find in page"],
+    ["Ctrl+P", "Print / Save as PDF"],
     ["Ctrl+,", "Open settings"],
     ["Ctrl++ / Ctrl+- / Ctrl+0", "Increase / decrease / reset font size"],
     ["Ctrl+Shift+T", "Toggle table of contents"],
@@ -12,6 +13,7 @@ export const KEYBINDING_HELP = {
   ],
   vim: [
     ["Ctrl+F", "Find in page"],
+    ["Ctrl+P", "Print / Save as PDF"],
     ["j / k", "Scroll down / up one line"],
     ["d / u", "Half page down / up"],
     ["f / b / Space", "Page down / page up / page down"],
@@ -26,6 +28,7 @@ export const KEYBINDING_HELP = {
   ],
   emacs: [
     ["Ctrl+F", "Find in page"],
+    ["Ctrl+P", "Print / Save as PDF"],
     ["Ctrl+n / Ctrl+p", "Scroll down / up one line"],
     ["Ctrl+v", "Page down"],
     ["Alt+v", "Page up"],
@@ -37,6 +40,7 @@ export const KEYBINDING_HELP = {
   ],
   common: [
     ["Ctrl+F", "Find in page"],
+    ["Ctrl+P", "Print / Save as PDF"],
     ["j / k", "Scroll down / up one line"],
     ["Space", "Page down"],
     ["Shift+Space", "Page up"],
@@ -98,6 +102,12 @@ function scrollToBottom() {
 }
 
 function handleAppShortcuts(event, actions) {
+  if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "p") {
+    event.preventDefault();
+    actions.print?.();
+    return true;
+  }
+
   if (event.ctrlKey && (event.key === "=" || event.key === "+")) {
     event.preventDefault();
     actions.adjustFontSize(1);

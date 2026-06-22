@@ -1322,6 +1322,40 @@ body:has(.settings-panel:not(.hidden)) .settings-toggle {
   color: var(--color-muted);
 }
 
+.print-setting-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-fg);
+  font: inherit;
+  font-size: 0.9em;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.print-setting-btn:hover,
+.print-setting-btn:focus-visible {
+  background: color-mix(in srgb, var(--color-fg) 6%, transparent);
+}
+
+.print-setting-btn:focus-visible {
+  outline: 2px solid var(--color-link);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .print-setting-btn {
+    transition: none;
+  }
+}
+
 .about-link {
   margin-top: 0.5rem;
   padding: 0.6rem 0;
@@ -1706,5 +1740,64 @@ mark[data-find-match] {
 mark[data-find-match].find-active {
   background: color-mix(in srgb, var(--color-link) 40%, transparent);
   animation: match-pulse 1.5s ease-in-out 2;
+}
+
+@media print {
+  *,
+  *::before,
+  *::after {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  @page {
+    margin: 0;
+  }
+
+  html,
+  body {
+    background: var(--color-bg) !important;
+    color: var(--color-fg);
+  }
+
+  body,
+  body.frame-emede {
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  body.frame-emede #reader {
+    position: static !important;
+    inset: auto !important;
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 0;
+  }
+
+  #titlebar,
+  .reader-control,
+  #settings-panel,
+  #toc-panel,
+  #search-bar,
+  #about-overlay,
+  #drag-overlay,
+  #loading-state,
+  #empty-state,
+  #missing-state,
+  #error-state {
+    display: none !important;
+  }
+
+  .prose {
+    opacity: 1 !important;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    break-after: avoid;
+  }
+
+  pre, table, figure, img, blockquote, .mermaid, mjx-container {
+    break-inside: avoid;
+  }
 }
 
