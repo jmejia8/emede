@@ -63,15 +63,22 @@ jobs:
 
       - name: Compress binary and upload to release
         run: |
+          VERSION="${{ steps.tauri_build.outputs.appVersion }}"
           BINARY="src-tauri/target/release/emede"
-          ARCHIVE="emede-v${{ steps.tauri_build.outputs.appVersion }}-x86_64-linux.tar.gz"
-          if [ -f "$BINARY" ]; then
-            tar -czf "$ARCHIVE" -C "$(dirname "$BINARY")" "$(basename "$BINARY")"
-            gh release upload "v${{ steps.tauri_build.outputs.appVersion }}" "$ARCHIVE" --clobber
-          else
+          ICON="src-tauri/icons/128x128.png"
+          ARCHIVE="emede-v$VERSION-x86_64-linux.tar.gz"
+          if [ ! -f "$BINARY" ]; then
             echo "Binary not found at $BINARY"
             ls -la src-tauri/target/release/ 2>/dev/null || echo "release dir not found"
             exit 1
           fi
+          # Bundle the binary together with the app icon so install.sh can wire
+          # up a desktop entry without a second download.
+          STAGE="$(mktemp -d)"
+          cp "$BINARY" "$STAGE/emede"
+          [ -f "$ICON" ] && cp "$ICON" "$STAGE/128x128.png"
+          tar -czf "$ARCHIVE" -C "$STAGE" .
+          sha256sum "$ARCHIVE" > "$ARCHIVE.sha256"
+          gh release upload "v$VERSION" "$ARCHIVE" "$ARCHIVE.sha256" --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

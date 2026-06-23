@@ -8,11 +8,34 @@
   Immersive, read-only markdown viewer powered by <a href="https://tauri.app">Tauri</a>, <a href="https://github.com/kivikakk/comrak">Comrak</a>, and bundled <a href="https://www.mathjax.org">MathJax</a>.
 </p>
 
-## Requirements
+## Install (Linux)
 
-- Rust toolchain and Node.js (for building)
+```bash
+curl -fsSL https://raw.githubusercontent.com/jmejia8/emede/main/scripts/install.sh | sh
+```
 
-## Usage
+Installs to `~/.local/bin` (no sudo), registers a desktop entry, and associates
+`.md` files with emede. The download is verified against a published SHA256
+checksum. Requires the `webkit2gtk` 4.1 runtime
+(`libwebkit2gtk-4.1-0` on Debian/Ubuntu, `webkit2gtk4.1` on Fedora,
+`webkit2gtk-4.1` on Arch) — the installer warns if it's missing.
+
+Pin a version with `EMEDE_VERSION=0.1.5`, or uninstall with:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jmejia8/emede/main/scripts/install.sh | sh -s -- --uninstall
+```
+
+Prebuilt `.deb` / `.rpm` packages are also attached to each
+[release](https://github.com/jmejia8/emede/releases).
+
+## Build from source
+
+### Requirements
+
+- Rust toolchain and Node.js
+
+### Usage
 
 ```bash
 # development
