@@ -633,7 +633,7 @@ async function ensureMermaidLoaded() {
   mermaidScriptLoaded = true;
   return new Promise((resolve) => {
     const script = document.createElement("script");
-    script.src = "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js";
+    script.src = "/vendor/mermaid/mermaid.min.js";
     script.onload = () => resolve(true);
     script.onerror = () => {
       mermaidScriptLoaded = false;

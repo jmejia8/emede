@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "tauri": "tauri",
-    "postinstall": "mkdir -p src/vendor/mathjax/mathjax-newcm-font && cp node_modules/mathjax/tex-chtml.js src/vendor/mathjax/ && cp node_modules/@mathjax/mathjax-newcm-font/chtml.js src/vendor/mathjax/mathjax-newcm-font/ && cp -r node_modules/@mathjax/mathjax-newcm-font/chtml src/vendor/mathjax/mathjax-newcm-font/"
+    "postinstall": "mkdir -p src/vendor/mathjax/mathjax-newcm-font src/vendor/mermaid && cp node_modules/mathjax/tex-chtml.js src/vendor/mathjax/ && cp node_modules/@mathjax/mathjax-newcm-font/chtml.js src/vendor/mathjax/mathjax-newcm-font/ && cp -r node_modules/@mathjax/mathjax-newcm-font/chtml src/vendor/mathjax/mathjax-newcm-font/ && cp node_modules/mermaid/dist/mermaid.min.js src/vendor/mermaid/"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2"
@@ -15,6 +15,7 @@
     "@tauri-apps/plugin-dialog": "^2.7.1",
     "@tauri-apps/plugin-opener": "^2.5.4",
     "@tauri-apps/plugin-window-state": "^2.4.1",
-    "mathjax": "^4"
+    "mathjax": "^4",
+    "mermaid": "^11.15.0"
   }
 }
