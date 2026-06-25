@@ -1,6 +1,6 @@
 [package]
 name = "emede"
-version = "0.1.7"
+version = "0.1.8"
 description = "Immersive markdown reader"
 authors = ["you"]
 edition = "2021"
