@@ -1,32 +1,64 @@
 use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::net::{IpAddr, Ipv4Addr, UdpSocket};
+use std::net::{IpAddr, Ipv4Addr, TcpStream, UdpSocket};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread::JoinHandle;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tiny_http::{Header, Method, Response, Server};
 
 use crate::markdown;
 use crate::settings;
 
-pub struct ShareState(pub Mutex<Option<ShareHandle>>);
+// ── Public state ──────────────────────────────────────────────────────────────
 
-pub struct ShareHandle {
-    server: Arc<Server>,
+pub struct ShareState(pub Mutex<ShareStateInner>);
+
+pub struct ShareStateInner {
+    server: Option<Arc<Server>>,
     join: Option<JoinHandle<()>>,
-    info: ShareInfo,
+    port: Option<u16>,
+    /// Shared with the server thread; keyed by hash.
+    route_map: Arc<RwLock<HashMap<String, NoteRoute>>>,
+    /// path → hash reverse index.
+    path_to_hash: HashMap<String, String>,
+    /// Most recently shared path (for backwards-compat get_share_status).
+    last_path: Option<String>,
+}
+
+impl Default for ShareStateInner {
+    fn default() -> Self {
+        Self {
+            server: None,
+            join: None,
+            port: None,
+            route_map: Arc::new(RwLock::new(HashMap::new())),
+            path_to_hash: HashMap::new(),
+            last_path: None,
+        }
+    }
+}
+
+#[derive(Clone)]
+struct NoteRoute {
+    path: String,
+    title: String,
+    hash: String,
 }
 
 #[derive(Clone, Serialize)]
 pub struct ShareInfo {
     pub url: String,
+    pub home_url: String,
     pub ip: String,
     pub port: u16,
     pub hash: String,
+    pub title: String,
 }
+
+// ── LAN helpers ───────────────────────────────────────────────────────────────
 
 /// Best-effort discovery of this machine's primary LAN address. Connecting a UDP
 /// socket does not send any packets; it just lets the OS pick the outbound
@@ -43,18 +75,29 @@ fn local_ip() -> Option<IpAddr> {
     }
 }
 
-// --- Persistent per-file share routes ---
+/// Check if anything is still listening on `port` on localhost.
+fn is_port_alive(port: u16) -> bool {
+    TcpStream::connect_timeout(
+        &std::net::SocketAddr::from(([127, 0, 0, 1], port)),
+        Duration::from_millis(50),
+    )
+    .is_ok()
+}
+
+// ── Persistent per-file hash storage ─────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ShareRouteEntry {
     hash: String,
-    port: u16,
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 struct ShareRouteFile {
     #[serde(default)]
     routes: HashMap<String, ShareRouteEntry>,
+    /// Port we successfully bound to last time; tried first on the next start.
+    #[serde(default)]
+    preferred_port: Option<u16>,
 }
 
 fn share_routes_path() -> PathBuf {
@@ -86,7 +129,88 @@ fn save_share_routes(file: &ShareRouteFile) {
     }
 }
 
-// --- Hash generation ---
+// ── Cross-instance active-shares registry ─────────────────────────────────────
+//
+// All running emede instances write their active shares to this shared JSON file
+// so the home page at "/" can list notes from every instance on the machine.
+// Stale entries (process crashed) are detected by checking if the port is still
+// reachable, so no cleanup daemon is needed.
+
+#[derive(Debug, Serialize, Deserialize, Default)]
+struct ActiveSharesFile {
+    instances: HashMap<String, InstanceEntry>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct InstanceEntry {
+    port: u16,
+    notes: Vec<ActiveNoteEntry>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct ActiveNoteEntry {
+    path: String,
+    hash: String,
+    title: String,
+}
+
+fn active_shares_path() -> PathBuf {
+    dirs::config_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("emede")
+        .join("active_shares.json")
+}
+
+fn load_active_shares() -> ActiveSharesFile {
+    let path = active_shares_path();
+    if path.exists() {
+        std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default()
+    } else {
+        ActiveSharesFile::default()
+    }
+}
+
+fn save_active_shares(file: &ActiveSharesFile) {
+    let path = active_shares_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Ok(json) = serde_json::to_string_pretty(file) {
+        let _ = std::fs::write(&path, json);
+    }
+}
+
+fn sync_active_shares(inner: &ShareStateInner) {
+    let pid = std::process::id().to_string();
+    let mut file = load_active_shares();
+
+    // Prune dead instances while we're here.
+    file.instances
+        .retain(|p, entry| p == &pid || is_port_alive(entry.port));
+
+    let map = inner.route_map.read().unwrap();
+    if map.is_empty() || inner.port.is_none() {
+        file.instances.remove(&pid);
+    } else {
+        let notes: Vec<ActiveNoteEntry> = map
+            .values()
+            .map(|r| ActiveNoteEntry {
+                path: r.path.clone(),
+                hash: r.hash.clone(),
+                title: r.title.clone(),
+            })
+            .collect();
+        file.instances
+            .insert(pid, InstanceEntry { port: inner.port.unwrap(), notes });
+    }
+
+    save_active_shares(&file);
+}
+
+// ── Hash generation ───────────────────────────────────────────────────────────
 
 static SHARE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -100,6 +224,8 @@ fn random_hash() -> String {
     let mixed = nanos ^ counter.wrapping_mul(0x9E37_79B9_7F4A_7C15);
     format!("{:08x}", (mixed as u32))
 }
+
+// ── Image inlining helpers ────────────────────────────────────────────────────
 
 fn is_remote_src(src: &str) -> bool {
     let lower = src.to_ascii_lowercase();
@@ -191,10 +317,13 @@ fn inline_local_images(html: &str) -> String {
     result
 }
 
-fn escape_title(s: &str) -> String {
+// ── Page building ─────────────────────────────────────────────────────────────
+
+fn escape_html(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
+        .replace('"', "&quot;")
 }
 
 fn font_size_pt(value: &str) -> u32 {
@@ -225,7 +354,7 @@ pub fn build_shared_page(path: &str) -> Result<String, String> {
     };
 
     let page = SHARED_PAGE_TEMPLATE
-        .replace("{{TITLE}}", &escape_title(&result.title))
+        .replace("{{TITLE}}", &escape_html(&result.title))
         .replace("{{FG}}", &settings.color_fg)
         .replace("{{BG}}", &settings.color_bg)
         .replace("{{SIZE}}", &font_size_pt(&settings.font_size).to_string())
@@ -236,97 +365,341 @@ pub fn build_shared_page(path: &str) -> Result<String, String> {
     Ok(page)
 }
 
-fn stop_handle(handle: ShareHandle) {
-    handle.server.unblock();
-    if let Some(join) = handle.join {
+fn build_home_page(
+    route_map: &HashMap<String, NoteRoute>,
+    ip: &str,
+    port: u16,
+) -> Response<std::io::Cursor<Vec<u8>>> {
+    let pid = std::process::id().to_string();
+
+    // Collect (title, url, filename) across all live instances.
+    let mut entries: Vec<(String, String, String)> = Vec::new();
+
+    for note in route_map.values() {
+        let url = format!("http://{}:{}/{}", ip, port, note.hash);
+        let filename = Path::new(&note.path)
+            .file_name()
+            .map(|f| f.to_string_lossy().to_string())
+            .unwrap_or_else(|| note.path.clone());
+        entries.push((note.title.clone(), url, filename));
+    }
+
+    let shares = load_active_shares();
+    for (instance_pid, entry) in &shares.instances {
+        if *instance_pid == pid {
+            continue;
+        }
+        if !is_port_alive(entry.port) {
+            continue;
+        }
+        for note in &entry.notes {
+            let url = format!("http://{}:{}/{}", ip, entry.port, note.hash);
+            let filename = Path::new(&note.path)
+                .file_name()
+                .map(|f| f.to_string_lossy().to_string())
+                .unwrap_or_else(|| note.path.clone());
+            entries.push((note.title.clone(), url, filename));
+        }
+    }
+
+    entries.sort_by(|a, b| a.0.cmp(&b.0));
+
+    let body = if entries.is_empty() {
+        "<p class=\"empty\">No notes are currently being shared.</p>".to_string()
+    } else {
+        let mut s = String::from("<ul>");
+        for (title, url, filename) in &entries {
+            s.push_str(&format!(
+                "<li><a href=\"{}\">{}</a><span class=\"path\">{}</span></li>",
+                escape_html(url),
+                escape_html(title),
+                escape_html(filename),
+            ));
+        }
+        s.push_str("</ul>");
+        s
+    };
+
+    let html = format!(
+        r#"<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>emede — shared notes</title>
+<style>
+  *, *::before, *::after {{ box-sizing: border-box; }}
+  body {{
+    font-family: system-ui, -apple-system, sans-serif;
+    max-width: 38rem;
+    margin: 3rem auto;
+    padding: 0 1.25rem 4rem;
+    background: #faf8f5;
+    color: #2c2c2c;
+    line-height: 1.6;
+  }}
+  h1 {{ font-size: 1.4rem; font-weight: 600; margin-bottom: 0.25rem; }}
+  p.sub {{ color: #888; font-size: 0.9rem; margin: 0 0 2rem; }}
+  ul {{ list-style: none; padding: 0; margin: 0; }}
+  li {{
+    margin: 0.6rem 0;
+    padding: 0.75rem 1rem;
+    border: 1px solid #e0dbd5;
+    border-radius: 8px;
+  }}
+  li:hover {{ background: #f2ede8; }}
+  a {{
+    text-decoration: none;
+    font-size: 1.05rem;
+    font-weight: 500;
+    color: #2c5282;
+    display: block;
+  }}
+  a:hover {{ text-decoration: underline; }}
+  .path {{ font-size: 0.78rem; color: #999; display: block; margin-top: 2px; }}
+  .empty {{ color: #888; font-style: italic; }}
+</style>
+</head>
+<body>
+<h1>emede shared notes</h1>
+<p class="sub">Notes currently shared on this network</p>
+{body}
+</body>
+</html>"#
+    );
+
+    html_response(html, 200)
+}
+
+// ── Server lifecycle ──────────────────────────────────────────────────────────
+
+/// Preferred default port. All notes in an instance share one port.
+const DEFAULT_PORT: u16 = 7777;
+
+fn try_bind_server(preferred_port: Option<u16>) -> Result<(Arc<Server>, u16), String> {
+    let mut candidates: Vec<String> = Vec::new();
+    if let Some(p) = preferred_port {
+        if p != DEFAULT_PORT {
+            candidates.push(format!("0.0.0.0:{p}"));
+        }
+    }
+    candidates.push(format!("0.0.0.0:{DEFAULT_PORT}"));
+    candidates.push("0.0.0.0:0".to_string());
+
+    for addr in &candidates {
+        if let Ok(s) = Server::http(addr) {
+            let port = s
+                .server_addr()
+                .to_ip()
+                .map(|a| a.port())
+                .ok_or_else(|| "failed to read server port".to_string())?;
+            return Ok((Arc::new(s), port));
+        }
+    }
+
+    Err("Failed to bind to any port".to_string())
+}
+
+fn stop_server(inner: &mut ShareStateInner) {
+    if let Some(server) = inner.server.take() {
+        server.unblock();
+    }
+    if let Some(join) = inner.join.take() {
         let _ = join.join();
     }
+    inner.port = None;
 }
+
+// ── Tauri commands ────────────────────────────────────────────────────────────
 
 #[tauri::command]
 pub fn start_share(
     path: String,
     state: tauri::State<ShareState>,
 ) -> Result<ShareInfo, String> {
-    // Validate the document renders before we start serving it.
-    let _ = markdown::render_markdown_inner(&path)?;
+    let result = markdown::render_markdown_inner(&path)?;
+    let title = result.title.clone();
 
-    let mut guard = state.0.lock().map_err(|e| e.to_string())?;
-    if let Some(existing) = guard.take() {
-        stop_handle(existing);
+    let mut inner = state.0.lock().map_err(|e| e.to_string())?;
+
+    // If this path is already being served, just return its existing info.
+    if let Some(hash) = inner.path_to_hash.get(&path).cloned() {
+        let ip = local_ip()
+            .unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST))
+            .to_string();
+        let port = inner.port.unwrap();
+        inner.last_path = Some(path.clone());
+        return Ok(ShareInfo {
+            url: format!("http://{ip}:{port}/{hash}"),
+            home_url: format!("http://{ip}:{port}/"),
+            ip,
+            port,
+            hash,
+            title,
+        });
     }
 
-    // Try to reuse the saved port and hash for this file so the URL stays stable.
     let mut routes = load_share_routes();
-    let (server, port, hash) = if let Some(entry) = routes.routes.get(&path) {
-        let bind_addr = format!("0.0.0.0:{}", entry.port);
-        if let Ok(s) = Server::http(&bind_addr) {
-            (Arc::new(s), entry.port, entry.hash.clone())
-        } else {
-            // Saved port unavailable; fall back to a new random assignment.
-            let s = Server::http("0.0.0.0:0").map_err(|e| e.to_string())?;
-            let p = s
-                .server_addr()
-                .to_ip()
-                .map(|a| a.port())
-                .ok_or_else(|| "failed to read server port".to_string())?;
-            let h = random_hash();
-            (Arc::new(s), p, h)
-        }
-    } else {
-        let s = Server::http("0.0.0.0:0").map_err(|e| e.to_string())?;
-        let p = s
-            .server_addr()
-            .to_ip()
-            .map(|a| a.port())
-            .ok_or_else(|| "failed to read server port".to_string())?;
-        let h = random_hash();
-        (Arc::new(s), p, h)
-    };
 
-    routes
+    // Reuse the saved hash for this file so the URL stays stable across restarts.
+    let hash = routes
         .routes
-        .insert(path.clone(), ShareRouteEntry { hash: hash.clone(), port });
+        .get(&path)
+        .map(|e| e.hash.clone())
+        .unwrap_or_else(random_hash);
+
+    // Start the server once; all subsequent notes share the same instance.
+    if inner.server.is_none() {
+        let (server, port) = try_bind_server(routes.preferred_port)?;
+
+        let route_map_clone = Arc::clone(&inner.route_map);
+        let thread_server = Arc::clone(&server);
+        let server_port = port;
+
+        let join = std::thread::spawn(move || {
+            for request in thread_server.incoming_requests() {
+                let url = request.url().split('?').next().unwrap_or("").to_string();
+                let is_get = request.method() == &Method::Get;
+
+                let response = if !is_get {
+                    html_response("Method not allowed".to_string(), 405)
+                } else if url == "/" {
+                    let current_ip = local_ip()
+                        .unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST))
+                        .to_string();
+                    let map = route_map_clone.read().unwrap();
+                    build_home_page(&map, &current_ip, server_port)
+                } else {
+                    let hash_str = url.trim_start_matches('/').to_string();
+                    let path_opt = {
+                        let map = route_map_clone.read().unwrap();
+                        map.get(&hash_str).map(|r| r.path.clone())
+                    };
+                    match path_opt {
+                        Some(p) => match build_shared_page(&p) {
+                            Ok(html) => html_response(html, 200),
+                            Err(err) => html_response(format!("Render error: {err}"), 500),
+                        },
+                        None => html_response("Not found".to_string(), 404),
+                    }
+                };
+
+                let _ = request.respond(response);
+            }
+        });
+
+        inner.server = Some(server);
+        inner.join = Some(join);
+        inner.port = Some(port);
+
+        if routes.preferred_port != Some(port) {
+            routes.preferred_port = Some(port);
+        }
+    }
+
+    let port = inner.port.unwrap();
+
+    inner.route_map.write().unwrap().insert(
+        hash.clone(),
+        NoteRoute { path: path.clone(), title: title.clone(), hash: hash.clone() },
+    );
+    inner.path_to_hash.insert(path.clone(), hash.clone());
+    inner.last_path = Some(path.clone());
+
+    routes.routes.insert(path.clone(), ShareRouteEntry { hash: hash.clone() });
     save_share_routes(&routes);
+    sync_active_shares(&inner);
 
     let ip = local_ip()
         .unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST))
         .to_string();
-    let info = ShareInfo {
+
+    Ok(ShareInfo {
         url: format!("http://{ip}:{port}/{hash}"),
+        home_url: format!("http://{ip}:{port}/"),
+        ip,
+        port,
+        hash,
+        title,
+    })
+}
+
+/// Stop sharing a single note. Stops the server if no notes remain.
+#[tauri::command]
+pub fn stop_share_note(
+    path: String,
+    state: tauri::State<ShareState>,
+) -> Result<(), String> {
+    let mut inner = state.0.lock().map_err(|e| e.to_string())?;
+    if let Some(hash) = inner.path_to_hash.remove(&path) {
+        inner.route_map.write().unwrap().remove(&hash);
+    }
+    if inner.last_path.as_deref() == Some(&path) {
+        inner.last_path = inner.path_to_hash.keys().next().cloned();
+    }
+    if inner.path_to_hash.is_empty() {
+        stop_server(&mut inner);
+    }
+    sync_active_shares(&inner);
+    Ok(())
+}
+
+/// Stop sharing everything and shut down the server.
+#[tauri::command]
+pub fn stop_share(state: tauri::State<ShareState>) -> Result<(), String> {
+    let mut inner = state.0.lock().map_err(|e| e.to_string())?;
+    inner.route_map.write().unwrap().clear();
+    inner.path_to_hash.clear();
+    inner.last_path = None;
+    stop_server(&mut inner);
+    sync_active_shares(&inner);
+    Ok(())
+}
+
+/// Returns share info for the most recently shared note (backwards compat).
+#[tauri::command]
+pub fn get_share_status(state: tauri::State<ShareState>) -> Option<ShareInfo> {
+    let inner = state.0.lock().ok()?;
+    let path = inner.last_path.as_ref()?;
+    let hash = inner.path_to_hash.get(path)?;
+    let port = inner.port?;
+    let map = inner.route_map.read().ok()?;
+    let route = map.get(hash)?;
+    let ip = local_ip()
+        .unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST))
+        .to_string();
+    Some(ShareInfo {
+        url: format!("http://{ip}:{port}/{hash}"),
+        home_url: format!("http://{ip}:{port}/"),
         ip,
         port,
         hash: hash.clone(),
-    };
+        title: route.title.clone(),
+    })
+}
 
-    let route = format!("/{hash}");
-    let thread_server = Arc::clone(&server);
-    let thread_path = path.clone();
-    let join = std::thread::spawn(move || {
-        for request in thread_server.incoming_requests() {
-            let request_route = request.url().split('?').next().unwrap_or("").to_string();
-            let is_match = request.method() == &Method::Get && request_route == route;
-
-            let response = if is_match {
-                match build_shared_page(&thread_path) {
-                    Ok(html) => html_response(html, 200),
-                    Err(err) => html_response(format!("Render error: {err}"), 500),
-                }
-            } else {
-                html_response("Not found".to_string(), 404)
-            };
-
-            let _ = request.respond(response);
-        }
-    });
-
-    *guard = Some(ShareHandle {
-        server,
-        join: Some(join),
-        info: info.clone(),
-    });
-
-    Ok(info)
+/// Returns share info for a specific note path, or None if not currently shared.
+#[tauri::command]
+pub fn get_note_share_info(
+    path: String,
+    state: tauri::State<ShareState>,
+) -> Option<ShareInfo> {
+    let inner = state.0.lock().ok()?;
+    let hash = inner.path_to_hash.get(&path)?;
+    let port = inner.port?;
+    let map = inner.route_map.read().ok()?;
+    let route = map.get(hash)?;
+    let ip = local_ip()
+        .unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST))
+        .to_string();
+    Some(ShareInfo {
+        url: format!("http://{ip}:{port}/{hash}"),
+        home_url: format!("http://{ip}:{port}/"),
+        ip,
+        port,
+        hash: hash.clone(),
+        title: route.title.clone(),
+    })
 }
 
 fn html_response(body: String, status: u16) -> Response<std::io::Cursor<Vec<u8>>> {
@@ -335,21 +708,6 @@ fn html_response(body: String, status: u16) -> Response<std::io::Cursor<Vec<u8>>
     Response::from_string(body)
         .with_header(header)
         .with_status_code(status)
-}
-
-#[tauri::command]
-pub fn stop_share(state: tauri::State<ShareState>) -> Result<(), String> {
-    let mut guard = state.0.lock().map_err(|e| e.to_string())?;
-    if let Some(handle) = guard.take() {
-        stop_handle(handle);
-    }
-    Ok(())
-}
-
-#[tauri::command]
-pub fn get_share_status(state: tauri::State<ShareState>) -> Option<ShareInfo> {
-    let guard = state.0.lock().ok()?;
-    guard.as_ref().map(|handle| handle.info.clone())
 }
 
 const SHARED_PAGE_TEMPLATE: &str = r##"<!doctype html>
@@ -520,8 +878,6 @@ const SHARED_PAGE_TEMPLATE: &str = r##"<!doctype html>
     var mermaidLib = null;
     // Custom properties read back as their literal source text, so a value like
     // color-mix(...) reaches Mermaid unresolved and its color parser throws.
-    // Assigning the value to a real `color` and reading it back lets the browser
-    // resolve it to a concrete rgb() that Mermaid can parse.
     // Paint the value onto a 1x1 canvas and read the pixel back. This forces the
     // browser to resolve any modern syntax (color-mix(), color(srgb ...), etc.)
     // down to plain 0-255 RGBA that Mermaid's color parser understands.
@@ -602,7 +958,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("create temp dir");
         let img_path = dir.join("pic.png");
-        // 1x1 transparent PNG bytes are not required; any bytes work for the test.
         std::fs::write(&img_path, b"\x89PNG\r\n\x1a\n test bytes").expect("write img");
 
         let html = format!(r#"<p><img src="{}" alt="x"></p>"#, img_path.display());

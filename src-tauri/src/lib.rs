@@ -81,7 +81,7 @@ pub fn run() {
                 .build(),
         )
         .manage(StartupFile(Mutex::new(None)))
-        .manage(share::ShareState(Mutex::new(None)))
+        .manage(share::ShareState(Mutex::new(share::ShareStateInner::default())))
         .invoke_handler(tauri::generate_handler![
             markdown::render_markdown,
             markdown::render_markdown_url,
@@ -92,7 +92,9 @@ pub fn run() {
             view_state::set_view_state,
             share::start_share,
             share::stop_share,
+            share::stop_share_note,
             share::get_share_status,
+            share::get_note_share_info,
             get_startup_file,
             restart_app,
         ])
