@@ -1,7 +1,8 @@
 use base64::Engine as _;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, UdpSocket};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
@@ -41,6 +42,51 @@ fn local_ip() -> Option<IpAddr> {
         Some(ip)
     }
 }
+
+// --- Persistent per-file share routes ---
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ShareRouteEntry {
+    hash: String,
+    port: u16,
+}
+
+#[derive(Debug, Serialize, Deserialize, Default)]
+struct ShareRouteFile {
+    #[serde(default)]
+    routes: HashMap<String, ShareRouteEntry>,
+}
+
+fn share_routes_path() -> PathBuf {
+    dirs::config_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("emede")
+        .join("share_routes.json")
+}
+
+fn load_share_routes() -> ShareRouteFile {
+    let path = share_routes_path();
+    if path.exists() {
+        std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default()
+    } else {
+        ShareRouteFile::default()
+    }
+}
+
+fn save_share_routes(file: &ShareRouteFile) {
+    let path = share_routes_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Ok(json) = serde_json::to_string_pretty(file) {
+        let _ = std::fs::write(&path, json);
+    }
+}
+
+// --- Hash generation ---
 
 static SHARE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -210,18 +256,42 @@ pub fn start_share(
         stop_handle(existing);
     }
 
-    let server = Server::http("0.0.0.0:0").map_err(|e| e.to_string())?;
-    let port = server
-        .server_addr()
-        .to_ip()
-        .map(|addr| addr.port())
-        .ok_or_else(|| "failed to read server port".to_string())?;
-    let server = Arc::new(server);
+    // Try to reuse the saved port and hash for this file so the URL stays stable.
+    let mut routes = load_share_routes();
+    let (server, port, hash) = if let Some(entry) = routes.routes.get(&path) {
+        let bind_addr = format!("0.0.0.0:{}", entry.port);
+        if let Ok(s) = Server::http(&bind_addr) {
+            (Arc::new(s), entry.port, entry.hash.clone())
+        } else {
+            // Saved port unavailable; fall back to a new random assignment.
+            let s = Server::http("0.0.0.0:0").map_err(|e| e.to_string())?;
+            let p = s
+                .server_addr()
+                .to_ip()
+                .map(|a| a.port())
+                .ok_or_else(|| "failed to read server port".to_string())?;
+            let h = random_hash();
+            (Arc::new(s), p, h)
+        }
+    } else {
+        let s = Server::http("0.0.0.0:0").map_err(|e| e.to_string())?;
+        let p = s
+            .server_addr()
+            .to_ip()
+            .map(|a| a.port())
+            .ok_or_else(|| "failed to read server port".to_string())?;
+        let h = random_hash();
+        (Arc::new(s), p, h)
+    };
+
+    routes
+        .routes
+        .insert(path.clone(), ShareRouteEntry { hash: hash.clone(), port });
+    save_share_routes(&routes);
 
     let ip = local_ip()
         .unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST))
         .to_string();
-    let hash = random_hash();
     let info = ShareInfo {
         url: format!("http://{ip}:{port}/{hash}"),
         ip,
