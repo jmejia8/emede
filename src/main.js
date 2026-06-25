@@ -176,6 +176,8 @@ const tocList = document.getElementById("toc-list");
 const settingsPanel = document.getElementById("settings-panel");
 const settingsToggle = document.getElementById("settings-toggle");
 const printToggle = document.getElementById("print-toggle");
+const shareToggle = document.getElementById("share-toggle");
+const shareStatus = document.getElementById("share-status");
 const settingsClose = document.getElementById("settings-close");
 const aboutOverlay = document.getElementById("about-overlay");
 const aboutLink = document.getElementById("about-link");
@@ -223,6 +225,7 @@ let activeOpenToken = 0;
 let isRestoringViewState = false;
 let colorTemplates = [];
 let findInPage;
+let shareActive = false;
 
 function populateFontSelect(select, { includeInherit = false, groups = FONT_GROUPS } = {}) {
   select.replaceChildren();
@@ -537,6 +540,7 @@ function clearToc() {
 
 function showEmptyState() {
   currentDocPath = null;
+  updateShareButtonState();
   contentEl.innerHTML = "";
   contentEl.classList.remove("visible");
   loadingStateEl.classList.add("hidden");
@@ -558,6 +562,7 @@ function showLoadingState() {
 
 function showMissingFile(message) {
   currentDocPath = null;
+  updateShareButtonState();
   contentEl.innerHTML = "";
   contentEl.classList.remove("visible");
   loadingStateEl.classList.add("hidden");
@@ -570,6 +575,7 @@ function showMissingFile(message) {
 
 function showError(message) {
   currentDocPath = null;
+  updateShareButtonState();
   contentEl.innerHTML = "";
   contentEl.classList.remove("visible");
   loadingStateEl.classList.add("hidden");
@@ -795,6 +801,7 @@ async function applyDocument(result, { initial = false, reload = false, openToke
   missingStateEl.classList.add("hidden");
   errorStateEl.classList.add("hidden");
   currentDocPath = result.path;
+  updateShareButtonState();
 
   await setWindowTitle(formatWindowTitle(result.title));
 
@@ -1080,6 +1087,58 @@ async function handleImportColorTemplate() {
     console.warn("Failed to import color template", err);
     colorTemplateStatus.textContent = String(err);
   }
+}
+
+function updateShareButtonState() {
+  if (!shareToggle) return;
+  shareToggle.disabled = !shareActive && !currentDocPath;
+}
+
+async function startShare() {
+  if (!currentDocPath) {
+    shareStatus.textContent = "Open a document first.";
+    return;
+  }
+  shareStatus.textContent = "Starting…";
+  try {
+    const info = await invoke("start_share", { path: currentDocPath });
+    shareActive = true;
+    shareToggle.textContent = "Stop sharing";
+    shareStatus.textContent = info.url;
+    try {
+      await navigator.clipboard.writeText(info.url);
+      shareStatus.textContent = `${info.url}  (copied)`;
+    } catch {
+      // Clipboard is best-effort; the URL is still shown.
+    }
+  } catch (err) {
+    shareActive = false;
+    shareToggle.textContent = "Share on local network";
+    shareStatus.textContent = String(err);
+  }
+  updateShareButtonState();
+}
+
+async function stopShare() {
+  try {
+    await invoke("stop_share");
+  } catch (err) {
+    console.warn("Failed to stop share", err);
+  }
+  shareActive = false;
+  shareToggle.textContent = "Share on local network";
+  shareStatus.textContent = "";
+  updateShareButtonState();
+}
+
+function wireShare() {
+  shareToggle.addEventListener("click", () => {
+    if (shareActive) {
+      void stopShare();
+    } else {
+      void startShare();
+    }
+  });
 }
 
 function toggleSettings(open) {
@@ -1450,6 +1509,7 @@ async function boot() {
   wireOpenPath();
   wireDragDrop();
   wireKeybindings();
+  wireShare();
 
   openFileBtn.addEventListener("click", () => {
     void handlePickAndOpenFile();

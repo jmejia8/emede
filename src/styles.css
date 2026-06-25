@@ -1356,6 +1356,55 @@ body:has(.settings-panel:not(.hidden)) .settings-toggle {
   }
 }
 
+.share-local {
+  margin-top: 0.25rem;
+}
+
+.share-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-fg);
+  font: inherit;
+  font-size: 0.9em;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.share-btn:hover:not(:disabled),
+.share-btn:focus-visible {
+  background: color-mix(in srgb, var(--color-fg) 6%, transparent);
+}
+
+.share-btn:focus-visible {
+  outline: 2px solid var(--color-link);
+  outline-offset: 2px;
+}
+
+.share-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+#share-status {
+  word-break: break-all;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .share-btn {
+    transition: none;
+  }
+}
+
 .about-link {
   margin-top: 0.5rem;
   padding: 0.6rem 0;

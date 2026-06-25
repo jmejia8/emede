@@ -1,5 +1,6 @@
 mod markdown;
 mod settings;
+mod share;
 mod view_state;
 
 use std::sync::Mutex;
@@ -80,6 +81,7 @@ pub fn run() {
                 .build(),
         )
         .manage(StartupFile(Mutex::new(None)))
+        .manage(share::ShareState(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             markdown::render_markdown,
             markdown::render_markdown_url,
@@ -88,6 +90,9 @@ pub fn run() {
             settings::read_color_template,
             view_state::get_view_state,
             view_state::set_view_state,
+            share::start_share,
+            share::stop_share,
+            share::get_share_status,
             get_startup_file,
             restart_app,
         ])
