@@ -336,9 +336,9 @@ fn font_size_pt(value: &str) -> u32 {
         .unwrap_or(12)
 }
 
-/// Render `path` into a single self-contained HTML page for LAN clients.
+/// Render `path` (local file or remote URL) into a self-contained HTML page for LAN clients.
 pub fn build_shared_page(path: &str) -> Result<String, String> {
-    let result = markdown::render_markdown_inner(path)?;
+    let result = markdown::render_markdown_any(path)?;
     let content = inline_local_images(&result.html);
     let settings = settings::load_settings();
 
@@ -517,7 +517,7 @@ pub fn start_share(
     path: String,
     state: tauri::State<ShareState>,
 ) -> Result<ShareInfo, String> {
-    let result = markdown::render_markdown_inner(&path)?;
+    let result = markdown::render_markdown_any(&path)?;
     let title = result.title.clone();
 
     let mut inner = state.0.lock().map_err(|e| e.to_string())?;

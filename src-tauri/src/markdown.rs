@@ -589,6 +589,21 @@ pub fn render_markdown_from_str(content: &str, source_path: &Path, source_id: &s
     })
 }
 
+/// Render a local file path or a remote URL, routing to the right backend.
+pub fn render_markdown_any(path_or_url: &str) -> Result<RenderResult, String> {
+    if is_remote_url(path_or_url) {
+        let response = ureq::get(path_or_url)
+            .call()
+            .map_err(|e| format!("Failed to fetch URL: {e}"))?;
+        let content = response
+            .into_string()
+            .map_err(|e| format!("Failed to read response body: {e}"))?;
+        render_markdown_from_str(&content, Path::new("."), path_or_url)
+    } else {
+        render_markdown_inner(path_or_url)
+    }
+}
+
 #[tauri::command]
 pub fn render_markdown_url(url: String) -> Result<RenderResult, String> {
     let response = ureq::get(&url)
