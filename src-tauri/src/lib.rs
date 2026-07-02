@@ -96,6 +96,7 @@ pub fn run() {
             share::get_share_status,
             share::get_note_share_info,
             get_startup_file,
+            get_app_version,
             restart_app,
         ])
         .setup(|app| {
@@ -119,6 +120,11 @@ pub fn run() {
 #[tauri::command]
 fn get_startup_file(state: tauri::State<StartupFile>) -> Option<String> {
     state.0.lock().ok()?.clone()
+}
+
+#[tauri::command]
+fn get_app_version(app: tauri::AppHandle) -> String {
+    app.package_info().version.to_string()
 }
 
 #[tauri::command]

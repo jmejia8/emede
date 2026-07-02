@@ -1116,11 +1116,67 @@ body:has(.settings-panel:not(.hidden)) .settings-toggle {
 }
 
 .settings-body {
-  padding: 1.25rem;
+  padding: 1rem 1.25rem 1.25rem;
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1rem;
   overflow-y: auto;
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.settings-section-title {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-muted);
+}
+
+.settings-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-fg);
+  font: inherit;
+  font-size: 0.85em;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.action-btn:hover:not(:disabled),
+.action-btn:focus-visible {
+  background: color-mix(in srgb, var(--color-fg) 6%, transparent);
+}
+
+.action-btn:focus-visible {
+  outline: 2px solid var(--color-link);
+  outline-offset: 2px;
+}
+
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .settings-body label {
@@ -1128,6 +1184,12 @@ body:has(.settings-panel:not(.hidden)) .settings-toggle {
   flex-direction: column;
   gap: 0.4rem;
   color: var(--color-fg);
+}
+
+.color-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
 }
 
 .settings-body input[type="text"],
@@ -1173,23 +1235,35 @@ body:has(.settings-panel:not(.hidden)) .settings-toggle {
   background: transparent;
 }
 
-.preset-buttons {
+.presets {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-top: 0.4rem;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.presets-label {
+  color: var(--color-fg);
+}
+
+.preset-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.4rem;
 }
 
 .preset-buttons button,
 .template-import-btn {
-  flex: 1;
-  padding: 0.45rem 0.5rem;
+  padding: 0.35rem 0.4rem;
   border: 1px solid var(--color-border);
   border-radius: 6px;
   background: transparent;
   color: var(--color-fg);
   cursor: pointer;
   font: inherit;
+  font-size: 0.85em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .preset-buttons button:hover,
@@ -1199,14 +1273,24 @@ body:has(.settings-panel:not(.hidden)) .settings-toggle {
 
 .template-import-btn {
   width: 100%;
-  margin-top: 0.65rem;
+  margin-top: 0.2rem;
+  color: var(--color-muted);
+  border-style: dashed;
+}
+
+.template-import-btn:hover {
+  color: var(--color-fg);
 }
 
 .setting-note {
-  margin: 0.5rem 0 0;
+  margin: 0;
   color: var(--color-muted);
   font-size: 0.75rem;
   line-height: 1.4;
+}
+
+.setting-note:empty {
+  display: none;
 }
 
 .setting-note code {
@@ -1214,30 +1298,34 @@ body:has(.settings-panel:not(.hidden)) .settings-toggle {
   font-size: 0.92em;
 }
 
-.keybindings-help {
+.settings-help {
   color: var(--color-fg);
 }
 
-.keybindings-help > summary {
+.settings-help > summary {
   color: var(--color-muted);
   font-size: 0.92em;
   cursor: pointer;
   list-style: none;
 }
 
-.keybindings-help > summary::-webkit-details-marker {
+.settings-help > summary::-webkit-details-marker {
   display: none;
 }
 
-.keybindings-help > summary::before {
+.settings-help > summary::before {
   content: "▸";
   display: inline-block;
   margin-right: 0.35rem;
   transition: transform 0.15s ease;
 }
 
-.keybindings-help[open] > summary::before {
+.settings-help[open] > summary::before {
   transform: rotate(90deg);
+}
+
+.settings-help-body {
+  margin-top: 0.4rem;
 }
 
 .keybindings-help-body {
@@ -1317,90 +1405,20 @@ body:has(.settings-panel:not(.hidden)) .settings-toggle {
 }
 
 .setting-gpu-note {
-  margin: -0.5rem 0 0;
+  margin: -0.45rem 0 0;
   font-size: 0.75rem;
   color: var(--color-muted);
 }
 
-.print-setting-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  width: 100%;
-  padding: 0.65rem 0.75rem;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--color-fg);
-  font: inherit;
-  font-size: 0.9em;
-  cursor: pointer;
-  touch-action: manipulation;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-
-.print-setting-btn:hover,
-.print-setting-btn:focus-visible {
-  background: color-mix(in srgb, var(--color-fg) 6%, transparent);
-}
-
-.print-setting-btn:focus-visible {
-  outline: 2px solid var(--color-link);
-  outline-offset: 2px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .print-setting-btn {
-    transition: none;
-  }
-}
-
-.share-local {
-  margin-top: 0.25rem;
-}
-
-.share-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  width: 100%;
-  padding: 0.65rem 0.75rem;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--color-fg);
-  font: inherit;
-  font-size: 0.9em;
-  cursor: pointer;
-  touch-action: manipulation;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-
-.share-btn:hover:not(:disabled),
-.share-btn:focus-visible {
-  background: color-mix(in srgb, var(--color-fg) 6%, transparent);
-}
-
-.share-btn:focus-visible {
-  outline: 2px solid var(--color-link);
-  outline-offset: 2px;
-}
-
-.share-btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
 #share-status {
+  margin-top: -0.5rem;
   word-break: break-all;
   user-select: text;
   -webkit-user-select: text;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .share-btn {
+  .action-btn {
     transition: none;
   }
 }

@@ -80,117 +80,138 @@
       </header>
 
       <div class="settings-body">
-        <button id="print-toggle" class="print-setting-btn" type="button" title="Print / Save as PDF (Ctrl+P)" aria-label="Print or save as PDF">⎙ Print / Save as PDF</button>
-
-        <div class="share-local">
-          <button id="share-toggle" class="share-btn" type="button">Share on local network</button>
-          <p id="share-status" class="setting-note"></p>
+        <div class="settings-actions">
+          <button id="print-toggle" class="action-btn" type="button" title="Print / Save as PDF (Ctrl+P)" aria-label="Print or save as PDF">⎙ Print / PDF</button>
+          <button id="share-toggle" class="action-btn" type="button" title="Share this document on the local network">Share on LAN</button>
         </div>
+        <p id="share-status" class="setting-note"></p>
 
-        <label>
-          Text color
-          <input id="setting-fg" type="color" />
-        </label>
+        <section class="settings-section">
+          <h3 class="settings-section-title">Colors</h3>
 
-        <label>
-          Background
-          <input id="setting-bg" type="color" />
-        </label>
+          <div class="color-row">
+            <label>
+              Text
+              <input id="setting-fg" type="color" />
+            </label>
 
-        <div class="presets color-templates">
-          <span>Color templates</span>
-          <div id="color-template-list" class="preset-buttons color-template-buttons"></div>
-          <button id="import-color-template" class="template-import-btn" type="button">Import CSS template</button>
-          <p id="color-template-status" class="setting-note">
-            Required: <code>--color-fg</code>, <code>--color-bg</code>. Optional:
-            <code>--color-title</code>, <code>--color-bold</code>, <code>--color-italic</code>,
-            <code>--color-quote</code>, <code>--color-link</code>, <code>--color-code</code>,
-            <code>--color-code-bg</code>, <code>--color-border</code>, <code>--color-muted</code>.
-          </p>
-        </div>
-
-        <label>
-          Body font
-          <select id="setting-font"></select>
-        </label>
-
-        <label>
-          Titles font
-          <select id="setting-font-title"></select>
-        </label>
-
-        <label>
-          Code font
-          <select id="setting-font-code"></select>
-        </label>
-
-        <div class="presets">
-          <span>Font presets</span>
-          <div class="preset-buttons">
-            <button type="button" data-font-preset="default">Default</button>
-            <button type="button" data-font-preset="literata">Literata</button>
-            <button type="button" data-font-preset="source">Source</button>
-            <button type="button" data-font-preset="noto">Noto</button>
-            <button type="button" data-font-preset="dejavu">DejaVu</button>
-            <button type="button" data-font-preset="technical">Technical</button>
+            <label>
+              Background
+              <input id="setting-bg" type="color" />
+            </label>
           </div>
-        </div>
 
-        <label class="setting-toggle">
-          <span class="setting-toggle-label">Justify text</span>
-          <input id="setting-justify" type="checkbox" role="switch" />
-        </label>
+          <div class="presets color-templates">
+            <span class="presets-label">Templates</span>
+            <div id="color-template-list" class="preset-buttons color-template-buttons"></div>
+            <button id="import-color-template" class="template-import-btn" type="button">Import CSS template&hellip;</button>
+            <p id="color-template-status" class="setting-note"></p>
+            <details class="settings-help">
+              <summary>Template format</summary>
+              <p class="setting-note settings-help-body">
+                A CSS file defining variables. Required: <code>--color-fg</code>, <code>--color-bg</code>. Optional:
+                <code>--color-title</code>, <code>--color-bold</code>, <code>--color-italic</code>,
+                <code>--color-quote</code>, <code>--color-link</code>, <code>--color-code</code>,
+                <code>--color-code-bg</code>, <code>--color-border</code>, <code>--color-muted</code>.
+              </p>
+            </details>
+          </div>
+        </section>
 
-        <label class="setting-toggle">
-          <span class="setting-toggle-label">Mermaid diagrams</span>
-          <input id="setting-mermaid" type="checkbox" role="switch" />
-        </label>
+        <section class="settings-section">
+          <h3 class="settings-section-title">Typography</h3>
 
-        <label>
-          Font size
-          <span class="range-row">
-            <input id="setting-size" type="range" min="8" max="32" step="1" />
-            <span id="setting-size-label" class="range-value"></span>
-          </span>
-        </label>
+          <label>
+            Body font
+            <select id="setting-font"></select>
+          </label>
 
-        <label>
-          Margins
-          <span class="range-row">
-            <input id="setting-margin" type="range" min="0" max="25" step="1" />
-            <span id="setting-margin-label" class="range-value"></span>
-          </span>
-        </label>
+          <label>
+            Titles font
+            <select id="setting-font-title"></select>
+          </label>
 
-        <label>
-          Window frame
-          <select id="setting-window-frame">
-            <option value="emede">emede (custom)</option>
-            <option value="system">System (native)</option>
-          </select>
-        </label>
+          <label>
+            Code font
+            <select id="setting-font-code"></select>
+          </label>
 
-        <label>
-          Keybindings
-          <select id="setting-keybindings">
-            <option value="default">Default (browser)</option>
-            <option value="vim">Vim</option>
-            <option value="emacs">Emacs</option>
-            <option value="common">Common reader</option>
-          </select>
-        </label>
+          <div class="presets">
+            <span class="presets-label">Presets</span>
+            <div class="preset-buttons">
+              <button type="button" data-font-preset="default">Default</button>
+              <button type="button" data-font-preset="literata">Literata</button>
+              <button type="button" data-font-preset="source">Source</button>
+              <button type="button" data-font-preset="noto">Noto</button>
+              <button type="button" data-font-preset="dejavu">DejaVu</button>
+              <button type="button" data-font-preset="technical">Technical</button>
+            </div>
+          </div>
 
-        <details class="keybindings-help">
-          <summary>Shortcuts</summary>
-          <div id="keybindings-help" class="keybindings-help-body"></div>
-        </details>
+          <label>
+            Font size
+            <span class="range-row">
+              <input id="setting-size" type="range" min="8" max="32" step="1" />
+              <span id="setting-size-label" class="range-value"></span>
+            </span>
+          </label>
 
-        <label class="setting-toggle">
-          <span class="setting-toggle-label">GPU acceleration</span>
-          <input id="setting-gpu" type="checkbox" role="switch" />
-        </label>
+          <label class="setting-toggle">
+            <span class="setting-toggle-label">Justify text</span>
+            <input id="setting-justify" type="checkbox" role="switch" />
+          </label>
+        </section>
 
-        <p class="setting-gpu-note">Restart required &mdash; will restart automatically</p>
+        <section class="settings-section">
+          <h3 class="settings-section-title">Layout</h3>
+
+          <label>
+            Margins
+            <span class="range-row">
+              <input id="setting-margin" type="range" min="0" max="25" step="1" />
+              <span id="setting-margin-label" class="range-value"></span>
+            </span>
+          </label>
+
+          <label>
+            Window frame
+            <select id="setting-window-frame">
+              <option value="emede">emede (custom)</option>
+              <option value="system">System (native)</option>
+            </select>
+          </label>
+        </section>
+
+        <section class="settings-section">
+          <h3 class="settings-section-title">Behavior</h3>
+
+          <label>
+            Keybindings
+            <select id="setting-keybindings">
+              <option value="default">Default (browser)</option>
+              <option value="vim">Vim</option>
+              <option value="emacs">Emacs</option>
+              <option value="common">Common reader</option>
+            </select>
+          </label>
+
+          <details class="settings-help keybindings-help">
+            <summary>Shortcuts</summary>
+            <div id="keybindings-help" class="keybindings-help-body"></div>
+          </details>
+
+          <label class="setting-toggle">
+            <span class="setting-toggle-label">Mermaid diagrams</span>
+            <input id="setting-mermaid" type="checkbox" role="switch" />
+          </label>
+
+          <label class="setting-toggle">
+            <span class="setting-toggle-label">GPU acceleration</span>
+            <input id="setting-gpu" type="checkbox" role="switch" />
+          </label>
+
+          <p class="setting-gpu-note">Restart required &mdash; will restart automatically</p>
+        </section>
 
         <button id="about-link" class="about-link" type="button">About emede</button>
       </div>

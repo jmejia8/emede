@@ -894,6 +894,35 @@ const SHARED_PAGE_TEMPLATE: &str = r##"<!doctype html>
       var d = probeCtx.getImageData(0, 0, 1, 1).data;
       return "rgb(" + d[0] + ", " + d[1] + ", " + d[2] + ")";
     }
+    function resolveRgbData(value) {
+      if (!probeCtx) return null;
+      probeCtx.clearRect(0, 0, 1, 1);
+      probeCtx.fillStyle = "#000";
+      probeCtx.fillStyle = value;
+      probeCtx.fillRect(0, 0, 1, 1);
+      return probeCtx.getImageData(0, 0, 1, 1).data;
+    }
+    // Distinct multi-color palette (pie slices, cScale) tuned for the theme bg.
+    // Low saturation + a blend toward the background keep it muted and on-theme.
+    function autoPalette(count, bgData, dark) {
+      var sat = 38;
+      var light = dark ? 58 : 52;
+      var blend = 0.28;
+      var out = [];
+      for (var i = 0; i < count; i++) {
+        var hue = Math.round((i * 137.5) % 360);
+        var c = resolveRgbData("hsl(" + hue + ", " + sat + "%, " + light + "%)");
+        if (!c || !bgData) {
+          out.push(resolveColor("hsl(" + hue + ", " + sat + "%, " + light + "%)"));
+          continue;
+        }
+        var r = Math.round(c[0] * (1 - blend) + bgData[0] * blend);
+        var g = Math.round(c[1] * (1 - blend) + bgData[1] * blend);
+        var b = Math.round(c[2] * (1 - blend) + bgData[2] * blend);
+        out.push("rgb(" + r + ", " + g + ", " + b + ")");
+      }
+      return out;
+    }
     function renderMermaid() {
       var blocks = document.querySelectorAll("pre > code.language-mermaid, div.mermaid[data-src]");
       if (!blocks.length || !mermaidLib) return;
@@ -902,22 +931,37 @@ const SHARED_PAGE_TEMPLATE: &str = r##"<!doctype html>
       var bgc = resolveColor(style.getPropertyValue("--color-bg").trim());
       var codeBg = resolveColor(style.getPropertyValue("--color-code-bg").trim());
       var link = resolveColor(style.getPropertyValue("--color-link").trim());
+      var bgData = resolveRgbData(style.getPropertyValue("--color-bg").trim());
+      var dark = bgData
+        ? (0.2126 * bgData[0] + 0.7152 * bgData[1] + 0.0722 * bgData[2]) / 255 < 0.5
+        : true;
+      var palette = autoPalette(12, bgData, dark);
+      var themeVars = {
+        background: bgc,
+        primaryColor: codeBg,
+        primaryTextColor: fgc,
+        primaryBorderColor: fgc,
+        lineColor: fgc,
+        mainBkg: codeBg,
+        nodeBorder: fgc,
+        nodeTextColor: fgc,
+        labelColor: fgc,
+        edgeLabelBackground: bgc,
+        linkColor: link,
+        pieStrokeColor: fgc,
+        pieOuterStrokeColor: fgc,
+        pieSectionTextColor: fgc,
+        pieTitleTextColor: fgc,
+        pieOpacity: 1,
+      };
+      for (var p = 0; p < palette.length; p++) {
+        themeVars["pie" + (p + 1)] = palette[p];
+        themeVars["cScale" + p] = palette[p];
+      }
       mermaidLib.initialize({
         startOnLoad: false,
         theme: "base",
-        themeVariables: {
-          background: bgc,
-          primaryColor: codeBg,
-          primaryTextColor: fgc,
-          primaryBorderColor: fgc,
-          lineColor: fgc,
-          mainBkg: codeBg,
-          nodeBorder: fgc,
-          nodeTextColor: fgc,
-          labelColor: fgc,
-          edgeLabelBackground: bgc,
-          linkColor: link,
-        },
+        themeVariables: themeVars,
       });
       var nodes = [];
       document.querySelectorAll("pre > code.language-mermaid").forEach(function (code) {

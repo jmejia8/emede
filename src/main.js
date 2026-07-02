@@ -430,6 +430,7 @@ function renderColorTemplates() {
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = template.label;
+    button.title = template.label;
     button.style.color = template.colors.color_fg;
     button.style.background = template.colors.color_bg;
     button.style.borderColor = template.colors.color_fg;
@@ -650,6 +651,51 @@ async function ensureMermaidLoaded() {
   });
 }
 
+// Resolve any CSS color (hex, rgb, hsl, color-mix(...)) to a plain "rgb(r, g, b)"
+// string by painting it onto a 1x1 canvas and reading the pixel back. Mermaid's
+// color parser only understands plain color values, not modern CSS functions.
+const paletteCanvas = document.createElement("canvas");
+paletteCanvas.width = paletteCanvas.height = 1;
+const paletteCtx = paletteCanvas.getContext("2d", { willReadFrequently: true });
+function resolveRgb(value) {
+  if (!paletteCtx || !value) return null;
+  paletteCtx.clearRect(0, 0, 1, 1);
+  paletteCtx.fillStyle = "#000";
+  paletteCtx.fillStyle = value;
+  paletteCtx.fillRect(0, 0, 1, 1);
+  const [r, g, b] = paletteCtx.getImageData(0, 0, 1, 1).data;
+  return { r, g, b, css: `rgb(${r}, ${g}, ${b})` };
+}
+
+// Build a distinct multi-color palette (pie slices, cScale, etc.) that reads on
+// the current theme background. Hues are spread by the golden angle so adjacent
+// entries stay visually separated; saturation is kept low and each color is
+// blended toward the background so the palette feels muted and on-theme rather
+// than neon-bright.
+function autoPalette(count, bgRgb, dark) {
+  const sat = 38;
+  const light = dark ? 58 : 52;
+  const blend = 0.28; // mix toward background to harmonize with the theme
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    const hue = Math.round((i * 137.5) % 360);
+    const c = resolveRgb(`hsl(${hue}, ${sat}%, ${light}%)`);
+    if (!c) {
+      out.push(`hsl(${hue}, ${sat}%, ${light}%)`);
+      continue;
+    }
+    if (bgRgb) {
+      const r = Math.round(c.r * (1 - blend) + bgRgb.r * blend);
+      const g = Math.round(c.g * (1 - blend) + bgRgb.g * blend);
+      const b = Math.round(c.b * (1 - blend) + bgRgb.b * blend);
+      out.push(`rgb(${r}, ${g}, ${b})`);
+    } else {
+      out.push(c.css);
+    }
+  }
+  return out;
+}
+
 async function renderMermaid() {
   if (!currentSettings?.mermaid_diagrams) return;
   const blocks = contentEl.querySelectorAll("pre > code.language-mermaid");
@@ -668,11 +714,28 @@ async function renderMermaid() {
   const codeBg = get("--color-code-bg");
   const link = get("--color-link");
   const title = get("--color-title") || fg;
+  const bgRgb = resolveRgb(bg);
+  const dark = bgRgb
+    ? (0.2126 * bgRgb.r + 0.7152 * bgRgb.g + 0.0722 * bgRgb.b) / 255 < 0.5
+    : true;
+  const palette = autoPalette(12, bgRgb, dark);
+  const paletteVars = {};
+  palette.forEach((c, i) => {
+    paletteVars["pie" + (i + 1)] = c;
+    paletteVars["cScale" + i] = c;
+  });
   window.mermaid.initialize({
     startOnLoad: false,
     theme: "base",
     themeVariables: {
       fontFamily: fontFamily || undefined,
+      ...paletteVars,
+      // pie chart: colorful slices with themed strokes and text
+      pieStrokeColor: border || fg,
+      pieOuterStrokeColor: border || fg,
+      pieSectionTextColor: fg,
+      pieTitleTextColor: title,
+      pieOpacity: 1,
       background: bg,
       primaryColor: codeBg,
       primaryTextColor: fg,
@@ -1113,7 +1176,7 @@ async function startShare() {
     }
   } catch (err) {
     shareActive = false;
-    shareToggle.textContent = "Share on local network";
+    shareToggle.textContent = "Share on LAN";
     shareStatus.textContent = String(err);
   }
   updateShareButtonState();
@@ -1126,7 +1189,7 @@ async function stopShare() {
     console.warn("Failed to stop share", err);
   }
   shareActive = false;
-  shareToggle.textContent = "Share on local network";
+  shareToggle.textContent = "Share on LAN";
   shareStatus.textContent = "";
   updateShareButtonState();
 }
@@ -1517,6 +1580,10 @@ async function boot() {
 
   const startupFilePromise = invoke("get_startup_file");
   const settingsPromise = invoke("get_settings");
+  invoke("get_app_version").then((v) => {
+    const el = document.querySelector(".about-version");
+    if (el) el.textContent = `v${v}`;
+  }).catch(() => {});
 
   void listen("file-to-open", (event) => {
     if (event.payload) {
