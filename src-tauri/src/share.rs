@@ -26,6 +26,8 @@ pub struct ShareStateInner {
     path_to_hash: HashMap<String, String>,
     /// Most recently shared path (for backwards-compat get_share_status).
     last_path: Option<String>,
+    /// Random key used to authenticate URLs; generated at server start.
+    server_key: Option<String>,
 }
 
 impl Default for ShareStateInner {
@@ -37,6 +39,7 @@ impl Default for ShareStateInner {
             route_map: Arc::new(RwLock::new(HashMap::new())),
             path_to_hash: HashMap::new(),
             last_path: None,
+            server_key: None,
         }
     }
 }
@@ -98,6 +101,9 @@ struct ShareRouteFile {
     /// Port we successfully bound to last time; tried first on the next start.
     #[serde(default)]
     preferred_port: Option<u16>,
+    /// Random key that authenticates URLs for this server instance.
+    #[serde(default)]
+    key: Option<String>,
 }
 
 fn share_routes_path() -> PathBuf {
@@ -238,6 +244,41 @@ fn random_hash() -> String {
     let counter = SHARE_COUNTER.fetch_add(1, Ordering::Relaxed);
     let mixed = nanos ^ counter.wrapping_mul(0x9E37_79B9_7F4A_7C15);
     format!("{:08x}", (mixed as u32))
+}
+
+/// Longer random string used as the URL auth key. Generated once per server
+/// instance so the same key protects all notes.
+fn generate_key() -> String {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0);
+    let counter = SHARE_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let pid = std::process::id() as u64;
+    let mixed = nanos
+        ^ counter.wrapping_mul(0x9E37_79B9_7F4A_7C15)
+        ^ pid.wrapping_mul(0xB0A7_0D2D);
+    format!("{:08x}", (mixed as u32))
+}
+
+// ── URL query key parsing ─────────────────────────────────────────────────────
+
+/// Split a request URL into (path, extracted_key).
+/// Returns the path portion and the value of the `key` query parameter if present.
+fn parse_url_key(url: &str) -> (String, Option<String>) {
+    let Some((path, query)) = url.split_once('?') else {
+        return (url.to_string(), None);
+    };
+    let key = query
+        .split('&')
+        .find_map(|pair| {
+            let mut parts = pair.splitn(2, '=');
+            match (parts.next(), parts.next()) {
+                (Some(k), Some(v)) if k == "key" => Some(v.to_string()),
+                _ => None,
+            }
+        });
+    (path.to_string(), key)
 }
 
 // ── Image inlining helpers ────────────────────────────────────────────────────
@@ -384,6 +425,7 @@ fn build_home_page(
     route_map: &HashMap<String, NoteRoute>,
     ip: &str,
     port: u16,
+    key: &str,
 ) -> Response<std::io::Cursor<Vec<u8>>> {
     let pid = std::process::id().to_string();
 
@@ -391,7 +433,7 @@ fn build_home_page(
     let mut entries: Vec<(String, String, String)> = Vec::new();
 
     for note in route_map.values() {
-        let url = format!("http://{}:{}/{}", ip, port, note.hash);
+        let url = format!("http://{}:{}/{}?key={}", ip, port, note.hash, key);
         let filename = Path::new(&note.path)
             .file_name()
             .map(|f| f.to_string_lossy().to_string())
@@ -408,7 +450,7 @@ fn build_home_page(
             continue;
         }
         for note in &entry.notes {
-            let url = format!("http://{}:{}/{}", ip, entry.port, note.hash);
+            let url = format!("http://{}:{}/{}?key={}", ip, entry.port, note.hash, key);
             let filename = Path::new(&note.path)
                 .file_name()
                 .map(|f| f.to_string_lossy().to_string())
@@ -598,6 +640,7 @@ fn stop_server(inner: &mut ShareStateInner) {
         let _ = join.join();
     }
     inner.port = None;
+    inner.server_key = None;
 }
 
 // ── Tauri commands ────────────────────────────────────────────────────────────
@@ -618,10 +661,11 @@ pub fn start_share(
             .unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST))
             .to_string();
         let port = inner.port.unwrap();
+        let key = inner.server_key.clone().unwrap_or_default();
         inner.last_path = Some(path.clone());
         return Ok(ShareInfo {
-            url: format!("http://{ip}:{port}/{hash}"),
-            home_url: format!("http://{ip}:{port}/"),
+            url: format!("http://{ip}:{port}/{hash}?key={key}"),
+            home_url: format!("http://{ip}:{port}/?key={key}"),
             ip,
             port,
             hash,
@@ -638,6 +682,9 @@ pub fn start_share(
         .map(|e| e.hash.clone())
         .unwrap_or_else(random_hash);
 
+    // Reuse or generate the server auth key so URLs stay valid across restarts.
+    let key = routes.key.clone().unwrap_or_else(generate_key);
+
     // Start the server once; all subsequent notes share the same instance.
     if inner.server.is_none() {
         let (server, port) = try_bind_server(routes.preferred_port)?;
@@ -645,22 +692,28 @@ pub fn start_share(
         let route_map_clone = Arc::clone(&inner.route_map);
         let thread_server = Arc::clone(&server);
         let server_port = port;
+        let server_key = key.clone();
 
         let join = std::thread::spawn(move || {
             for request in thread_server.incoming_requests() {
-                let url = request.url().split('?').next().unwrap_or("").to_string();
+                let full_url = request.url().to_string();
+                let (url_path, query_key) = parse_url_key(&full_url);
                 let is_get = request.method() == &Method::Get;
+
+                let key_ok = query_key.as_deref() == Some(&server_key);
 
                 let response = if !is_get {
                     html_response("Method not allowed".to_string(), 405)
-                } else if url == "/" {
+                } else if !key_ok {
+                    html_response("Not found".to_string(), 404)
+                } else if url_path == "/" {
                     let current_ip = local_ip()
                         .unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST))
                         .to_string();
                     let map = route_map_clone.read().unwrap();
-                    build_home_page(&map, &current_ip, server_port)
+                    build_home_page(&map, &current_ip, server_port, &server_key)
                 } else {
-                    let hash_str = url.trim_start_matches('/').to_string();
+                    let hash_str = url_path.trim_start_matches('/').to_string();
                     let path_opt = {
                         let map = route_map_clone.read().unwrap();
                         map.get(&hash_str).map(|r| r.path.clone())
@@ -681,10 +734,14 @@ pub fn start_share(
         inner.server = Some(server);
         inner.join = Some(join);
         inner.port = Some(port);
+        inner.server_key = Some(key.clone());
+
+        routes.key = Some(key.clone());
 
         if routes.preferred_port != Some(port) {
             routes.preferred_port = Some(port);
         }
+        save_share_routes(&routes);
     }
 
     let port = inner.port.unwrap();
@@ -704,9 +761,11 @@ pub fn start_share(
         .unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST))
         .to_string();
 
+    let key = inner.server_key.as_deref().unwrap_or("");
+
     Ok(ShareInfo {
-        url: format!("http://{ip}:{port}/{hash}"),
-        home_url: format!("http://{ip}:{port}/"),
+        url: format!("http://{ip}:{port}/{hash}?key={key}"),
+        home_url: format!("http://{ip}:{port}/?key={key}"),
         ip,
         port,
         hash,
@@ -758,9 +817,10 @@ pub fn get_share_status(state: tauri::State<ShareState>) -> Option<ShareInfo> {
     let ip = local_ip()
         .unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST))
         .to_string();
+    let key = inner.server_key.as_deref().unwrap_or("");
     Some(ShareInfo {
-        url: format!("http://{ip}:{port}/{hash}"),
-        home_url: format!("http://{ip}:{port}/"),
+        url: format!("http://{ip}:{port}/{hash}?key={key}"),
+        home_url: format!("http://{ip}:{port}/?key={key}"),
         ip,
         port,
         hash: hash.clone(),
@@ -782,9 +842,10 @@ pub fn get_note_share_info(
     let ip = local_ip()
         .unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST))
         .to_string();
+    let key = inner.server_key.as_deref().unwrap_or("");
     Some(ShareInfo {
-        url: format!("http://{ip}:{port}/{hash}"),
-        home_url: format!("http://{ip}:{port}/"),
+        url: format!("http://{ip}:{port}/{hash}?key={key}"),
+        home_url: format!("http://{ip}:{port}/?key={key}"),
         ip,
         port,
         hash: hash.clone(),
