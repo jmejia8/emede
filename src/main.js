@@ -178,6 +178,10 @@ const settingsToggle = document.getElementById("settings-toggle");
 const printToggle = document.getElementById("print-toggle");
 const shareToggle = document.getElementById("share-toggle");
 const shareStatus = document.getElementById("share-status");
+const shareOverlay = document.getElementById("share-overlay");
+const shareModalClose = document.getElementById("share-modal-close");
+const shareQr = document.getElementById("share-qr");
+const shareUrl = document.getElementById("share-url");
 const settingsClose = document.getElementById("settings-close");
 const aboutOverlay = document.getElementById("about-overlay");
 const aboutLink = document.getElementById("about-link");
@@ -226,6 +230,7 @@ let isRestoringViewState = false;
 let colorTemplates = [];
 let findInPage;
 let shareActive = false;
+let currentShareInfo = null;
 
 function populateFontSelect(select, { includeInherit = false, groups = FONT_GROUPS } = {}) {
   select.replaceChildren();
@@ -1157,6 +1162,26 @@ function updateShareButtonState() {
   shareToggle.disabled = !shareActive && !currentDocPath;
 }
 
+function showShareModal(info) {
+  shareUrl.href = info.url;
+  shareUrl.textContent = info.url;
+  shareQr.innerHTML = "";
+
+  invoke("generate_share_qr", { url: info.url })
+    .then((svg) => { shareQr.innerHTML = svg; })
+    .catch(() => {});
+
+  shareOverlay.classList.remove("hidden");
+  shareOverlay.setAttribute("aria-hidden", "false");
+  document.body.classList.toggle("has-modal", true);
+}
+
+function hideShareModal() {
+  shareOverlay.classList.add("hidden");
+  shareOverlay.setAttribute("aria-hidden", "true");
+  document.body.classList.toggle("has-modal", false);
+}
+
 async function startShare() {
   if (!currentDocPath) {
     shareStatus.textContent = "Open a document first.";
@@ -1166,14 +1191,19 @@ async function startShare() {
   try {
     const info = await invoke("start_share", { path: currentDocPath });
     shareActive = true;
+    currentShareInfo = info;
     shareToggle.textContent = "Stop sharing";
-    shareStatus.textContent = info.url;
-    try {
-      await navigator.clipboard.writeText(info.url);
-      shareStatus.textContent = `${info.url}  (copied)`;
-    } catch {
-      // Clipboard is best-effort; the URL is still shown.
-    }
+    shareStatus.textContent = "";
+    const link = document.createElement("a");
+    link.href = "#";
+    link.className = "share-status-link";
+    link.textContent = `Show QR`;
+    link.addEventListener("click", (e) => {
+      e.preventDefault();
+      showShareModal(info);
+    });
+    shareStatus.appendChild(link);
+    showShareModal(info);
   } catch (err) {
     shareActive = false;
     shareToggle.textContent = "Share on LAN";
@@ -1191,6 +1221,7 @@ async function stopShare() {
   shareActive = false;
   shareToggle.textContent = "Share on LAN";
   shareStatus.textContent = "";
+  hideShareModal();
   updateShareButtonState();
 }
 
@@ -1200,6 +1231,17 @@ function wireShare() {
       void stopShare();
     } else {
       void startShare();
+    }
+  });
+
+  shareModalClose.addEventListener("click", hideShareModal);
+  shareOverlay.addEventListener("click", (e) => {
+    if (e.target === shareOverlay) hideShareModal();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !shareOverlay.classList.contains("hidden")) {
+      hideShareModal();
     }
   });
 }

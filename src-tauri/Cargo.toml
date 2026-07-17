@@ -25,6 +25,7 @@ ammonia = "4.1.2"
 ureq = "2"
 tiny_http = "0.12"
 base64 = "0.22"
+qrcode = { version = "0.14", features = ["svg"] }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-window-state = "2"

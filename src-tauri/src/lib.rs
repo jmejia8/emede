@@ -95,6 +95,7 @@ pub fn run() {
             share::stop_share_note,
             share::get_share_status,
             share::get_note_share_info,
+            share::generate_share_qr,
             get_startup_file,
             get_app_version,
             restart_app,

@@ -992,6 +992,25 @@ const SHARED_PAGE_TEMPLATE: &str = r##"<!doctype html>
 </html>
 "##;
 
+// ── QR code generation ─────────────────────────────────────────────────────────
+
+/// Generate an SVG QR code for the given URL string.
+pub fn generate_qr_svg(url: &str) -> Result<String, String> {
+    let code = qrcode::QrCode::new(url.as_bytes()).map_err(|e| e.to_string())?;
+    let svg = code
+        .render()
+        .min_dimensions(400, 400)
+        .dark_color(qrcode::render::svg::Color("#000000"))
+        .light_color(qrcode::render::svg::Color("#ffffff"))
+        .build();
+    Ok(svg)
+}
+
+#[tauri::command]
+pub fn generate_share_qr(url: String) -> Result<String, String> {
+    generate_qr_svg(&url)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

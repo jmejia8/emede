@@ -247,6 +247,16 @@
       </div>
     </div>
 
+    <div id="share-overlay" class="share-overlay hidden" aria-hidden="true">
+      <div id="share-modal" class="share-modal" role="dialog" aria-modal="true" aria-label="Share on LAN">
+        <button id="share-modal-close" class="share-modal-close" type="button" aria-label="Close share">&times;</button>
+        <h2 class="share-modal-title">Share on LAN</h2>
+        <p class="share-modal-sub">Scan the QR code or open the URL on another device</p>
+        <div id="share-qr" class="share-qr"></div>
+        <a id="share-url" class="share-url" href="#" target="_blank" rel="noopener noreferrer"></a>
+      </div>
+    </div>
+
     <main id="reader">
       <div id="loading-state" class="loading-state hidden" role="status" aria-live="polite" aria-label="Loading document">
         <img src="assets/logo.png" alt="" class="state-logo" width="128" height="128" />
