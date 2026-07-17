@@ -185,11 +185,26 @@ fn save_active_shares(file: &ActiveSharesFile) {
 
 fn sync_active_shares(inner: &ShareStateInner) {
     let pid = std::process::id().to_string();
+    let current_port = inner.port;
     let mut file = load_active_shares();
 
     // Prune dead instances while we're here.
-    file.instances
-        .retain(|p, entry| p == &pid || is_port_alive(entry.port));
+    // Also prune entries whose port matches ours but belong to a different PID:
+    // only one process can bind a port, so the other PID must be a stale entry
+    // from a crashed instance.
+    file.instances.retain(|p, entry| {
+        if p == &pid {
+            return true;
+        }
+        if !is_port_alive(entry.port) {
+            return false;
+        }
+        // Same port as ours with a different PID → stale.
+        if current_port == Some(entry.port) {
+            return false;
+        }
+        true
+    });
 
     let map = inner.route_map.read().unwrap();
     if map.is_empty() || inner.port.is_none() {
@@ -405,12 +420,12 @@ fn build_home_page(
     entries.sort_by(|a, b| a.0.cmp(&b.0));
 
     let body = if entries.is_empty() {
-        "<p class=\"empty\">No notes are currently being shared.</p>".to_string()
+        r#"<p class="empty">No notes are currently being shared…</p>"#.to_string()
     } else {
         let mut s = String::from("<ul>");
         for (title, url, filename) in &entries {
             s.push_str(&format!(
-                "<li><a href=\"{}\">{}</a><span class=\"path\">{}</span></li>",
+                r#"<li><a href="{}"><span class="title">{}</span><span class="path">{}</span></a></li>"#,
                 escape_html(url),
                 escape_html(title),
                 escape_html(filename),
@@ -421,51 +436,126 @@ fn build_home_page(
     };
 
     let html = format!(
-        r#"<!doctype html>
+        r##"<!doctype html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>emede — shared notes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@500;700&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after {{ box-sizing: border-box; }}
+  :root {{
+    --color-bg: #faf8f5;
+    --color-surface: #ffffff;
+    --color-fg: #1a1a1a;
+    --color-muted: #8b8782;
+    --color-border: #e6e1db;
+    --color-link: #3d5a80;
+    --color-link-hover: #1a365d;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.05), 0 2px 4px rgba(0,0,0,0.03);
+  }}
+  html {{
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }}
   body {{
-    font-family: system-ui, -apple-system, sans-serif;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
     max-width: 38rem;
-    margin: 3rem auto;
-    padding: 0 1.25rem 4rem;
-    background: #faf8f5;
-    color: #2c2c2c;
+    margin: 0 auto;
+    padding: 3rem 1.25rem 5rem;
+    background: var(--color-bg);
+    color: var(--color-fg);
     line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
   }}
-  h1 {{ font-size: 1.4rem; font-weight: 600; margin-bottom: 0.25rem; }}
-  p.sub {{ color: #888; font-size: 0.9rem; margin: 0 0 2rem; }}
-  ul {{ list-style: none; padding: 0; margin: 0; }}
+  header {{
+    text-align: center;
+    margin-bottom: 2.5rem;
+  }}
+  h1 {{
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin: 0 0 0.35rem;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }}
+  .sub {{
+    color: var(--color-muted);
+    font-size: 0.9rem;
+    margin: 0;
+    font-weight: 400;
+  }}
+  ul {{
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 0.6rem;
+  }}
   li {{
-    margin: 0.6rem 0;
-    padding: 0.75rem 1rem;
-    border: 1px solid #e0dbd5;
-    border-radius: 8px;
+    margin: 0;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
   }}
-  li:hover {{ background: #f2ede8; }}
-  a {{
+  li a {{
+    display: block;
     text-decoration: none;
+    padding: 0.9rem 1.1rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow 0.15s ease, border-color 0.15s ease;
+  }}
+  li a:hover {{
+    box-shadow: var(--shadow-md);
+    border-color: #cdc7bf;
+  }}
+  li a:focus-visible {{
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(61, 90, 128, 0.35), var(--shadow-md);
+    border-color: var(--color-link);
+  }}
+  .title {{
     font-size: 1.05rem;
     font-weight: 500;
-    color: #2c5282;
+    color: var(--color-link);
+    display: block;
+    margin-bottom: 0.2rem;
+  }}
+  li a:hover .title {{
+    color: var(--color-link-hover);
+  }}
+  .path {{
+    font-size: 0.78rem;
+    color: var(--color-muted);
     display: block;
   }}
-  a:hover {{ text-decoration: underline; }}
-  .path {{ font-size: 0.78rem; color: #999; display: block; margin-top: 2px; }}
-  .empty {{ color: #888; font-style: italic; }}
+  .empty {{
+    text-align: center;
+    color: var(--color-muted);
+    font-style: italic;
+    padding: 3rem 0;
+  }}
+  @media (prefers-reduced-motion: reduce) {{
+    li, li a {{
+      transition: none;
+    }}
+  }}
 </style>
 </head>
 <body>
-<h1>emede shared notes</h1>
+<header>
+<h1>Shared Notes</h1>
 <p class="sub">Notes currently shared on this network</p>
+</header>
 {body}
 </body>
-</html>"#
+</html>"##
     );
 
     html_response(html, 200)
