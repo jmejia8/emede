@@ -252,9 +252,12 @@
         <button id="share-modal-close" class="share-modal-close" type="button" aria-label="Close share">&times;</button>
         <h2 class="share-modal-title">Share on LAN</h2>
         <p class="share-modal-sub">Scan the QR code or open the URL on another device</p>
-        <div id="share-qr" class="share-qr"></div>
+        <div id="share-qr" class="share-qr" aria-hidden="true"></div>
         <a id="share-url" class="share-url" href="#" target="_blank" rel="noopener noreferrer"></a>
-        <button id="share-stop-btn" class="share-stop-btn" type="button">Stop sharing</button>
+        <button id="share-stop-btn" class="share-stop-btn" type="button">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>
+          Stop Sharing
+        </button>
       </div>
     </div>
 
