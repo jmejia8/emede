@@ -1192,18 +1192,9 @@ async function startShare() {
     const info = await invoke("start_share", { path: currentDocPath });
     shareActive = true;
     currentShareInfo = info;
-    shareToggle.textContent = "Stop sharing";
-    shareStatus.textContent = "";
-    const link = document.createElement("a");
-    link.href = "#";
-    link.className = "share-status-link";
-    link.textContent = `Show QR`;
-    link.addEventListener("click", (e) => {
-      e.preventDefault();
-      showShareModal(info);
-    });
-    shareStatus.appendChild(link);
+    shareToggle.textContent = "Sharing info";
     showShareModal(info);
+    shareStatus.textContent = "Sharing…";
   } catch (err) {
     shareActive = false;
     shareToggle.textContent = "Share on LAN";
@@ -1227,7 +1218,9 @@ async function stopShare() {
 
 function wireShare() {
   shareToggle.addEventListener("click", () => {
-    if (shareActive) {
+    if (shareActive && currentShareInfo) {
+      showShareModal(currentShareInfo);
+    } else if (shareActive) {
       void stopShare();
     } else {
       void startShare();
@@ -1237,6 +1230,11 @@ function wireShare() {
   shareModalClose.addEventListener("click", hideShareModal);
   shareOverlay.addEventListener("click", (e) => {
     if (e.target === shareOverlay) hideShareModal();
+  });
+
+  const shareStopBtn = document.getElementById("share-stop-btn");
+  shareStopBtn.addEventListener("click", () => {
+    void stopShare();
   });
 
   document.addEventListener("keydown", (e) => {

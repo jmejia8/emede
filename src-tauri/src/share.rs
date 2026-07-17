@@ -945,13 +945,19 @@ const SHARED_PAGE_TEMPLATE: &str = r##"<!doctype html>
   .prose hr { border: none; border-top: 1px solid var(--color-border); }
   .prose .mermaid { text-align: center; }
 
-  #cfg-toggle {
+  .top-btns {
     position: fixed; top: 12px; right: 12px; z-index: 10;
+    display: flex; gap: 8px;
+  }
+  .top-btns button {
     width: 40px; height: 40px; border-radius: 50%;
     border: 1px solid var(--color-border);
     background: var(--color-bg); color: var(--color-fg);
-    font-size: 18px; cursor: pointer;
+    font-size: 18px; cursor: pointer; display: flex;
+    align-items: center; justify-content: center;
+    transition: background 0.15s;
   }
+  .top-btns button:hover { background: var(--color-code-bg); }
   #cfg-panel {
     position: fixed; top: 60px; right: 12px; z-index: 10;
     background: var(--color-bg); color: var(--color-fg);
@@ -966,7 +972,10 @@ const SHARED_PAGE_TEMPLATE: &str = r##"<!doctype html>
 </style>
 </head>
 <body>
-<button id="cfg-toggle" type="button" aria-label="Display settings">⚙</button>
+<div class="top-btns">
+  <button id="home-btn" type="button" aria-label="Home" title="Shared notes home">⌂</button>
+  <button id="cfg-toggle" type="button" aria-label="Display settings">⚙</button>
+</div>
 <div id="cfg-panel" hidden>
   <label>Text <input id="cfg-fg" type="color" /></label>
   <label>Background <input id="cfg-bg" type="color" /></label>
@@ -1011,6 +1020,11 @@ const SHARED_PAGE_TEMPLATE: &str = r##"<!doctype html>
     applySize(initSize);
 
     toggle.addEventListener("click", function () { panel.hidden = !panel.hidden; });
+    document.getElementById("home-btn").addEventListener("click", function () {
+      var m = location.search.match(/[?&]key=([^&]+)/);
+      var key = m ? m[1] : "";
+      location.href = location.origin + "/" + (key ? "?key=" + key : "");
+    });
     fg.addEventListener("input", function () {
       applyFg(fg.value);
       localStorage.setItem("emede-share-fg", fg.value);
