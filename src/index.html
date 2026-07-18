@@ -39,6 +39,24 @@
         },
         options: {
           skipHtmlTags: ["script", "noscript", "style", "textarea", "pre", "code"],
+          // MathJax 4 generates a11y speech/braille via a Speech Rule Engine
+          // web worker whose promise is awaited in the render pipeline. That
+          // worker/its mathmaps data isn't bundled for offline use, so on a
+          // re-typeset (live reload) the task never settles and typesetPromise
+          // deadlocks — leaving formulas as raw `$...$` text. The context menu
+          // re-syncs enableEnrichment/enableSpeech/enableBraille from its own
+          // settings on every render, so the plain options are not enough — the
+          // authoritative source is `menuOptions.settings`. emede is a read-only
+          // viewer that uses none of this, so turn the whole path off there.
+          enableMenu: false,
+          menuOptions: {
+            settings: {
+              enrich: false,
+              speech: false,
+              braille: false,
+              collapsible: false,
+            },
+          },
         },
       };
     </script>
