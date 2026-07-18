@@ -25,6 +25,33 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          # Need full history + tags so we can diff against the previous release.
+          fetch-depth: 0
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          CURRENT_TAG="${GITHUB_REF_NAME}"
+          PREV_TAG=$(git describe --tags --abbrev=0 "${CURRENT_TAG}^" 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            RANGE="${PREV_TAG}..${CURRENT_TAG}"
+            echo "Changelog range: $RANGE"
+          else
+            RANGE="${CURRENT_TAG}"
+            echo "No previous tag found; listing all commits up to $CURRENT_TAG"
+          fi
+          {
+            echo "body<<CHANGELOG_EOF"
+            echo "## Changes"
+            echo ""
+            git log --no-merges --pretty=format:'- %s (%h)' "$RANGE" \
+              | grep -viE '^- release v' || true
+            echo ""
+            echo ""
+            echo "See the assets to download this version and install."
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Install Node.js
         uses: actions/setup-node@v4
@@ -56,7 +83,7 @@ jobs:
         with:
           tagName: v__VERSION__
           releaseName: "emede v__VERSION__"
-          releaseBody: "See the assets to download this version and install."
+          releaseBody: ${{ steps.changelog.outputs.body }}
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
