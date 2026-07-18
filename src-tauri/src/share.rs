@@ -480,15 +480,16 @@ fn build_home_page(
     route_map: &HashMap<String, NoteRoute>,
     ip: &str,
     port: u16,
-    key: &str,
 ) -> Response<std::io::Cursor<Vec<u8>>> {
     let pid = std::process::id().to_string();
 
-    // Collect (title, url, filename) across all live instances.
+    // Collect (title, url, filename) across all live instances. Links are
+    // key-free: the visitor reached this page with a valid cookie (host-scoped,
+    // so it also covers other instances' ports), which authenticates them onward.
     let mut entries: Vec<(String, String, String)> = Vec::new();
 
     for note in route_map.values() {
-        let url = format!("http://{}:{}/{}?key={}", ip, port, note.hash, key);
+        let url = format!("http://{}:{}/{}", ip, port, note.hash);
         let filename = Path::new(&note.path)
             .file_name()
             .map(|f| f.to_string_lossy().to_string())
@@ -505,7 +506,7 @@ fn build_home_page(
             continue;
         }
         for note in &entry.notes {
-            let url = format!("http://{}:{}/{}?key={}", ip, entry.port, note.hash, key);
+            let url = format!("http://{}:{}/{}", ip, entry.port, note.hash);
             let filename = Path::new(&note.path)
                 .file_name()
                 .map(|f| f.to_string_lossy().to_string())
@@ -1336,6 +1337,53 @@ fn key_matches(candidate: Option<&str>, expected: &str) -> bool {
     c.len() == expected.len() && c.as_bytes().ct_eq(expected.as_bytes()).into()
 }
 
+/// Name of the cookie the key is stashed in after a client presents it once.
+const KEY_COOKIE: &str = "emede_key";
+
+/// How long the auth cookie survives in the client's browser (7 days). It only
+/// needs to outlast a viewing session; the key itself is still checked on every
+/// request, so an expired cookie merely re-shows the unlock prompt.
+const KEY_COOKIE_MAX_AGE: u32 = 7 * 24 * 60 * 60;
+
+/// Pull the auth key out of a raw `Cookie` header value, if the key cookie is
+/// among the `;`-separated pairs.
+fn cookie_key_from_header(cookies: &str) -> Option<String> {
+    let prefix = format!("{KEY_COOKIE}=");
+    cookies
+        .split(';')
+        .map(str::trim)
+        .find_map(|pair| pair.strip_prefix(&prefix))
+        .map(|v| v.to_string())
+}
+
+/// Extract the auth key from the request's `Cookie` header, if present.
+fn parse_cookie_key(request: &tiny_http::Request) -> Option<String> {
+    let cookies = request
+        .headers()
+        .iter()
+        .find(|h| h.field.equiv("Cookie"))
+        .map(|h| h.value.as_str())?;
+    cookie_key_from_header(cookies)
+}
+
+/// Redirect to `location`, planting the auth key in an `HttpOnly` cookie so the
+/// key drops out of the visible URL and out of every subsequent link. The
+/// cookie is not `Secure` because LAN sharing is plain HTTP; `SameSite=Lax` and
+/// `HttpOnly` still keep it off cross-site requests and out of page scripts.
+fn redirect_with_cookie(location: &str, key: &str) -> Response<std::io::Cursor<Vec<u8>>> {
+    let cookie =
+        format!("{KEY_COOKIE}={key}; Path=/; Max-Age={KEY_COOKIE_MAX_AGE}; HttpOnly; SameSite=Lax");
+    Response::from_string(String::new())
+        .with_status_code(302)
+        .with_header(header("Location", location))
+        .with_header(header("Set-Cookie", &cookie))
+        .with_header(header("Cache-Control", "no-store"))
+        .with_header(header("Content-Security-Policy", SHARED_CSP))
+        .with_header(header("X-Frame-Options", "DENY"))
+        .with_header(header("X-Content-Type-Options", "nosniff"))
+        .with_header(header("Referrer-Policy", "no-referrer"))
+}
+
 /// Build the response for one shared-server request. Pure function of the
 /// request plus shared state, so it is safe to run inside `catch_unwind`.
 fn handle_share_request(
@@ -1352,10 +1400,23 @@ fn handle_share_request(
     }
 
     let (url_path, query_key) = parse_url_key(request.url());
-    if !key_matches(query_key.as_deref(), server_key) {
-        // No/invalid key: ask for it instead of a dead end. The form submits the
-        // key back as `?key=` (see `build_unlock_page`); a correct one reaches
-        // the home page. `attempted` distinguishes a first visit from a retry.
+
+    // A valid key handed in via `?key=` is exchanged for a cookie: set the
+    // cookie and redirect to the same path stripped of the query. After this one
+    // hop the key is gone from the address bar and rides in the cookie instead,
+    // so none of the links we emit need to carry it. This covers both the
+    // owner's bootstrap URL and a correct submission of the unlock form.
+    if key_matches(query_key.as_deref(), server_key) {
+        return redirect_with_cookie(&url_path, server_key);
+    }
+
+    // Steady-state auth is the cookie planted by that redirect.
+    if !key_matches(parse_cookie_key(request).as_deref(), server_key) {
+        // Neither a valid key nor cookie: ask for it instead of a dead end. The
+        // form submits the key back as `?key=` (see `build_unlock_page`), which
+        // the branch above then turns into a cookie. `attempted` is true when a
+        // wrong key was just submitted, so we show an error instead of a cold
+        // prompt.
         return build_unlock_page(query_key.is_some());
     }
 
@@ -1364,7 +1425,7 @@ fn handle_share_request(
             .unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST))
             .to_string();
         let map = route_map.read().unwrap_or_else(|e| e.into_inner());
-        build_home_page(&map, &current_ip, server_port, server_key)
+        build_home_page(&map, &current_ip, server_port)
     } else {
         let hash_str = url_path.trim_start_matches('/').to_string();
         let path_opt = {
@@ -1589,9 +1650,8 @@ const SHARED_PAGE_TEMPLATE: &str = r##"<!doctype html>
 
     toggle.addEventListener("click", function () { panel.hidden = !panel.hidden; });
     document.getElementById("home-btn").addEventListener("click", function () {
-      var m = location.search.match(/[?&]key=([^&]+)/);
-      var key = m ? m[1] : "";
-      location.href = location.origin + "/" + (key ? "?key=" + key : "");
+      // Auth rides in the cookie, so the home link stays key-free.
+      location.href = location.origin + "/";
     });
     fg.addEventListener("input", function () {
       applyFg(fg.value);
@@ -1849,6 +1909,41 @@ mod tests {
     }
 
     #[test]
+    fn cookie_key_parses_from_header() {
+        assert_eq!(cookie_key_from_header("emede_key=abc123").as_deref(), Some("abc123"));
+        // Alongside other cookies, with surrounding whitespace.
+        assert_eq!(
+            cookie_key_from_header("foo=1; emede_key=abc123; bar=2").as_deref(),
+            Some("abc123")
+        );
+        assert_eq!(cookie_key_from_header("foo=1; bar=2"), None);
+        assert_eq!(cookie_key_from_header(""), None);
+        // A cookie whose name merely ends in the same suffix must not match.
+        assert_eq!(cookie_key_from_header("not_emede_key=nope"), None);
+    }
+
+    #[test]
+    fn redirect_sets_httponly_cookie() {
+        use std::io::Read;
+        let resp = redirect_with_cookie("/somehash", "deadbeef");
+        assert_eq!(resp.status_code().0, 302);
+        let headers: Vec<String> = resp
+            .headers()
+            .iter()
+            .map(|h| format!("{}: {}", h.field, h.value.as_str()))
+            .collect();
+        let joined = headers.join("\n");
+        assert!(joined.contains("Location: /somehash"), "missing redirect target: {joined}");
+        assert!(joined.contains("Set-Cookie: emede_key=deadbeef"), "missing cookie: {joined}");
+        assert!(joined.contains("HttpOnly"), "cookie must be HttpOnly: {joined}");
+        assert!(joined.contains("SameSite=Lax"), "cookie must be SameSite=Lax: {joined}");
+        // Body is empty on a redirect.
+        let mut body = String::new();
+        resp.into_reader().read_to_string(&mut body).unwrap();
+        assert!(body.is_empty(), "redirect body should be empty");
+    }
+
+    #[test]
     fn key_matches_is_exact() {
         assert!(key_matches(Some("abc123"), "abc123"));
         assert!(!key_matches(Some("abc124"), "abc123"));
@@ -1860,7 +1955,7 @@ mod tests {
     #[test]
     fn home_page_includes_logo_and_theme_toggle() {
         let map = HashMap::new();
-        let resp = build_home_page(&map, "192.168.1.20", 7777, "abcdef");
+        let resp = build_home_page(&map, "192.168.1.20", 7777);
         let mut body = String::new();
         use std::io::Read;
         resp.into_reader().read_to_string(&mut body).unwrap();
