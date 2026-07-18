@@ -181,6 +181,7 @@ const shareModal = document.getElementById("share-modal");
 const shareModalClose = document.getElementById("share-modal-close");
 const shareQr = document.getElementById("share-qr");
 const shareUrl = document.getElementById("share-url");
+const shareCopyBtn = document.getElementById("share-copy-btn");
 const settingsClose = document.getElementById("settings-close");
 const aboutOverlay = document.getElementById("about-overlay");
 const aboutModal = document.getElementById("about-modal");
@@ -1280,6 +1281,9 @@ function closeModalFocus() {
 function showShareModal(info) {
   shareUrl.href = info.url;
   shareUrl.textContent = info.url;
+  shareCopyBtn.classList.remove("copied");
+  const copyLabel = shareCopyBtn.querySelector(".share-copy-label");
+  if (copyLabel) copyLabel.textContent = "Copy";
   shareQr.innerHTML = "";
 
   invoke("generate_share_qr", { url: info.url })
@@ -1353,6 +1357,27 @@ function wireShare() {
   const shareStopBtn = document.getElementById("share-stop-btn");
   shareStopBtn.addEventListener("click", () => {
     void stopShare();
+  });
+
+  const copyLabel = shareCopyBtn.querySelector(".share-copy-label");
+  let copyResetTimer = null;
+  shareCopyBtn.addEventListener("click", async () => {
+    const url = shareUrl.href;
+    if (!url) return;
+    let ok = false;
+    try {
+      await navigator.clipboard.writeText(url);
+      ok = true;
+    } catch {
+      ok = false;
+    }
+    shareCopyBtn.classList.toggle("copied", ok);
+    if (copyLabel) copyLabel.textContent = ok ? "Copied" : "Failed";
+    clearTimeout(copyResetTimer);
+    copyResetTimer = setTimeout(() => {
+      shareCopyBtn.classList.remove("copied");
+      if (copyLabel) copyLabel.textContent = "Copy";
+    }, 1600);
   });
 
   document.addEventListener("keydown", (e) => {
