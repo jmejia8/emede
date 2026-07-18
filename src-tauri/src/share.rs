@@ -807,6 +807,243 @@ fn build_home_page(
     html_response(html, 200)
 }
 
+/// The key-request ("unlock") page shown when a request arrives without a valid
+/// key. It is a plain `<form method="get" action="/">` whose single `key` input
+/// becomes the `?key=` query parameter on submit: a correct key lands on the
+/// home page, a wrong one bounces back here. `attempted` is true when the request
+/// carried a (wrong) key, so we can show an inline error instead of a cold prompt.
+fn build_unlock_page(attempted: bool) -> Response<std::io::Cursor<Vec<u8>>> {
+    let error = if attempted {
+        r#"<p id="key-error" class="error" role="alert">That key didn't match. Try again.</p>"#
+    } else {
+        ""
+    };
+    let invalid_attrs = if attempted {
+        r#" aria-invalid="true" aria-describedby="key-error""#
+    } else {
+        ""
+    };
+
+    let html = format!(
+        r##"<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>emede — enter key</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after {{ box-sizing: border-box; }}
+  :root {{
+    --color-bg: #faf8f5;
+    --color-surface: #ffffff;
+    --color-fg: #1a1a1a;
+    --color-muted: #8b8782;
+    --color-border: #e6e1db;
+    --color-border-hover: #cdc7bf;
+    --color-link: #3d5a80;
+    --color-link-hover: #1a365d;
+    --color-error: #b3261e;
+    --focus-ring: rgba(61, 90, 128, 0.35);
+    --logo-invert: 0;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.05), 0 2px 4px rgba(0,0,0,0.03);
+  }}
+  @media (prefers-color-scheme: dark) {{
+    :root:not([data-theme="light"]) {{
+      --color-bg: #17171a;
+      --color-surface: #212127;
+      --color-fg: #e8e6e3;
+      --color-muted: #928e88;
+      --color-border: #33333b;
+      --color-border-hover: #4a4a55;
+      --color-link: #9db8dc;
+      --color-link-hover: #c3d4ee;
+      --color-error: #f2b8b5;
+      --focus-ring: rgba(157, 184, 220, 0.4);
+      --logo-invert: 1;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.24);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.36), 0 2px 4px rgba(0,0,0,0.28);
+    }}
+  }}
+  :root[data-theme="dark"] {{
+    --color-bg: #17171a;
+    --color-surface: #212127;
+    --color-fg: #e8e6e3;
+    --color-muted: #928e88;
+    --color-border: #33333b;
+    --color-border-hover: #4a4a55;
+    --color-link: #9db8dc;
+    --color-link-hover: #c3d4ee;
+    --color-error: #f2b8b5;
+    --focus-ring: rgba(157, 184, 220, 0.4);
+    --logo-invert: 1;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.24);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.36), 0 2px 4px rgba(0,0,0,0.28);
+  }}
+  html {{
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    color-scheme: light dark;
+  }}
+  body {{
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    min-height: 100dvh;
+    margin: 0;
+    padding: 3rem 1.25rem 5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-bg);
+    color: var(--color-fg);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }}
+  .card {{
+    width: 100%;
+    max-width: 24rem;
+    text-align: center;
+  }}
+  .logo {{
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 1.25rem;
+    display: block;
+    filter: invert(var(--logo-invert));
+  }}
+  h1 {{
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin: 0 0 0.35rem;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }}
+  .sub {{
+    color: var(--color-muted);
+    font-size: 0.9rem;
+    margin: 0 0 2rem;
+  }}
+  form {{
+    display: grid;
+    gap: 0.75rem;
+    text-align: left;
+  }}
+  label {{
+    font-size: 0.85rem;
+    font-weight: 500;
+  }}
+  input[type="password"] {{
+    width: 100%;
+    font: inherit;
+    padding: 0.7rem 0.9rem;
+    background: var(--color-surface);
+    color: var(--color-fg);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    box-shadow: var(--shadow-sm);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }}
+  input[type="password"]:hover {{
+    border-color: var(--color-border-hover);
+  }}
+  input[type="password"]:focus-visible {{
+    outline: none;
+    border-color: var(--color-link);
+    box-shadow: 0 0 0 3px var(--focus-ring), var(--shadow-sm);
+  }}
+  input[aria-invalid="true"] {{
+    border-color: var(--color-error);
+  }}
+  .error {{
+    margin: 0;
+    font-size: 0.82rem;
+    color: var(--color-error);
+  }}
+  button {{
+    font: inherit;
+    font-weight: 600;
+    margin-top: 0.25rem;
+    padding: 0.7rem 1rem;
+    color: #fff;
+    background: var(--color-link);
+    border: 1px solid transparent;
+    border-radius: 10px;
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+    transition: background 0.15s ease, box-shadow 0.15s ease;
+  }}
+  button:hover {{
+    background: var(--color-link-hover);
+    box-shadow: var(--shadow-md);
+  }}
+  button:focus-visible {{
+    outline: none;
+    box-shadow: 0 0 0 3px var(--focus-ring), var(--shadow-sm);
+  }}
+  footer {{
+    margin-top: 3rem;
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--color-muted);
+    line-height: 1.7;
+  }}
+  footer .who {{
+    display: block;
+    margin-bottom: 0.35rem;
+  }}
+  footer a {{
+    color: var(--color-link);
+    text-decoration: none;
+    font-weight: 500;
+  }}
+  footer a:hover {{
+    color: var(--color-link-hover);
+    text-decoration: underline;
+  }}
+  footer a:focus-visible {{
+    outline: none;
+    border-radius: 3px;
+    box-shadow: 0 0 0 3px var(--focus-ring);
+    color: var(--color-link-hover);
+  }}
+  @media (prefers-reduced-motion: reduce) {{
+    input, button {{ transition: none; }}
+  }}
+</style>
+</head>
+<body>
+<main class="card">
+<img class="logo" src="{logo}" alt="emede logo" width="64" height="64">
+<h1>Enter key</h1>
+<p class="sub">This note is shared privately. Enter the key to continue.</p>
+<form method="get" action="/">
+  <label for="key">Key</label>
+  <input id="key" name="key" type="password" autocomplete="off" spellcheck="false"
+         autocapitalize="off" autocorrect="off" required autofocus{invalid}>
+  {error}
+  <button type="submit">Unlock</button>
+</form>
+</main>
+<footer>
+<span class="who">{user}</span>
+<span>Powered by <a href="{repo}" target="_blank" rel="noopener noreferrer">emede</a></span>
+</footer>
+</body>
+</html>"##,
+        logo = logo_data_uri(),
+        invalid = invalid_attrs,
+        error = error,
+        user = escape_html(&host_user_label()),
+        repo = EMEDE_REPO_URL,
+    );
+
+    html_response(html, if attempted { 401 } else { 200 })
+}
+
 // ── Server lifecycle ──────────────────────────────────────────────────────────
 
 /// Preferred default port. All notes in an instance share one port.
@@ -1116,7 +1353,10 @@ fn handle_share_request(
 
     let (url_path, query_key) = parse_url_key(request.url());
     if !key_matches(query_key.as_deref(), server_key) {
-        return html_response("Not found".to_string(), 404);
+        // No/invalid key: ask for it instead of a dead end. The form submits the
+        // key back as `?key=` (see `build_unlock_page`); a correct one reaches
+        // the home page. `attempted` distinguishes a first visit from a retry.
+        return build_unlock_page(query_key.is_some());
     }
 
     if url_path == "/" {
@@ -1631,6 +1871,33 @@ mod tests {
             body.contains("prefers-color-scheme: dark"),
             "missing dark-mode support"
         );
+    }
+
+    #[test]
+    fn unlock_page_has_get_form_logo_and_footer() {
+        use std::io::Read;
+
+        // First visit: no key attempted yet, so no error and a 200 status.
+        let resp = build_unlock_page(false);
+        assert_eq!(resp.status_code().0, 200);
+        let mut body = String::new();
+        resp.into_reader().read_to_string(&mut body).unwrap();
+        assert!(
+            body.contains(r#"<form method="get" action="/">"#),
+            "missing GET form pointing at home"
+        );
+        assert!(body.contains(r#"name="key""#), "missing key input");
+        assert!(body.contains("data:image/png;base64,"), "missing inlined logo");
+        assert!(body.contains("Powered by"), "missing footer");
+        assert!(!body.contains("key-error"), "should not show error on first visit");
+
+        // Retry after a wrong key: inline error and a 401 status.
+        let retry = build_unlock_page(true);
+        assert_eq!(retry.status_code().0, 401);
+        let mut retry_body = String::new();
+        retry.into_reader().read_to_string(&mut retry_body).unwrap();
+        assert!(retry_body.contains("key-error"), "missing error on retry");
+        assert!(retry_body.contains(r#"aria-invalid="true""#), "missing invalid state");
     }
 
     #[test]
