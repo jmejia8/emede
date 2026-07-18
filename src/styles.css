@@ -1906,6 +1906,30 @@ body.has-modal {
   }
 }
 
+.share-username-input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  margin-top: 1.25rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: center;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.share-username-input:focus-visible {
+  outline: 2px solid var(--color-link);
+  outline-offset: 2px;
+  border-color: var(--color-link);
+}
+
 .share-stop-btn {
   display: inline-flex;
   align-items: center;

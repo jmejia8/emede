@@ -42,6 +42,10 @@ pub struct Settings {
     pub justify_text: bool,
     #[serde(default = "default_mermaid_diagrams")]
     pub mermaid_diagrams: bool,
+    /// Name shown as the host on LAN-shared pages. Defaults to the `USER`
+    /// environment value; empty means "fall back to the env var / anonymous".
+    #[serde(default = "default_share_username")]
+    pub share_username: String,
 }
 
 fn default_window_frame() -> String {
@@ -58,6 +62,16 @@ fn default_gpu_acceleration() -> bool {
 
 fn default_mermaid_diagrams() -> bool {
     true
+}
+
+/// Default shared-host name: the OS username, or empty if unavailable.
+fn default_share_username() -> String {
+    std::env::var("USER")
+        .or_else(|_| std::env::var("USERNAME"))
+        .ok()
+        .map(|u| u.trim().to_string())
+        .filter(|u| !u.is_empty())
+        .unwrap_or_default()
 }
 
 fn default_font_inherit() -> String {
@@ -96,6 +110,7 @@ impl Default for Settings {
             gpu_acceleration: default_gpu_acceleration(),
             justify_text: false,
             mermaid_diagrams: default_mermaid_diagrams(),
+            share_username: default_share_username(),
         }
     }
 }

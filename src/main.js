@@ -182,6 +182,7 @@ const shareModalClose = document.getElementById("share-modal-close");
 const shareQr = document.getElementById("share-qr");
 const shareUrl = document.getElementById("share-url");
 const shareCopyBtn = document.getElementById("share-copy-btn");
+const shareUsername = document.getElementById("share-username");
 const settingsClose = document.getElementById("settings-close");
 const aboutOverlay = document.getElementById("about-overlay");
 const aboutModal = document.getElementById("about-modal");
@@ -514,6 +515,7 @@ function applySettings(settings) {
   settingGpu.checked = settings.gpu_acceleration;
   settingJustify.checked = settings.justify_text;
   settingMermaid.checked = settings.mermaid_diagrams ?? true;
+  shareUsername.value = settings.share_username ?? "";
   contentEl.classList.toggle("prose-justify", settings.justify_text);
   void applyWindowFrame(settings.window_frame);
   scheduleMermaid();
@@ -534,6 +536,7 @@ function settingsFromForm() {
     gpu_acceleration: settingGpu.checked,
     justify_text: settingJustify.checked,
     mermaid_diagrams: settingMermaid.checked,
+    share_username: shareUsername.value.trim(),
   };
 }
 
@@ -1357,6 +1360,20 @@ function wireShare() {
   const shareStopBtn = document.getElementById("share-stop-btn");
   shareStopBtn.addEventListener("click", () => {
     void stopShare();
+  });
+
+  // Persist the shared-host name without re-rendering the field (which would
+  // move the caret). Re-shared pages pick up the new name on next request.
+  let usernameSaveTimer = null;
+  shareUsername.addEventListener("input", () => {
+    const name = shareUsername.value.trim();
+    if (currentSettings) currentSettings.share_username = name;
+    clearTimeout(usernameSaveTimer);
+    usernameSaveTimer = setTimeout(() => {
+      invoke("set_settings", { settings: settingsFromForm() }).catch((err) =>
+        console.warn("Failed to save username", err),
+      );
+    }, 300);
   });
 
   const copyLabel = shareCopyBtn.querySelector(".share-copy-label");

@@ -453,6 +453,27 @@ fn logo_data_uri() -> &'static str {
     })
 }
 
+/// Public URL of the emede source repository, linked from the shared home page.
+const EMEDE_REPO_URL: &str = "https://github.com/jmejia8/emede";
+
+/// Best-effort label for the person hosting these shares: just the username.
+/// The hostname is deliberately omitted to avoid disclosing a targetable
+/// machine name to everyone on the LAN. Falls back to "someone".
+fn host_user_label() -> String {
+    // A name the user set in settings wins; otherwise fall back to the OS
+    // username, then to a generic label.
+    let configured = settings::load_settings().share_username.trim().to_string();
+    if !configured.is_empty() {
+        return configured;
+    }
+    std::env::var("USER")
+        .or_else(|_| std::env::var("USERNAME"))
+        .ok()
+        .map(|u| u.trim().to_string())
+        .filter(|u| !u.is_empty())
+        .unwrap_or_else(|| "someone".to_string())
+}
+
 fn build_home_page(
     route_map: &HashMap<String, NoteRoute>,
     ip: &str,
@@ -695,6 +716,34 @@ fn build_home_page(
     font-style: italic;
     padding: 3rem 0;
   }}
+  footer {{
+    margin-top: 3.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--color-border);
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--color-muted);
+    line-height: 1.7;
+  }}
+  footer .who {{
+    display: block;
+    margin-bottom: 0.35rem;
+  }}
+  footer a {{
+    color: var(--color-link);
+    text-decoration: none;
+    font-weight: 500;
+  }}
+  footer a:hover {{
+    color: var(--color-link-hover);
+    text-decoration: underline;
+  }}
+  footer a:focus-visible {{
+    outline: none;
+    border-radius: 3px;
+    box-shadow: 0 0 0 3px var(--focus-ring);
+    color: var(--color-link-hover);
+  }}
   @media (prefers-reduced-motion: reduce) {{
     li, li a, .theme-toggle {{
       transition: none;
@@ -714,6 +763,10 @@ fn build_home_page(
 <p class="sub">Notes currently shared on this network</p>
 </header>
 {body}
+<footer>
+<span class="who">Shared by {user}</span>
+<span>Powered by <a href="{repo}" target="_blank" rel="noopener noreferrer">emede</a></span>
+</footer>
 <script>
   (function () {{
     var root = document.documentElement;
@@ -745,6 +798,8 @@ fn build_home_page(
 </body>
 </html>"##,
         logo = logo_data_uri(),
+        user = escape_html(&host_user_label()),
+        repo = EMEDE_REPO_URL,
     );
 
     html_response(html, 200)
