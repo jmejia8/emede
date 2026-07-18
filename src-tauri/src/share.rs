@@ -441,6 +441,18 @@ pub fn build_shared_page(path: &str) -> Result<String, String> {
     Ok(page)
 }
 
+/// The emede logo (a monochrome cat mark) embedded so the LAN-served home page
+/// stays self-contained. Encoded to a `data:` URI once, on first use.
+fn logo_data_uri() -> &'static str {
+    use std::sync::OnceLock;
+    static LOGO: OnceLock<String> = OnceLock::new();
+    LOGO.get_or_init(|| {
+        let bytes = include_bytes!("../../src/assets/logo.png");
+        let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
+        format!("data:image/png;base64,{encoded}")
+    })
+}
+
 fn build_home_page(
     route_map: &HashMap<String, NoteRoute>,
     ip: &str,
@@ -515,14 +527,50 @@ fn build_home_page(
     --color-fg: #1a1a1a;
     --color-muted: #8b8782;
     --color-border: #e6e1db;
+    --color-border-hover: #cdc7bf;
     --color-link: #3d5a80;
     --color-link-hover: #1a365d;
+    --focus-ring: rgba(61, 90, 128, 0.35);
+    --logo-invert: 0;
     --shadow-sm: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03);
     --shadow-md: 0 4px 12px rgba(0,0,0,0.05), 0 2px 4px rgba(0,0,0,0.03);
+  }}
+  /* Dark palette: applied when the OS prefers dark AND the user hasn't forced
+     a theme, or when the user explicitly selects dark. */
+  @media (prefers-color-scheme: dark) {{
+    :root:not([data-theme="light"]) {{
+      --color-bg: #17171a;
+      --color-surface: #212127;
+      --color-fg: #e8e6e3;
+      --color-muted: #928e88;
+      --color-border: #33333b;
+      --color-border-hover: #4a4a55;
+      --color-link: #9db8dc;
+      --color-link-hover: #c3d4ee;
+      --focus-ring: rgba(157, 184, 220, 0.4);
+      --logo-invert: 1;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.24);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.36), 0 2px 4px rgba(0,0,0,0.28);
+    }}
+  }}
+  :root[data-theme="dark"] {{
+    --color-bg: #17171a;
+    --color-surface: #212127;
+    --color-fg: #e8e6e3;
+    --color-muted: #928e88;
+    --color-border: #33333b;
+    --color-border-hover: #4a4a55;
+    --color-link: #9db8dc;
+    --color-link-hover: #c3d4ee;
+    --focus-ring: rgba(157, 184, 220, 0.4);
+    --logo-invert: 1;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.24);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.36), 0 2px 4px rgba(0,0,0,0.28);
   }}
   html {{
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
+    color-scheme: light dark;
   }}
   body {{
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
@@ -538,6 +586,50 @@ fn build_home_page(
     text-align: center;
     margin-bottom: 2.5rem;
   }}
+  .logo {{
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 1rem;
+    display: block;
+    filter: invert(var(--logo-invert));
+  }}
+  .theme-toggle {{
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid var(--color-border);
+    border-radius: 50%;
+    background: var(--color-surface);
+    color: var(--color-fg);
+    box-shadow: var(--shadow-sm);
+    cursor: pointer;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }}
+  .theme-toggle:hover {{
+    border-color: var(--color-border-hover);
+    box-shadow: var(--shadow-md);
+  }}
+  .theme-toggle:focus-visible {{
+    outline: none;
+    box-shadow: 0 0 0 3px var(--focus-ring), var(--shadow-sm);
+    border-color: var(--color-link);
+  }}
+  .theme-toggle svg {{
+    width: 20px;
+    height: 20px;
+  }}
+  /* Only the icon matching the active mode is shown. */
+  .theme-toggle .icon {{ display: none; }}
+  :root:not([data-theme]) .theme-toggle .icon-auto,
+  :root[data-theme="auto"] .theme-toggle .icon-auto,
+  :root[data-theme="light"] .theme-toggle .icon-light,
+  :root[data-theme="dark"] .theme-toggle .icon-dark {{ display: block; }}
   h1 {{
     font-family: 'Playfair Display', Georgia, serif;
     font-size: 1.8rem;
@@ -575,11 +667,11 @@ fn build_home_page(
   }}
   li a:hover {{
     box-shadow: var(--shadow-md);
-    border-color: #cdc7bf;
+    border-color: var(--color-border-hover);
   }}
   li a:focus-visible {{
     outline: none;
-    box-shadow: 0 0 0 3px rgba(61, 90, 128, 0.35), var(--shadow-md);
+    box-shadow: 0 0 0 3px var(--focus-ring), var(--shadow-md);
     border-color: var(--color-link);
   }}
   .title {{
@@ -604,20 +696,55 @@ fn build_home_page(
     padding: 3rem 0;
   }}
   @media (prefers-reduced-motion: reduce) {{
-    li, li a {{
+    li, li a, .theme-toggle {{
       transition: none;
     }}
   }}
 </style>
 </head>
 <body>
+<button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch color theme" title="Switch color theme">
+  <svg class="icon icon-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none"/></svg>
+  <svg class="icon icon-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+  <svg class="icon icon-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+</button>
 <header>
+<img class="logo" src="{logo}" alt="emede logo" width="64" height="64">
 <h1>Shared Notes</h1>
 <p class="sub">Notes currently shared on this network</p>
 </header>
 {body}
+<script>
+  (function () {{
+    var root = document.documentElement;
+    var btn = document.getElementById("theme-toggle");
+    var order = ["auto", "light", "dark"];
+    var labels = {{ auto: "System theme", light: "Light theme", dark: "Dark theme" }};
+
+    function apply(mode) {{
+      if (mode === "auto") {{
+        root.removeAttribute("data-theme");
+      }} else {{
+        root.setAttribute("data-theme", mode);
+      }}
+      btn.setAttribute("aria-label", labels[mode] + " (click to switch)");
+      btn.setAttribute("title", labels[mode]);
+    }}
+
+    var saved = localStorage.getItem("emede-share-theme");
+    var current = order.indexOf(saved) !== -1 ? saved : "auto";
+    apply(current);
+
+    btn.addEventListener("click", function () {{
+      current = order[(order.indexOf(current) + 1) % order.length];
+      localStorage.setItem("emede-share-theme", current);
+      apply(current);
+    }});
+  }})();
+</script>
 </body>
-</html>"##
+</html>"##,
+        logo = logo_data_uri(),
     );
 
     html_response(html, 200)
@@ -1413,6 +1540,22 @@ mod tests {
         assert!(!key_matches(Some("abc12"), "abc123"));
         assert!(!key_matches(Some("abc1234"), "abc123"));
         assert!(!key_matches(None, "abc123"));
+    }
+
+    #[test]
+    fn home_page_includes_logo_and_theme_toggle() {
+        let map = HashMap::new();
+        let resp = build_home_page(&map, "192.168.1.20", 7777, "abcdef");
+        let mut body = String::new();
+        use std::io::Read;
+        resp.into_reader().read_to_string(&mut body).unwrap();
+        assert!(body.contains(r#"id="theme-toggle""#), "missing theme toggle");
+        assert!(body.contains("data:image/png;base64,"), "missing inlined logo");
+        assert!(body.contains(r#"alt="emede logo""#), "missing logo alt text");
+        assert!(
+            body.contains("prefers-color-scheme: dark"),
+            "missing dark-mode support"
+        );
     }
 
     #[test]
