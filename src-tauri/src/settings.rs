@@ -64,13 +64,15 @@ fn default_mermaid_diagrams() -> bool {
     true
 }
 
-/// Default shared-host name: the OS username, or empty if unavailable.
+/// Default shared-host footer text, e.g. "Shared by jesus". Shown verbatim on
+/// LAN-shared pages. Empty if no OS username is available.
 fn default_share_username() -> String {
     std::env::var("USER")
         .or_else(|_| std::env::var("USERNAME"))
         .ok()
         .map(|u| u.trim().to_string())
         .filter(|u| !u.is_empty())
+        .map(|u| format!("Shared by {u}"))
         .unwrap_or_default()
 }
 

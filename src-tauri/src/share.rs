@@ -436,6 +436,8 @@ pub fn build_shared_page(path: &str) -> Result<String, String> {
         .replace("{{SIZE}}", &font_size_pt(&settings.font_size).to_string())
         .replace("{{FONT}}", &body_font)
         .replace("{{FONT_CODE}}", &code_font)
+        .replace("{{USER}}", &escape_html(&host_user_label()))
+        .replace("{{REPO}}", EMEDE_REPO_URL)
         .replace("{{CONTENT}}", &content);
 
     Ok(page)
@@ -456,12 +458,11 @@ fn logo_data_uri() -> &'static str {
 /// Public URL of the emede source repository, linked from the shared home page.
 const EMEDE_REPO_URL: &str = "https://github.com/jmejia8/emede";
 
-/// Best-effort label for the person hosting these shares: just the username.
-/// The hostname is deliberately omitted to avoid disclosing a targetable
-/// machine name to everyone on the LAN. Falls back to "someone".
+/// The footer line shown on shared pages, taken verbatim from the user's
+/// setting (e.g. "Shared by jesus"). The hostname is deliberately omitted to
+/// avoid disclosing a targetable machine name to everyone on the LAN. Falls
+/// back to the OS username, then to a generic label.
 fn host_user_label() -> String {
-    // A name the user set in settings wins; otherwise fall back to the OS
-    // username, then to a generic label.
     let configured = settings::load_settings().share_username.trim().to_string();
     if !configured.is_empty() {
         return configured;
@@ -471,7 +472,8 @@ fn host_user_label() -> String {
         .ok()
         .map(|u| u.trim().to_string())
         .filter(|u| !u.is_empty())
-        .unwrap_or_else(|| "someone".to_string())
+        .map(|u| format!("Shared by {u}"))
+        .unwrap_or_else(|| "Shared by someone".to_string())
 }
 
 fn build_home_page(
@@ -764,7 +766,7 @@ fn build_home_page(
 </header>
 {body}
 <footer>
-<span class="who">Shared by {user}</span>
+<span class="who">{user}</span>
 <span>Powered by <a href="{repo}" target="_blank" rel="noopener noreferrer">emede</a></span>
 </footer>
 <script>
@@ -1253,6 +1255,20 @@ const SHARED_PAGE_TEMPLATE: &str = r##"<!doctype html>
   .prose hr { border: none; border-top: 1px solid var(--color-border); }
   .prose .mermaid { text-align: center; }
 
+  .share-footer {
+    max-width: 46rem;
+    margin: 0 auto;
+    padding: 1.5rem var(--reader-margin) 3rem;
+    border-top: 1px solid var(--color-border);
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--color-muted);
+    line-height: 1.7;
+  }
+  .share-footer .who { display: block; margin-bottom: 0.35rem; }
+  .share-footer a { color: var(--color-link); text-decoration: none; }
+  .share-footer a:hover { text-decoration: underline; }
+
   .top-btns {
     position: fixed; top: 12px; right: 12px; z-index: 10;
     display: flex; gap: 8px;
@@ -1290,6 +1306,10 @@ const SHARED_PAGE_TEMPLATE: &str = r##"<!doctype html>
   <label>Size <input id="cfg-size" type="range" min="8" max="32" step="1" /><span id="cfg-size-label"></span></label>
 </div>
 <article class="prose">{{CONTENT}}</article>
+<footer class="share-footer">
+<span class="who">{{USER}}</span>
+<span>Powered by <a href="{{REPO}}" target="_blank" rel="noopener noreferrer">emede</a></span>
+</footer>
 <script>
   (function () {
     var root = document.documentElement;
