@@ -9,9 +9,7 @@ import {
   applyViewState,
   flushViewState,
   flushViewStateAsync,
-  getScrollEventTarget,
   loadViewState,
-  saveViewState,
 } from "./viewstate.js";
 
 const { invoke, convertFileSrc } = window.__TAURI__.core;
@@ -98,7 +96,7 @@ const BUNDLED_COLOR_TEMPLATES = [
   },
   {
     id: "catppuccin-mocha",
-    label: "Moca",
+    label: "Mocha",
     path: "themes/catppuccin-mocha.css",
   },
 ];
@@ -179,11 +177,13 @@ const printToggle = document.getElementById("print-toggle");
 const shareToggle = document.getElementById("share-toggle");
 const shareStatus = document.getElementById("share-status");
 const shareOverlay = document.getElementById("share-overlay");
+const shareModal = document.getElementById("share-modal");
 const shareModalClose = document.getElementById("share-modal-close");
 const shareQr = document.getElementById("share-qr");
 const shareUrl = document.getElementById("share-url");
 const settingsClose = document.getElementById("settings-close");
 const aboutOverlay = document.getElementById("about-overlay");
+const aboutModal = document.getElementById("about-modal");
 const aboutLink = document.getElementById("about-link");
 const aboutClose = document.getElementById("about-close");
 const settingFont = document.getElementById("setting-font");
@@ -218,6 +218,12 @@ const openFileBtn = document.getElementById("open-file-btn");
 const openPathDetails = document.getElementById("open-path-details");
 const openPathForm = document.getElementById("open-path-form");
 const openPathInput = document.getElementById("open-path-input");
+const recentFiles = document.getElementById("recent-files");
+const recentFilesList = document.getElementById("recent-files-list");
+const missingRetryBtn = document.getElementById("missing-retry-btn");
+const missingOpenBtn = document.getElementById("missing-open-btn");
+const errorRetryBtn = document.getElementById("error-retry-btn");
+const errorOpenBtn = document.getElementById("error-open-btn");
 const dragOverlay = document.getElementById("drag-overlay");
 
 let currentSettings = null;
@@ -226,11 +232,12 @@ let initialFontSize = 12;
 let initialGpuAccel = null;
 let saveTimer = null;
 let activeOpenToken = 0;
-let isRestoringViewState = false;
 let colorTemplates = [];
 let findInPage;
 let shareActive = false;
 let currentShareInfo = null;
+// The last thing the user asked to open, so the error state can offer a retry.
+let lastOpenTarget = null;
 
 function populateFontSelect(select, { includeInherit = false, groups = FONT_GROUPS } = {}) {
   select.replaceChildren();
@@ -544,52 +551,36 @@ function clearToc() {
   toggleToc(false);
 }
 
-function showEmptyState() {
-  currentDocPath = null;
-  updateShareButtonState();
+// The reader shows exactly one of these states at a time (plus "content", which
+// is entered by applyDocument). Collapsing them into one function keeps the
+// element toggling in a single place.
+function setReaderState(state, message = "") {
   contentEl.innerHTML = "";
   contentEl.classList.remove("visible");
-  loadingStateEl.classList.add("hidden");
-  emptyStateEl.classList.remove("hidden");
-  missingStateEl.classList.add("hidden");
-  errorStateEl.classList.add("hidden");
-  clearToc();
-}
+  loadingStateEl.classList.toggle("hidden", state !== "loading");
+  emptyStateEl.classList.toggle("hidden", state !== "empty");
+  missingStateEl.classList.toggle("hidden", state !== "missing");
+  errorStateEl.classList.toggle("hidden", state !== "error");
 
-function showLoadingState() {
-  contentEl.innerHTML = "";
-  contentEl.classList.remove("visible");
-  loadingStateEl.classList.remove("hidden");
-  emptyStateEl.classList.add("hidden");
-  missingStateEl.classList.add("hidden");
-  errorStateEl.classList.add("hidden");
-  clearToc();
-}
+  if (state === "missing") {
+    missingMessageEl.textContent = message.replace(/^File not found:\s*/, "");
+  } else if (state === "error") {
+    errorMessageEl.textContent = message;
+  }
 
-function showMissingFile(message) {
-  currentDocPath = null;
-  updateShareButtonState();
-  contentEl.innerHTML = "";
-  contentEl.classList.remove("visible");
-  loadingStateEl.classList.add("hidden");
-  emptyStateEl.classList.add("hidden");
-  missingMessageEl.textContent = message.replace(/^File not found:\s*/, "");
-  missingStateEl.classList.remove("hidden");
-  errorStateEl.classList.add("hidden");
   clearToc();
-}
 
-function showError(message) {
-  currentDocPath = null;
-  updateShareButtonState();
-  contentEl.innerHTML = "";
-  contentEl.classList.remove("visible");
-  loadingStateEl.classList.add("hidden");
-  emptyStateEl.classList.add("hidden");
-  missingStateEl.classList.add("hidden");
-  errorMessageEl.textContent = message;
-  errorStateEl.classList.remove("hidden");
-  clearToc();
+  // "loading" is transient and keeps the current document path so that a
+  // reload/refresh does not discard it; the terminal states clear it.
+  if (state !== "loading") {
+    currentDocPath = null;
+    updateShareButtonState();
+    void invoke("unwatch_document").catch(() => {});
+  }
+
+  if (state === "empty") {
+    void refreshRecentFiles();
+  }
 }
 
 async function waitForMathJax() {
@@ -649,7 +640,7 @@ async function ensureMermaidLoaded() {
     script.onload = () => resolve(true);
     script.onerror = () => {
       mermaidScriptLoaded = false;
-      console.warn("Failed to load Mermaid from CDN");
+      console.warn("Failed to load Mermaid");
       resolve(false);
     };
     document.head.appendChild(script);
@@ -831,27 +822,22 @@ function wrapTables(root) {
 async function restoreSavedViewState(viewState, openToken) {
   if (!viewState || (openToken !== undefined && openToken !== activeOpenToken)) return;
 
-  isRestoringViewState = true;
-  try {
-    const scrollRoot = getScrollRoot();
-    applyViewState(scrollRoot, contentEl, viewState);
-    await nextFrame();
-    if (openToken !== undefined && openToken !== activeOpenToken) return;
-    applyViewState(scrollRoot, contentEl, viewState);
+  const scrollRoot = getScrollRoot();
+  applyViewState(scrollRoot, contentEl, viewState);
+  await nextFrame();
+  if (openToken !== undefined && openToken !== activeOpenToken) return;
+  applyViewState(scrollRoot, contentEl, viewState);
 
-    const scrollBeforeMath = scrollRoot.scrollTop;
-    await typesetMath();
-    if (openToken !== undefined && openToken !== activeOpenToken) return;
+  const scrollBeforeMath = scrollRoot.scrollTop;
+  await typesetMath();
+  if (openToken !== undefined && openToken !== activeOpenToken) return;
 
-    if (scrollRoot.scrollTop === scrollBeforeMath) {
-      applyViewState(scrollRoot, contentEl, viewState);
-    }
-  } finally {
-    isRestoringViewState = false;
+  if (scrollRoot.scrollTop === scrollBeforeMath) {
+    applyViewState(scrollRoot, contentEl, viewState);
   }
 }
 
-async function applyDocument(result, { initial = false, reload = false, openToken } = {}) {
+async function applyDocument(result, { reload = false, openToken } = {}) {
   if (openToken !== undefined && openToken !== activeOpenToken) return;
 
   const scrollRoot = getScrollRoot();
@@ -1066,17 +1052,20 @@ async function revealWindow() {
 async function openFile(path) {
   toggleSearch(false);
   flushViewState(currentDocPath, contentEl);
+  lastOpenTarget = { kind: "file", value: path };
   const openToken = ++activeOpenToken;
-  showLoadingState();
+  setReaderState("loading");
 
   try {
     const result = await invoke("render_markdown", { path });
-    await applyDocument(result, { initial: true, openToken });
+    await applyDocument(result, { openToken });
+    void invoke("watch_document", { path: result.path }).catch((e) =>
+      console.warn("watch failed", e),
+    );
   } catch (err) {
     if (openToken !== activeOpenToken) return;
 
-    currentDocPath = null;
-    showMissingFile(String(err));
+    setReaderState("missing", String(err));
 
     await setWindowTitle("emede");
   }
@@ -1085,16 +1074,18 @@ async function openFile(path) {
 async function openFromUrl(url) {
   toggleSearch(false);
   flushViewState(currentDocPath, contentEl);
+  lastOpenTarget = { kind: "url", value: url };
   const openToken = ++activeOpenToken;
-  showLoadingState();
+  setReaderState("loading");
 
   try {
     const result = await invoke("render_markdown_url", { url });
-    await applyDocument(result, { initial: true, openToken });
+    await applyDocument(result, { openToken });
+    // Remote documents are not watched on disk.
+    void invoke("unwatch_document").catch(() => {});
   } catch (err) {
     if (openToken !== activeOpenToken) return;
-    currentDocPath = null;
-    showError(String(err));
+    setReaderState("error", String(err));
     await setWindowTitle("emede");
   }
 }
@@ -1127,6 +1118,58 @@ async function handlePickAndOpenFile() {
   } catch (err) {
     console.warn("Failed to open file dialog", err);
   }
+}
+
+// Re-open whatever the user last asked for (used by the error/missing retry
+// buttons).
+function retryLastOpen() {
+  if (!lastOpenTarget) {
+    void handlePickAndOpenFile();
+    return;
+  }
+  if (lastOpenTarget.kind === "url") {
+    void openFromUrl(lastOpenTarget.value);
+  } else {
+    void openFile(lastOpenTarget.value);
+  }
+}
+
+async function refreshRecentFiles() {
+  if (!recentFiles || !recentFilesList) return;
+  let files = [];
+  try {
+    files = await invoke("get_recent_files");
+  } catch (err) {
+    console.warn("Failed to load recent files", err);
+  }
+
+  recentFilesList.replaceChildren();
+  if (!files.length) {
+    recentFiles.classList.add("hidden");
+    return;
+  }
+
+  for (const entry of files) {
+    const li = document.createElement("li");
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "recent-file";
+    btn.title = entry.path;
+
+    const title = document.createElement("span");
+    title.className = "recent-file-title";
+    title.textContent = entry.title || entry.path;
+
+    const path = document.createElement("span");
+    path.className = "recent-file-path";
+    path.textContent = entry.path;
+
+    btn.append(title, path);
+    btn.addEventListener("click", () => void openFile(entry.path));
+    li.appendChild(btn);
+    recentFilesList.appendChild(li);
+  }
+  recentFiles.classList.remove("hidden");
 }
 
 async function handleImportColorTemplate() {
@@ -1162,6 +1205,78 @@ function updateShareButtonState() {
   shareToggle.disabled = !shareActive && !currentDocPath;
 }
 
+// ── Modal focus management ────────────────────────────────────────────────────
+// Background containers made inert while a modal is open, so keyboard/AT users
+// can't tab into content behind the dialog.
+const MODAL_BACKGROUND_IDS = [
+  "reader",
+  "titlebar",
+  "settings-panel",
+  "toc-panel",
+  "toc-toggle",
+  "settings-toggle",
+  "search-bar",
+];
+
+let activeModal = null;
+
+function focusableWithin(container) {
+  return Array.from(
+    container.querySelectorAll(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ),
+  ).filter((el) => el.offsetParent !== null);
+}
+
+function openModalFocus(modalEl, focusTarget) {
+  // If a modal is already trapped, release it first.
+  if (activeModal) closeModalFocus();
+
+  const previouslyFocused = document.activeElement;
+  const inertized = [];
+  for (const id of MODAL_BACKGROUND_IDS) {
+    const el = document.getElementById(id);
+    if (el && !el.hasAttribute("inert")) {
+      el.setAttribute("inert", "");
+      inertized.push(el);
+    }
+  }
+
+  const onKeydown = (e) => {
+    if (e.key !== "Tab") return;
+    const focusable = focusableWithin(modalEl);
+    if (!focusable.length) {
+      e.preventDefault();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
+  modalEl.addEventListener("keydown", onKeydown);
+
+  (focusTarget || focusableWithin(modalEl)[0] || modalEl).focus?.();
+
+  activeModal = { modalEl, onKeydown, inertized, previouslyFocused };
+}
+
+function closeModalFocus() {
+  if (!activeModal) return;
+  const { modalEl, onKeydown, inertized, previouslyFocused } = activeModal;
+  modalEl.removeEventListener("keydown", onKeydown);
+  for (const el of inertized) el.removeAttribute("inert");
+  activeModal = null;
+  if (previouslyFocused && typeof previouslyFocused.focus === "function") {
+    previouslyFocused.focus();
+  }
+}
+
 function showShareModal(info) {
   shareUrl.href = info.url;
   shareUrl.textContent = info.url;
@@ -1174,12 +1289,15 @@ function showShareModal(info) {
   shareOverlay.classList.remove("hidden");
   shareOverlay.setAttribute("aria-hidden", "false");
   document.body.classList.toggle("has-modal", true);
+  openModalFocus(shareModal, shareModalClose);
 }
 
 function hideShareModal() {
+  const wasOpen = !shareOverlay.classList.contains("hidden");
   shareOverlay.classList.add("hidden");
   shareOverlay.setAttribute("aria-hidden", "true");
   document.body.classList.toggle("has-modal", false);
+  if (wasOpen) closeModalFocus();
 }
 
 async function startShare() {
@@ -1246,21 +1364,39 @@ function wireShare() {
 
 function toggleSettings(open) {
   const show = open ?? settingsPanel.classList.contains("hidden");
+  const hadFocus = settingsPanel.contains(document.activeElement);
   settingsPanel.classList.toggle("hidden", !show);
   settingsPanel.setAttribute("aria-hidden", String(!show));
+  if (show) {
+    settingsClose?.focus();
+  } else if (hadFocus) {
+    settingsToggle?.focus();
+  }
 }
 
 function toggleToc(open) {
   const show = open ?? tocPanel.classList.contains("hidden");
+  const hadFocus = tocPanel.contains(document.activeElement);
   tocPanel.classList.toggle("hidden", !show);
   tocPanel.setAttribute("aria-hidden", String(!show));
+  if (show) {
+    tocClose?.focus();
+  } else if (hadFocus) {
+    tocToggle?.focus();
+  }
 }
 
 function toggleAbout(open) {
-  const show = open ?? aboutOverlay.classList.contains("hidden");
+  const wasOpen = !aboutOverlay.classList.contains("hidden");
+  const show = open ?? !wasOpen;
   aboutOverlay.classList.toggle("hidden", !show);
   aboutOverlay.setAttribute("aria-hidden", String(!show));
   document.body.classList.toggle("has-modal", show);
+  if (show && !wasOpen) {
+    openModalFocus(aboutModal, aboutClose);
+  } else if (!show && wasOpen) {
+    closeModalFocus();
+  }
 }
 
 function toggleSearch(open) {
@@ -1618,6 +1754,11 @@ async function boot() {
     void handlePickAndOpenFile();
   });
 
+  missingRetryBtn?.addEventListener("click", retryLastOpen);
+  errorRetryBtn?.addEventListener("click", retryLastOpen);
+  missingOpenBtn?.addEventListener("click", () => void handlePickAndOpenFile());
+  errorOpenBtn?.addEventListener("click", () => void handlePickAndOpenFile());
+
   const startupFilePromise = invoke("get_startup_file");
   const settingsPromise = invoke("get_settings");
   invoke("get_app_version").then((v) => {
@@ -1628,6 +1769,16 @@ async function boot() {
   void listen("file-to-open", (event) => {
     if (event.payload) {
       openFile(event.payload);
+    }
+  });
+
+  // Live reload: the backend re-renders the open document when its file changes
+  // on disk and emits it here. Only apply it if it's still the current document;
+  // the reload path preserves scroll position.
+  void listen("document-updated", (event) => {
+    const result = event.payload;
+    if (result?.path && result.path === currentDocPath) {
+      void applyDocument(result, { reload: true });
     }
   });
 
@@ -1644,9 +1795,9 @@ async function boot() {
 
   // Paint the first meaningful frame (loader or empty state) before the window appears.
   if (startupFile) {
-    showLoadingState();
+    setReaderState("loading");
   } else {
-    showEmptyState();
+    setReaderState("empty");
   }
 
   await revealWindow();

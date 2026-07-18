@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -28,6 +27,15 @@ struct ViewStateFile {
     documents: HashMap<String, DocViewState>,
 }
 
+impl Default for ViewStateFile {
+    fn default() -> Self {
+        Self {
+            version: default_version(),
+            documents: HashMap::new(),
+        }
+    }
+}
+
 fn default_version() -> u32 {
     1
 }
@@ -47,21 +55,7 @@ fn now_unix_secs() -> u64 {
 }
 
 fn load_view_state_file() -> ViewStateFile {
-    let path = view_state_path();
-    if path.exists() {
-        fs::read_to_string(&path)
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_else(|| ViewStateFile {
-                version: default_version(),
-                documents: HashMap::new(),
-            })
-    } else {
-        ViewStateFile {
-            version: default_version(),
-            documents: HashMap::new(),
-        }
-    }
+    crate::persist::load_json_or_backup(&view_state_path())
 }
 
 fn prune_documents(documents: &mut HashMap<String, DocViewState>) {
@@ -82,12 +76,8 @@ fn prune_documents(documents: &mut HashMap<String, DocViewState>) {
 }
 
 fn save_view_state_file(file: &ViewStateFile) -> Result<(), String> {
-    let path = view_state_path();
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
     let json = serde_json::to_string_pretty(file).map_err(|e| e.to_string())?;
-    fs::write(path, json).map_err(|e| e.to_string())
+    crate::persist::write_json_atomic(&view_state_path(), &json)
 }
 
 #[tauri::command]
@@ -109,6 +99,7 @@ pub fn set_view_state(path: String, state: DocViewState) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     use std::sync::{Mutex, OnceLock};
 
     fn test_guard() -> std::sync::MutexGuard<'static, ()> {

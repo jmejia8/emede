@@ -108,24 +108,12 @@ fn settings_path() -> PathBuf {
 }
 
 pub fn load_settings() -> Settings {
-    let path = settings_path();
-    if path.exists() {
-        fs::read_to_string(&path)
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default()
-    } else {
-        Settings::default()
-    }
+    crate::persist::load_json_or_backup(&settings_path())
 }
 
 pub fn save_settings(settings: &Settings) -> Result<(), String> {
-    let path = settings_path();
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
     let json = serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?;
-    fs::write(&path, json).map_err(|e| e.to_string())
+    crate::persist::write_json_atomic(&settings_path(), &json)
 }
 
 #[tauri::command]

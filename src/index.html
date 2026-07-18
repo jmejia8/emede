@@ -239,7 +239,7 @@
         <button id="about-close" class="about-close" type="button" aria-label="Close about">&times;</button>
         <img src="assets/logo.png" alt="" class="about-logo" width="96" height="96" />
         <h2 class="about-name">emede</h2>
-        <p class="about-version">v0.1.1</p>
+        <p class="about-version"></p>
         <p class="about-desc">A distraction-free markdown reader</p>
         <div class="about-divider"></div>
         <p class="about-author">by <strong>jmejia8</strong></p>
@@ -295,17 +295,29 @@
             <button type="submit" class="open-path-submit">Open</button>
           </form>
         </details>
+        <nav id="recent-files" class="recent-files hidden" aria-label="Recent files">
+          <p class="recent-files-title">Recent</p>
+          <ul id="recent-files-list" class="recent-files-list"></ul>
+        </nav>
       </div>
-      <div id="missing-state" class="missing-state hidden">
+      <div id="missing-state" class="missing-state hidden" role="alert">
         <img src="assets/logo.png" alt="" class="state-logo" width="128" height="128" />
         <p class="missing-eyebrow">Document not found</p>
         <h1>That file is not on this shelf.</h1>
         <p id="missing-message" class="missing-message"></p>
         <p class="missing-hint">Check the path and try opening it again.</p>
+        <div class="state-actions">
+          <button type="button" id="missing-retry-btn" class="open-file-btn">Retry</button>
+          <button type="button" id="missing-open-btn" class="open-file-btn">Open File…</button>
+        </div>
       </div>
-      <div id="error-state" class="error-state hidden">
+      <div id="error-state" class="error-state hidden" role="alert">
         <img src="assets/logo.png" alt="" class="state-logo" width="128" height="128" />
         <p id="error-message" class="error-message"></p>
+        <div class="state-actions">
+          <button type="button" id="error-retry-btn" class="open-file-btn">Retry</button>
+          <button type="button" id="error-open-btn" class="open-file-btn">Open File…</button>
+        </div>
       </div>
     </main>
     <div id="drag-overlay" class="drag-overlay" aria-hidden="true">

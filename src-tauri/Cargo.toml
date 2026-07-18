@@ -26,6 +26,9 @@ ureq = "2"
 tiny_http = "0.12"
 base64 = "0.22"
 qrcode = { version = "0.14", features = ["svg"] }
+getrandom = "0.3"
+subtle = "2.6"
+notify = "8"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-window-state = "2"

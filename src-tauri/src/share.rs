@@ -3,10 +3,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, TcpStream, UdpSocket};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::JoinHandle;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 use tiny_http::{Header, Method, Response, Server};
 
 use crate::markdown;
@@ -114,24 +113,17 @@ fn share_routes_path() -> PathBuf {
 }
 
 fn load_share_routes() -> ShareRouteFile {
-    let path = share_routes_path();
-    if path.exists() {
-        std::fs::read_to_string(&path)
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default()
-    } else {
-        ShareRouteFile::default()
-    }
+    crate::persist::load_json_or_backup(&share_routes_path())
 }
 
 fn save_share_routes(file: &ShareRouteFile) {
-    let path = share_routes_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    if let Ok(json) = serde_json::to_string_pretty(file) {
-        let _ = std::fs::write(&path, json);
+    match serde_json::to_string_pretty(file) {
+        Ok(json) => {
+            if let Err(e) = crate::persist::write_json_atomic(&share_routes_path(), &json) {
+                eprintln!("emede: failed to save share routes: {e}");
+            }
+        }
+        Err(e) => eprintln!("emede: failed to serialize share routes: {e}"),
     }
 }
 
@@ -168,24 +160,17 @@ fn active_shares_path() -> PathBuf {
 }
 
 fn load_active_shares() -> ActiveSharesFile {
-    let path = active_shares_path();
-    if path.exists() {
-        std::fs::read_to_string(&path)
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default()
-    } else {
-        ActiveSharesFile::default()
-    }
+    crate::persist::load_json_or_backup(&active_shares_path())
 }
 
 fn save_active_shares(file: &ActiveSharesFile) {
-    let path = active_shares_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    if let Ok(json) = serde_json::to_string_pretty(file) {
-        let _ = std::fs::write(&path, json);
+    match serde_json::to_string_pretty(file) {
+        Ok(json) => {
+            if let Err(e) = crate::persist::write_json_atomic(&active_shares_path(), &json) {
+                eprintln!("emede: failed to save active shares: {e}");
+            }
+        }
+        Err(e) => eprintln!("emede: failed to serialize active shares: {e}"),
     }
 }
 
@@ -212,53 +197,52 @@ fn sync_active_shares(inner: &ShareStateInner) {
         true
     });
 
-    let map = inner.route_map.read().unwrap();
-    if map.is_empty() || inner.port.is_none() {
-        file.instances.remove(&pid);
-    } else {
-        let notes: Vec<ActiveNoteEntry> = map
-            .values()
-            .map(|r| ActiveNoteEntry {
-                path: r.path.clone(),
-                hash: r.hash.clone(),
-                title: r.title.clone(),
-            })
-            .collect();
-        file.instances
-            .insert(pid, InstanceEntry { port: inner.port.unwrap(), notes });
+    let map = inner.route_map.read().unwrap_or_else(|e| e.into_inner());
+    match inner.port {
+        Some(port) if !map.is_empty() => {
+            let notes: Vec<ActiveNoteEntry> = map
+                .values()
+                .map(|r| ActiveNoteEntry {
+                    path: r.path.clone(),
+                    hash: r.hash.clone(),
+                    title: r.title.clone(),
+                })
+                .collect();
+            file.instances.insert(pid, InstanceEntry { port, notes });
+        }
+        _ => {
+            file.instances.remove(&pid);
+        }
     }
 
     save_active_shares(&file);
 }
 
-// ── Hash generation ───────────────────────────────────────────────────────────
+// ── Hash / key generation ─────────────────────────────────────────────────────
 
-static SHARE_COUNTER: AtomicU64 = AtomicU64::new(0);
+/// Minimum length (hex chars) of a valid auth key. Keys persisted by older
+/// versions were 8 chars (32-bit); anything shorter than a full 128-bit key is
+/// treated as legacy and regenerated on next share.
+const MIN_KEY_LEN: usize = 32;
 
-/// Short, hard-to-guess token used as the served route. Obscurity only.
-fn random_hash() -> String {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos() as u64)
-        .unwrap_or(0);
-    let counter = SHARE_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let mixed = nanos ^ counter.wrapping_mul(0x9E37_79B9_7F4A_7C15);
-    format!("{:08x}", (mixed as u32))
+/// Fill a buffer with cryptographically secure random bytes and hex-encode it.
+/// A failure of the OS RNG is unrecoverable for a security token, so we panic
+/// rather than fall back to weak entropy.
+fn random_hex(bytes: usize) -> String {
+    let mut buf = vec![0u8; bytes];
+    getrandom::fill(&mut buf).expect("OS random number generator unavailable");
+    buf.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-/// Longer random string used as the URL auth key. Generated once per server
-/// instance so the same key protects all notes.
+/// Short, unguessable token used as the served route (64-bit).
+fn random_hash() -> String {
+    random_hex(8)
+}
+
+/// URL auth key, generated once per server instance so the same key protects
+/// all notes (128-bit).
 fn generate_key() -> String {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos() as u64)
-        .unwrap_or(0);
-    let counter = SHARE_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let pid = std::process::id() as u64;
-    let mixed = nanos
-        ^ counter.wrapping_mul(0x9E37_79B9_7F4A_7C15)
-        ^ pid.wrapping_mul(0xB0A7_0D2D);
-    format!("{:08x}", (mixed as u32))
+    random_hex(16)
 }
 
 // ── URL query key parsing ─────────────────────────────────────────────────────
@@ -274,7 +258,7 @@ fn parse_url_key(url: &str) -> (String, Option<String>) {
         .find_map(|pair| {
             let mut parts = pair.splitn(2, '=');
             match (parts.next(), parts.next()) {
-                (Some(k), Some(v)) if k == "key" => Some(v.to_string()),
+                (Some("key"), Some(v)) => Some(v.to_string()),
                 _ => None,
             }
         });
@@ -310,9 +294,18 @@ fn mime_for_extension(path: &Path) -> &'static str {
     }
 }
 
+/// Largest local image (bytes) that will be inlined into a shared page.
+const MAX_INLINE_IMAGE_BYTES: u64 = 10 * 1024 * 1024;
+
 /// Replace local-file `src` values on a single `<img>` tag with a base64 `data:`
 /// URI so the served page is fully self-contained. Remote URLs are left as-is.
-fn inline_img_tag_src(tag: &str) -> String {
+///
+/// Inlining is confined to `base_dir` (the shared note's canonicalized parent
+/// directory): a note can only inline images that live alongside it, never
+/// arbitrary paths like `/etc/shadow` or `~/.ssh/id_rsa`. Canonicalizing the
+/// image path first defeats `../` traversal and symlink escapes. If `base_dir`
+/// is `None` (e.g. a remote note) nothing local is inlined.
+fn inline_img_tag_src(tag: &str, base_dir: Option<&Path>) -> String {
     let lower = tag.to_ascii_lowercase();
     let Some(src_idx) = lower.find("src=") else {
         return tag.to_string();
@@ -340,18 +333,38 @@ fn inline_img_tag_src(tag: &str) -> String {
     if !path.is_absolute() {
         return tag.to_string();
     }
-    let Ok(bytes) = std::fs::read(path) else {
+
+    // Confine to the note's directory. No base dir → never inline local files.
+    let Some(base) = base_dir else {
+        return tag.to_string();
+    };
+    let Ok(canon) = path.canonicalize() else {
+        return tag.to_string();
+    };
+    if !canon.starts_with(base) {
+        return tag.to_string();
+    }
+
+    // Skip oversized images rather than buffer them fully into memory.
+    match std::fs::metadata(&canon) {
+        Ok(meta) if meta.len() > MAX_INLINE_IMAGE_BYTES => return tag.to_string(),
+        Ok(_) => {}
+        Err(_) => return tag.to_string(),
+    }
+
+    let Ok(bytes) = std::fs::read(&canon) else {
         return tag.to_string();
     };
 
     let encoded = base64::engine::general_purpose::STANDARD.encode(&bytes);
-    let data_uri = format!("data:{};base64,{}", mime_for_extension(path), encoded);
+    let data_uri = format!("data:{};base64,{}", mime_for_extension(&canon), encoded);
     let prefix = &tag[..src_idx + 4 + 1];
     format!("{prefix}{data_uri}{quote}{}", &rest[end_quote + 1..])
 }
 
-/// Inline every local `<img>` source in the rendered HTML as a `data:` URI.
-fn inline_local_images(html: &str) -> String {
+/// Inline every local `<img>` source in the rendered HTML as a `data:` URI,
+/// confined to `base_dir` (see [`inline_img_tag_src`]).
+fn inline_local_images(html: &str, base_dir: Option<&Path>) -> String {
     let mut result = String::with_capacity(html.len());
     let lower_html = html.to_ascii_lowercase();
     let mut search_from = 0;
@@ -365,7 +378,7 @@ fn inline_local_images(html: &str) -> String {
         let end = start + tag_end_rel + 1;
 
         result.push_str(&html[search_from..start]);
-        result.push_str(&inline_img_tag_src(&html[start..end]));
+        result.push_str(&inline_img_tag_src(&html[start..end], base_dir));
         search_from = end;
     }
 
@@ -395,7 +408,14 @@ fn font_size_pt(value: &str) -> u32 {
 /// Render `path` (local file or remote URL) into a self-contained HTML page for LAN clients.
 pub fn build_shared_page(path: &str) -> Result<String, String> {
     let result = markdown::render_markdown_any(path)?;
-    let content = inline_local_images(&result.html);
+    // Only local notes get a confinement directory; remote notes never inline
+    // local files.
+    let base_dir = if markdown::is_remote_url(path) {
+        None
+    } else {
+        Path::new(path).parent().and_then(|p| p.canonicalize().ok())
+    };
+    let content = inline_local_images(&result.html, base_dir.as_deref());
     let settings = settings::load_settings();
 
     let body_font = if settings.font_family.trim().is_empty() {
@@ -608,6 +628,11 @@ fn build_home_page(
 /// Preferred default port. All notes in an instance share one port.
 const DEFAULT_PORT: u16 = 7777;
 
+/// Bind the share server. We deliberately bind `0.0.0.0` — LAN reachability is
+/// the whole point of the feature. The exposure is bounded by three controls:
+/// a 128-bit CSPRNG auth key required on every request, `Host`-header
+/// validation (rejecting DNS-rebinding), and image inlining confined to each
+/// note's own directory.
 fn try_bind_server(preferred_port: Option<u16>) -> Result<(Arc<Server>, u16), String> {
     let mut candidates: Vec<String> = Vec::new();
     if let Some(p) = preferred_port {
@@ -655,12 +680,14 @@ pub fn start_share(
 
     let mut inner = state.0.lock().map_err(|e| e.to_string())?;
 
-    // If this path is already being served, just return its existing info.
-    if let Some(hash) = inner.path_to_hash.get(&path).cloned() {
+    // If this path is already being served by a running server, return its
+    // existing info. Guard on `port` too: if the reverse index still holds a
+    // hash but the server isn't running (an inconsistent state), fall through
+    // to the full start path below instead of panicking.
+    if let (Some(hash), Some(port)) = (inner.path_to_hash.get(&path).cloned(), inner.port) {
         let ip = local_ip()
             .unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST))
             .to_string();
-        let port = inner.port.unwrap();
         let key = inner.server_key.clone().unwrap_or_default();
         inner.last_path = Some(path.clone());
         return Ok(ShareInfo {
@@ -682,11 +709,16 @@ pub fn start_share(
         .map(|e| e.hash.clone())
         .unwrap_or_else(random_hash);
 
-    // Reuse or generate the server auth key so URLs stay valid across restarts.
-    let key = routes.key.clone().unwrap_or_else(generate_key);
+    // Reuse the persisted key so URLs stay valid across restarts, but treat a
+    // legacy weak key (older 32-bit, <32 hex chars) as invalid and regenerate.
+    let key = routes
+        .key
+        .clone()
+        .filter(|k| k.len() >= MIN_KEY_LEN)
+        .unwrap_or_else(generate_key);
 
     // Start the server once; all subsequent notes share the same instance.
-    if inner.server.is_none() {
+    let bound_port = if inner.server.is_none() {
         let (server, port) = try_bind_server(routes.preferred_port)?;
 
         let route_map_clone = Arc::clone(&inner.route_map);
@@ -696,36 +728,12 @@ pub fn start_share(
 
         let join = std::thread::spawn(move || {
             for request in thread_server.incoming_requests() {
-                let full_url = request.url().to_string();
-                let (url_path, query_key) = parse_url_key(&full_url);
-                let is_get = request.method() == &Method::Get;
-
-                let key_ok = query_key.as_deref() == Some(&server_key);
-
-                let response = if !is_get {
-                    html_response("Method not allowed".to_string(), 405)
-                } else if !key_ok {
-                    html_response("Not found".to_string(), 404)
-                } else if url_path == "/" {
-                    let current_ip = local_ip()
-                        .unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST))
-                        .to_string();
-                    let map = route_map_clone.read().unwrap();
-                    build_home_page(&map, &current_ip, server_port, &server_key)
-                } else {
-                    let hash_str = url_path.trim_start_matches('/').to_string();
-                    let path_opt = {
-                        let map = route_map_clone.read().unwrap();
-                        map.get(&hash_str).map(|r| r.path.clone())
-                    };
-                    match path_opt {
-                        Some(p) => match build_shared_page(&p) {
-                            Ok(html) => html_response(html, 200),
-                            Err(err) => html_response(format!("Render error: {err}"), 500),
-                        },
-                        None => html_response("Not found".to_string(), 404),
-                    }
-                };
+                // Isolate each request: a panic while rendering one note must not
+                // kill the accept loop and take down the whole share server.
+                let response = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    handle_share_request(&request, &route_map_clone, server_port, &server_key)
+                }))
+                .unwrap_or_else(|_| html_response("Internal error".to_string(), 500));
 
                 let _ = request.respond(response);
             }
@@ -742,14 +750,25 @@ pub fn start_share(
             routes.preferred_port = Some(port);
         }
         save_share_routes(&routes);
-    }
 
-    let port = inner.port.unwrap();
+        port
+    } else {
+        // Server already running from an earlier share; reuse its port.
+        inner
+            .port
+            .ok_or_else(|| "share server is running without a bound port".to_string())?
+    };
 
-    inner.route_map.write().unwrap().insert(
-        hash.clone(),
-        NoteRoute { path: path.clone(), title: title.clone(), hash: hash.clone() },
-    );
+    let port = bound_port;
+
+    inner
+        .route_map
+        .write()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(
+            hash.clone(),
+            NoteRoute { path: path.clone(), title: title.clone(), hash: hash.clone() },
+        );
     inner.path_to_hash.insert(path.clone(), hash.clone());
     inner.last_path = Some(path.clone());
 
@@ -781,7 +800,11 @@ pub fn stop_share_note(
 ) -> Result<(), String> {
     let mut inner = state.0.lock().map_err(|e| e.to_string())?;
     if let Some(hash) = inner.path_to_hash.remove(&path) {
-        inner.route_map.write().unwrap().remove(&hash);
+        inner
+            .route_map
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&hash);
     }
     if inner.last_path.as_deref() == Some(&path) {
         inner.last_path = inner.path_to_hash.keys().next().cloned();
@@ -797,7 +820,11 @@ pub fn stop_share_note(
 #[tauri::command]
 pub fn stop_share(state: tauri::State<ShareState>) -> Result<(), String> {
     let mut inner = state.0.lock().map_err(|e| e.to_string())?;
-    inner.route_map.write().unwrap().clear();
+    inner
+        .route_map
+        .write()
+        .unwrap_or_else(|e| e.into_inner())
+        .clear();
     inner.path_to_hash.clear();
     inner.last_path = None;
     stop_server(&mut inner);
@@ -853,12 +880,111 @@ pub fn get_note_share_info(
     })
 }
 
+/// Content-Security-Policy applied to every served page. The shared pages use
+/// inline `<script>`/`<style>` and pull MathJax + Mermaid from jsDelivr; the
+/// home page additionally uses Google Fonts. Everything else is denied.
+const SHARED_CSP: &str = "default-src 'none'; \
+script-src 'unsafe-inline' https://cdn.jsdelivr.net; \
+style-src 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; \
+font-src https://fonts.gstatic.com https://cdn.jsdelivr.net; \
+img-src data: http: https:; \
+connect-src https://cdn.jsdelivr.net";
+
+fn header(name: &str, value: &str) -> Header {
+    Header::from_bytes(name.as_bytes(), value.as_bytes()).expect("valid header")
+}
+
 fn html_response(body: String, status: u16) -> Response<std::io::Cursor<Vec<u8>>> {
-    let header = Header::from_bytes(&b"Content-Type"[..], &b"text/html; charset=utf-8"[..])
-        .expect("valid header");
     Response::from_string(body)
-        .with_header(header)
+        .with_header(header("Content-Type", "text/html; charset=utf-8"))
+        .with_header(header("Content-Security-Policy", SHARED_CSP))
+        .with_header(header("X-Frame-Options", "DENY"))
+        .with_header(header("X-Content-Type-Options", "nosniff"))
+        .with_header(header("Referrer-Policy", "no-referrer"))
         .with_status_code(status)
+}
+
+/// Constant-time comparison of the query key against the server key, so an
+/// attacker cannot recover the key byte-by-byte through response timing.
+fn key_matches(candidate: Option<&str>, expected: &str) -> bool {
+    use subtle::ConstantTimeEq;
+    let Some(c) = candidate else {
+        return false;
+    };
+    // The length check leaks only the (constant, 32-char) expected length.
+    c.len() == expected.len() && c.as_bytes().ct_eq(expected.as_bytes()).into()
+}
+
+/// Build the response for one shared-server request. Pure function of the
+/// request plus shared state, so it is safe to run inside `catch_unwind`.
+fn handle_share_request(
+    request: &tiny_http::Request,
+    route_map: &Arc<RwLock<HashMap<String, NoteRoute>>>,
+    server_port: u16,
+    server_key: &str,
+) -> Response<std::io::Cursor<Vec<u8>>> {
+    if !host_header_ok(request) {
+        return html_response("Forbidden".to_string(), 403);
+    }
+    if request.method() != &Method::Get {
+        return html_response("Method not allowed".to_string(), 405);
+    }
+
+    let (url_path, query_key) = parse_url_key(request.url());
+    if !key_matches(query_key.as_deref(), server_key) {
+        return html_response("Not found".to_string(), 404);
+    }
+
+    if url_path == "/" {
+        let current_ip = local_ip()
+            .unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST))
+            .to_string();
+        let map = route_map.read().unwrap_or_else(|e| e.into_inner());
+        build_home_page(&map, &current_ip, server_port, server_key)
+    } else {
+        let hash_str = url_path.trim_start_matches('/').to_string();
+        let path_opt = {
+            let map = route_map.read().unwrap_or_else(|e| e.into_inner());
+            map.get(&hash_str).map(|r| r.path.clone())
+        };
+        match path_opt {
+            Some(p) => match build_shared_page(&p) {
+                Ok(html) => html_response(html, 200),
+                Err(err) => html_response(format!("Render error: {err}"), 500),
+            },
+            None => html_response("Not found".to_string(), 404),
+        }
+    }
+}
+
+/// Is this `Host` header value acceptable? Accepts a bare IP literal or
+/// `localhost` (optionally with a `:port`), rejects domain names.
+fn host_value_ok(host: &str) -> bool {
+    // Strip a trailing ":port". For IPv6 literals the host is bracketed
+    // (`[::1]:7777`); unwrap the brackets before parsing.
+    let hostname = if let Some(rest) = host.strip_prefix('[') {
+        rest.split(']').next().unwrap_or("")
+    } else {
+        host.rsplit_once(':').map(|(h, _)| h).unwrap_or(host)
+    };
+
+    hostname == "localhost" || hostname.parse::<IpAddr>().is_ok()
+}
+
+/// Validate the `Host` header to defeat DNS-rebinding attacks. Shared URLs
+/// always target a bare IP literal (or localhost), so a request whose Host is a
+/// domain name did not originate from one of our own URLs and is rejected.
+fn host_header_ok(request: &tiny_http::Request) -> bool {
+    match request
+        .headers()
+        .iter()
+        .find(|h| h.field.equiv("Host"))
+        .map(|h| h.value.as_str())
+    {
+        // No Host header (HTTP/1.0) — allow; there is no rebinding vector.
+        None => true,
+        Some(host) => host_value_ok(host),
+    }
 }
 
 const SHARED_PAGE_TEMPLATE: &str = r##"<!doctype html>
@@ -1185,11 +1311,12 @@ mod tests {
         let dir = std::env::temp_dir().join("emede-share-img-test");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("create temp dir");
-        let img_path = dir.join("pic.png");
+        let base = dir.canonicalize().expect("canonicalize dir");
+        let img_path = base.join("pic.png");
         std::fs::write(&img_path, b"\x89PNG\r\n\x1a\n test bytes").expect("write img");
 
         let html = format!(r#"<p><img src="{}" alt="x"></p>"#, img_path.display());
-        let out = inline_local_images(&html);
+        let out = inline_local_images(&html, Some(&base));
         assert!(
             out.contains("data:image/png;base64,"),
             "expected inlined data uri, got: {out}"
@@ -1200,9 +1327,92 @@ mod tests {
     }
 
     #[test]
+    fn does_not_inline_image_outside_base_dir() {
+        // An image referenced by absolute path outside the note's directory
+        // (e.g. a secret file) must not be inlined.
+        let base = std::env::temp_dir()
+            .join("emede-share-confine-base")
+            .canonicalize()
+            .unwrap_or_else(|_| {
+                let d = std::env::temp_dir().join("emede-share-confine-base");
+                std::fs::create_dir_all(&d).unwrap();
+                d.canonicalize().unwrap()
+            });
+        std::fs::create_dir_all(&base).ok();
+
+        let secret_dir = std::env::temp_dir().join("emede-share-confine-secret");
+        std::fs::create_dir_all(&secret_dir).expect("create secret dir");
+        let secret = secret_dir.canonicalize().unwrap().join("secret.png");
+        std::fs::write(&secret, b"\x89PNG top secret").expect("write secret");
+
+        let html = format!(r#"<img src="{}" alt="x">"#, secret.display());
+        let out = inline_local_images(&html, Some(&base));
+        assert!(
+            !out.contains("data:image"),
+            "image outside base dir must not be inlined, got: {out}"
+        );
+        assert_eq!(out, html, "tag should be left untouched");
+
+        let _ = std::fs::remove_dir_all(&secret_dir);
+    }
+
+    #[test]
+    fn does_not_inline_oversized_image() {
+        let dir = std::env::temp_dir().join("emede-share-oversize");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let base = dir.canonicalize().expect("canonicalize");
+        let img_path = base.join("big.png");
+        // One byte over the cap.
+        let big = vec![0u8; (MAX_INLINE_IMAGE_BYTES + 1) as usize];
+        std::fs::write(&img_path, &big).expect("write big img");
+
+        let html = format!(r#"<img src="{}" alt="x">"#, img_path.display());
+        let out = inline_local_images(&html, Some(&base));
+        assert!(
+            !out.contains("data:image"),
+            "oversized image must not be inlined"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn leaves_remote_image_untouched() {
         let html = r#"<img src="https://example.com/a.png" alt="r">"#;
-        assert_eq!(inline_local_images(html), html);
+        assert_eq!(inline_local_images(html, None), html);
+    }
+
+    #[test]
+    fn generates_128bit_key() {
+        let key = generate_key();
+        assert_eq!(key.len(), 32, "key should be 32 hex chars (128-bit)");
+        assert!(key.chars().all(|c| c.is_ascii_hexdigit()));
+        assert!(key.len() >= MIN_KEY_LEN);
+        // Two keys must differ (astronomically unlikely to collide).
+        assert_ne!(generate_key(), generate_key());
+    }
+
+    #[test]
+    fn host_value_accepts_ips_rejects_domains() {
+        assert!(host_value_ok("192.168.1.5"));
+        assert!(host_value_ok("192.168.1.5:7777"));
+        assert!(host_value_ok("127.0.0.1:7777"));
+        assert!(host_value_ok("localhost"));
+        assert!(host_value_ok("localhost:7777"));
+        assert!(host_value_ok("[::1]:7777"));
+        assert!(!host_value_ok("attacker.example"));
+        assert!(!host_value_ok("evil.com:7777"));
+        assert!(!host_value_ok("emede.local"));
+    }
+
+    #[test]
+    fn key_matches_is_exact() {
+        assert!(key_matches(Some("abc123"), "abc123"));
+        assert!(!key_matches(Some("abc124"), "abc123"));
+        assert!(!key_matches(Some("abc12"), "abc123"));
+        assert!(!key_matches(Some("abc1234"), "abc123"));
+        assert!(!key_matches(None, "abc123"));
     }
 
     #[test]

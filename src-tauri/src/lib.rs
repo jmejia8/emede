@@ -1,7 +1,10 @@
 mod markdown;
+mod persist;
+mod recents;
 mod settings;
 mod share;
 mod view_state;
+mod watcher;
 
 use std::sync::Mutex;
 use tauri::{window::Color, AppHandle, Emitter, Manager, Url};
@@ -38,7 +41,13 @@ fn handle_navigation(app: &AppHandle, url: &Url) -> bool {
     }
 
     if scheme == "file" {
-        let _ = app.opener().open_path(url.path(), None::<&str>);
+        // Don't hand arbitrary local paths to the OS opener. If a link points at
+        // a markdown file, open it inside emede; otherwise block it entirely.
+        let path = url.path();
+        let lower = path.to_ascii_lowercase();
+        if lower.ends_with(".md") || lower.ends_with(".markdown") {
+            let _ = app.emit("file-to-open", path.to_string());
+        }
         return false;
     }
 
@@ -82,6 +91,7 @@ pub fn run() {
         )
         .manage(StartupFile(Mutex::new(None)))
         .manage(share::ShareState(Mutex::new(share::ShareStateInner::default())))
+        .manage(watcher::WatcherState::default())
         .invoke_handler(tauri::generate_handler![
             markdown::render_markdown,
             markdown::render_markdown_url,
@@ -96,6 +106,9 @@ pub fn run() {
             share::get_share_status,
             share::get_note_share_info,
             share::generate_share_qr,
+            watcher::watch_document,
+            watcher::unwatch_document,
+            recents::get_recent_files,
             get_startup_file,
             get_app_version,
             restart_app,
@@ -129,13 +142,13 @@ fn get_app_version(app: tauri::AppHandle) -> String {
 }
 
 #[tauri::command]
-fn restart_app() {
-    let exe = std::env::current_exe().expect("failed to get current exe path");
+fn restart_app() -> Result<(), String> {
+    let exe = std::env::current_exe().map_err(|e| format!("failed to get current exe path: {e}"))?;
     let args: Vec<String> = std::env::args().collect();
     std::process::Command::new(exe)
         .args(args.iter().skip(1))
         .spawn()
-        .expect("failed to restart app");
+        .map_err(|e| format!("failed to restart app: {e}"))?;
     std::process::exit(0);
 }
 

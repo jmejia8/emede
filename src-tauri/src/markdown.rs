@@ -4,8 +4,11 @@ use comrak::nodes::NodeValue;
 use comrak::{parse_document, Arena, Options};
 use serde::Serialize;
 use std::fmt::Write as _;
+use std::io::Read as _;
+use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
+use std::time::Duration;
 
 #[derive(Serialize, Clone)]
 pub struct RenderResult {
@@ -25,7 +28,7 @@ fn resolve_path(path: &str) -> PathBuf {
     }
 }
 
-fn is_remote_url(src: &str) -> bool {
+pub(crate) fn is_remote_url(src: &str) -> bool {
     let lower = src.to_ascii_lowercase();
     lower.starts_with("http://")
         || lower.starts_with("https://")
@@ -530,6 +533,9 @@ create_formatter!(MathJaxFormatter, {
     },
 });
 
+/// Largest local markdown file (bytes) we will read and render.
+const MAX_LOCAL_FILE_BYTES: u64 = 50 * 1024 * 1024;
+
 pub fn render_markdown_inner(path: &str) -> Result<RenderResult, String> {
     let resolved = resolve_path(path);
     if !resolved.exists() {
@@ -537,6 +543,16 @@ pub fn render_markdown_inner(path: &str) -> Result<RenderResult, String> {
     }
     if !resolved.is_file() {
         return Err(format!("Not a file: {}", resolved.display()));
+    }
+
+    if let Ok(meta) = std::fs::metadata(&resolved) {
+        if meta.len() > MAX_LOCAL_FILE_BYTES {
+            return Err(format!(
+                "File too large ({} MB). emede opens markdown files up to {} MB.",
+                meta.len() / (1024 * 1024),
+                MAX_LOCAL_FILE_BYTES / (1024 * 1024)
+            ));
+        }
     }
 
     let raw = std::fs::read_to_string(&resolved).map_err(|e| e.to_string())?;
@@ -564,7 +580,9 @@ pub fn render_markdown_inner(path: &str) -> Result<RenderResult, String> {
 
 #[tauri::command]
 pub fn render_markdown(path: String) -> Result<RenderResult, String> {
-    render_markdown_inner(&path)
+    let result = render_markdown_inner(&path)?;
+    crate::recents::add_recent(&result.path, &result.title);
+    Ok(result)
 }
 
 pub fn render_markdown_from_str(content: &str, source_path: &Path, source_id: &str) -> Result<RenderResult, String> {
@@ -589,16 +607,104 @@ pub fn render_markdown_from_str(content: &str, source_path: &Path, source_id: &s
     })
 }
 
+/// Largest remote document (bytes) we will fetch and render.
+const MAX_URL_BYTES: u64 = 10 * 1024 * 1024;
+
+/// Reject any address that could reach the loopback interface, a private/local
+/// network, or cloud metadata endpoints. Applied to every resolved address —
+/// including each redirect hop — to block SSRF via user-supplied URLs.
+fn is_public_ip(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => {
+            let o = v4.octets();
+            !(v4.is_loopback()
+                || v4.is_private()
+                || v4.is_link_local()
+                || v4.is_broadcast()
+                || v4.is_documentation()
+                || v4.is_unspecified()
+                // 0.0.0.0/8 "this network"
+                || o[0] == 0
+                // 100.64.0.0/10 carrier-grade NAT / shared address space
+                || (o[0] == 100 && (o[1] & 0xc0) == 0x40))
+        }
+        IpAddr::V6(v6) => {
+            if let Some(mapped) = v6.to_ipv4_mapped() {
+                return is_public_ip(IpAddr::V4(mapped));
+            }
+            let seg = v6.segments();
+            !(v6.is_loopback()
+                || v6.is_unspecified()
+                // fc00::/7 unique local addresses
+                || (seg[0] & 0xfe00) == 0xfc00
+                // fe80::/10 link-local
+                || (seg[0] & 0xffc0) == 0xfe80)
+        }
+    }
+}
+
+/// Shared HTTP agent with hard timeouts and an SSRF-blocking resolver.
+fn http_agent() -> ureq::Agent {
+    static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
+    AGENT
+        .get_or_init(|| {
+            ureq::AgentBuilder::new()
+                .timeout_connect(Duration::from_secs(10))
+                .timeout_read(Duration::from_secs(30))
+                .timeout(Duration::from_secs(60))
+                .resolver(|netloc: &str| -> std::io::Result<Vec<SocketAddr>> {
+                    let filtered: Vec<SocketAddr> = netloc
+                        .to_socket_addrs()?
+                        .filter(|a| is_public_ip(a.ip()))
+                        .collect();
+                    if filtered.is_empty() {
+                        Err(std::io::Error::new(
+                            std::io::ErrorKind::PermissionDenied,
+                            "refusing to fetch a private or local address",
+                        ))
+                    } else {
+                        Ok(filtered)
+                    }
+                })
+                .build()
+        })
+        .clone()
+}
+
+/// Fetch a remote `http(s)` URL under strict limits and render it.
+fn fetch_and_render_url(url: &str) -> Result<RenderResult, String> {
+    let lower = url.to_ascii_lowercase();
+    if !(lower.starts_with("http://") || lower.starts_with("https://")) {
+        return Err("Only http and https URLs can be opened.".to_string());
+    }
+
+    let response = http_agent()
+        .get(url)
+        .call()
+        .map_err(|e| format!("Failed to fetch URL: {e}"))?;
+
+    // Cap the body: read one byte past the limit so we can detect overflow
+    // instead of silently truncating (ureq's into_string caps at 10 MB quietly).
+    let mut content = String::new();
+    response
+        .into_reader()
+        .take(MAX_URL_BYTES + 1)
+        .read_to_string(&mut content)
+        .map_err(|e| format!("Failed to read response body: {e}"))?;
+    if content.len() as u64 > MAX_URL_BYTES {
+        return Err(format!(
+            "Remote document is too large (over {} MB).",
+            MAX_URL_BYTES / (1024 * 1024)
+        ));
+    }
+
+    render_markdown_from_str(&content, Path::new("."), url)
+}
+
 /// Render a local file path or a remote URL, routing to the right backend.
 pub fn render_markdown_any(path_or_url: &str) -> Result<RenderResult, String> {
     if is_remote_url(path_or_url) {
-        let response = ureq::get(path_or_url)
-            .call()
-            .map_err(|e| format!("Failed to fetch URL: {e}"))?;
-        let content = response
-            .into_string()
-            .map_err(|e| format!("Failed to read response body: {e}"))?;
-        render_markdown_from_str(&content, Path::new("."), path_or_url)
+        fetch_and_render_url(path_or_url)
     } else {
         render_markdown_inner(path_or_url)
     }
@@ -606,18 +712,42 @@ pub fn render_markdown_any(path_or_url: &str) -> Result<RenderResult, String> {
 
 #[tauri::command]
 pub fn render_markdown_url(url: String) -> Result<RenderResult, String> {
-    let response = ureq::get(&url)
-        .call()
-        .map_err(|e| format!("Failed to fetch URL: {e}"))?;
-    let content = response
-        .into_string()
-        .map_err(|e| format!("Failed to read response body: {e}"))?;
-    render_markdown_from_str(&content, Path::new("."), &url)
+    fetch_and_render_url(&url)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn blocks_private_and_local_ips() {
+        let blocked = [
+            "127.0.0.1",
+            "0.0.0.0",
+            "10.0.0.5",
+            "172.16.0.1",
+            "172.31.255.255",
+            "192.168.1.1",
+            "169.254.169.254", // cloud metadata
+            "100.64.0.1",      // CGNAT
+            "::1",
+            "fe80::1",
+            "fc00::1",
+            "fd00::1",
+            "::ffff:127.0.0.1", // ipv4-mapped loopback
+        ];
+        for ip in blocked {
+            assert!(
+                !is_public_ip(ip.parse().unwrap()),
+                "{ip} should be blocked"
+            );
+        }
+
+        let allowed = ["8.8.8.8", "1.1.1.1", "93.184.216.34", "2606:2800:220:1::1"];
+        for ip in allowed {
+            assert!(is_public_ip(ip.parse().unwrap()), "{ip} should be allowed");
+        }
+    }
 
     #[test]
     fn renders_readme_fenced_code_blocks() {
@@ -800,7 +930,7 @@ mod tests {
     fn plan_preprocess_has_javascript_fence() {
         let raw = "**New listener** in `boot()`:\n\n```javascript\nlisten(\"document-updated\", (event) => applyDocument(event.payload, { reload: true }));\n```\n";
         let preprocessed =
-            preprocess_tex_delimiters(&preprocess_math_fences(&preprocess_front_matter(&raw)));
+            preprocess_tex_delimiters(&preprocess_math_fences(&preprocess_front_matter(raw)));
         assert!(
             preprocessed.contains("```javascript\nlisten(\"document-updated\""),
             "missing javascript fence in preprocessed output around: {}",
