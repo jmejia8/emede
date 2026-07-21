@@ -321,18 +321,19 @@
       <div id="empty-state" class="empty-state hidden">
         <img src="assets/logo.png" alt="" class="state-logo" width="128" height="128" />
         <p class="empty-title">emede</p>
-        <p class="empty-hint">Pass a markdown file:</p>
-        <code>emede document.md</code>
-        <p class="empty-or">or</p>
-        <button type="button" id="open-file-btn" class="open-file-btn">Open File</button>
-        <p class="empty-or">or</p>
-        <details id="open-path-details" class="open-path-details">
-          <summary class="open-path-toggle">Enter path or URL</summary>
-          <form id="open-path-form" class="open-path-form" novalidate>
-            <input id="open-path-input" type="text" class="open-path-input" placeholder="/absolute/path/to/file.md  or  https://…" spellcheck="false" autocomplete="off" />
-            <button type="submit" class="open-path-submit">Open</button>
-          </form>
-        </details>
+        <p id="empty-tagline" class="empty-tagline"></p>
+        <button type="button" id="open-file-btn" class="open-file-btn">Open file</button>
+        <div class="empty-hints">
+          <span class="empty-hint-item">Drop a file anywhere</span>
+          <span class="empty-hint-dot" aria-hidden="true">·</span>
+          <details id="open-path-details" class="open-path-details">
+            <summary class="open-path-toggle">Enter path or URL</summary>
+            <form id="open-path-form" class="open-path-form" novalidate>
+              <input id="open-path-input" type="text" class="open-path-input" placeholder="/absolute/path/to/file.md  or  https://…" spellcheck="false" autocomplete="off" />
+              <button type="submit" class="open-path-submit">Open</button>
+            </form>
+          </details>
+        </div>
         <nav id="recent-files" class="recent-files hidden" aria-label="Recent files">
           <p class="recent-files-title">Recent</p>
           <ul id="recent-files-list" class="recent-files-list"></ul>

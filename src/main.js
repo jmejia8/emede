@@ -585,6 +585,7 @@ function setReaderState(state, message = "") {
   }
 
   if (state === "empty") {
+    setRandomTagline();
     void refreshRecentFiles();
   }
 }
@@ -1138,6 +1139,23 @@ function retryLastOpen() {
   } else {
     void openFile(lastOpenTarget.value);
   }
+}
+
+const TAGLINES = [
+  "A quiet place to read.",
+  "Pure text. Zero noise.",
+  "Read Markdown, undistracted.",
+  "Open a file. Stay a while.",
+  "Designed for deep focus.",
+  "Native rendering. Zero friction.",
+  "For hours of unbroken reading.",
+];
+
+const taglineEl = document.getElementById("empty-tagline");
+
+function setRandomTagline() {
+  if (!taglineEl) return;
+  taglineEl.textContent = TAGLINES[Math.floor(Math.random() * TAGLINES.length)];
 }
 
 async function refreshRecentFiles() {
