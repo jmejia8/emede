@@ -4,8 +4,8 @@
   --font-code: "IBM Plex Mono", "JetBrains Mono", "Fira Code", monospace;
   --font-size: 12pt;
   --line-height: 1.75;
-  --reader-margin: 10%;
-  --max-width: 65ch;
+  --reader-width: 16cm;
+  --reader-gutter: 1.5rem;
   --color-fg: #2c2c2c;
   --color-bg: #faf8f5;
   --color-muted: color-mix(in srgb, var(--color-fg) 52%, transparent);
@@ -55,11 +55,11 @@ body {
   min-height: 100dvh;
   padding-top: clamp(1.5rem, 5vh, 4rem);
   padding-bottom: clamp(3rem, 15vh, 10rem);
-  padding-inline: var(--reader-margin);
+  padding-inline: var(--reader-gutter);
 }
 
 .prose {
-  max-width: none;
+  max-width: var(--reader-width);
   margin: 0 auto;
   opacity: 0;
   transition: opacity 0.45s ease;

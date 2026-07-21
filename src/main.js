@@ -56,7 +56,9 @@ const FONT_GROUPS = [
 const PROSE_FONT_GROUPS = FONT_GROUPS.filter((group) => group.label !== "Monospace");
 const CODE_FONT_GROUPS = FONT_GROUPS.filter((group) => group.label === "Monospace");
 
-const DEFAULT_MARGIN_PERCENT = 10;
+const DEFAULT_READER_WIDTH_CM = 16;
+const MIN_READER_WIDTH_CM = 10;
+const MAX_READER_WIDTH_CM = 30;
 
 const BUNDLED_COLOR_TEMPLATES = [
   {
@@ -286,19 +288,19 @@ function toPt(value, fallback) {
   return Math.round(n);
 }
 
-// Parse margin to an integer percentage, migrating legacy `pt`/`rem` values.
-function toMarginPercent(value, fallback = DEFAULT_MARGIN_PERCENT) {
+// Parse the reading-column width (in cm). Legacy values were stored as a
+// window-relative percentage (or pt/rem) that can't be converted to a fixed
+// physical width, so any non-cm value falls back to the sensible default.
+function toReaderWidthCm(value, fallback = DEFAULT_READER_WIDTH_CM) {
+  if (!String(value).includes("cm")) return fallback;
   const n = parseFloat(value);
   if (!Number.isFinite(n)) return fallback;
-  const unit = String(value);
-  if (unit.includes("%")) return clampMarginPercent(n);
-  if (unit.includes("pt")) return clampMarginPercent(n / 7.2);
-  if (unit.includes("rem")) return clampMarginPercent((n * 12) / 7.2);
-  return clampMarginPercent(n);
+  return clampReaderWidthCm(n);
 }
 
-function clampMarginPercent(value) {
-  return Math.min(25, Math.max(0, Math.round(value)));
+function clampReaderWidthCm(value) {
+  const clamped = Math.min(MAX_READER_WIDTH_CM, Math.max(MIN_READER_WIDTH_CM, value));
+  return Math.round(clamped * 2) / 2; // snap to 0.5cm steps
 }
 
 function normalizeWindowFrame(frame) {
@@ -475,7 +477,7 @@ async function applyColorTemplate(template) {
 function applySettings(settings) {
   currentSettings = settings;
   const sizePt = toPt(settings.font_size, 12);
-  const marginPercent = toMarginPercent(settings.margin);
+  const readerWidthCm = toReaderWidthCm(settings.margin);
   const bodyFont = bodyFontFromSettings(settings);
   const titleFont = settings.font_title || bodyFont;
   const codeFont = settings.font_code || DEFAULT_FONT_CODE;
@@ -484,7 +486,7 @@ function applySettings(settings) {
   document.documentElement.style.setProperty("--font-title", titleFont);
   document.documentElement.style.setProperty("--font-code", codeFont);
   document.documentElement.style.setProperty("--font-size", `${sizePt}pt`);
-  document.documentElement.style.setProperty("--reader-margin", `${marginPercent}%`);
+  document.documentElement.style.setProperty("--reader-width", `${readerWidthCm}cm`);
   document.documentElement.style.setProperty("--color-fg", settings.color_fg);
   document.documentElement.style.setProperty("--color-bg", settings.color_bg);
   localStorage.setItem("emede-color-bg", settings.color_bg);
@@ -505,8 +507,8 @@ function applySettings(settings) {
   syncFontSelect(settingFontCode, settings.font_code, DEFAULT_FONT_CODE);
   settingSize.value = sizePt;
   settingSizeLabel.textContent = `${sizePt}pt`;
-  settingMargin.value = marginPercent;
-  settingMarginLabel.textContent = `${marginPercent}%`;
+  settingMargin.value = readerWidthCm;
+  settingMarginLabel.textContent = `${readerWidthCm} cm`;
   settingFg.value = settings.color_fg;
   settingBg.value = settings.color_bg;
   settingWindowFrame.value = normalizeWindowFrame(settings.window_frame);
@@ -530,7 +532,7 @@ function settingsFromForm() {
     font_size: `${Number(settingSize.value)}pt`,
     color_fg: settingFg.value,
     color_bg: settingBg.value,
-    margin: `${Number(settingMargin.value)}%`,
+    margin: `${Number(settingMargin.value)}cm`,
     window_frame: settingWindowFrame.value,
     keybindings: settingKeybindings.value,
     gpu_acceleration: settingGpu.checked,
@@ -1586,7 +1588,7 @@ function wireSettings() {
   });
 
   settingMargin.addEventListener("input", () => {
-    settingMarginLabel.textContent = `${Number(settingMargin.value)}%`;
+    settingMarginLabel.textContent = `${Number(settingMargin.value)} cm`;
   });
 
   document.querySelectorAll("[data-font-preset]").forEach((btn) => {

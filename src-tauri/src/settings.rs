@@ -85,7 +85,7 @@ fn default_font_code() -> String {
 }
 
 fn default_margin() -> String {
-    "10%".into()
+    "16cm".into()
 }
 
 impl Default for Settings {

@@ -405,6 +405,29 @@ fn font_size_pt(value: &str) -> u32 {
         .unwrap_or(12)
 }
 
+/// Default / bounds for the reading-column width (cm). Kept in sync with the
+/// frontend constants in `main.js` so the shared page matches the app.
+const DEFAULT_READER_WIDTH_CM: f64 = 16.0;
+const MIN_READER_WIDTH_CM: f64 = 10.0;
+const MAX_READER_WIDTH_CM: f64 = 30.0;
+
+/// Parse the reading-column width (cm) from the persisted `margin` setting.
+/// Legacy values were stored as a window-relative percentage (or pt/rem) that
+/// can't be converted to a fixed physical width, so any non-cm value falls back
+/// to the default. Mirrors the frontend's `toReaderWidthCm`.
+fn reader_width_cm(value: &str) -> f64 {
+    let trimmed = value.trim();
+    if !trimmed.contains("cm") {
+        return DEFAULT_READER_WIDTH_CM;
+    }
+    let n: f64 = match trimmed.trim_end_matches("cm").trim().parse() {
+        Ok(n) if (n as f64).is_finite() => n,
+        _ => return DEFAULT_READER_WIDTH_CM,
+    };
+    let clamped = n.clamp(MIN_READER_WIDTH_CM, MAX_READER_WIDTH_CM);
+    (clamped * 2.0).round() / 2.0 // snap to 0.5cm steps
+}
+
 /// Render `path` (local file or remote URL) into a self-contained HTML page for LAN clients.
 pub fn build_shared_page(path: &str) -> Result<String, String> {
     let result = markdown::render_markdown_any(path)?;
@@ -434,6 +457,7 @@ pub fn build_shared_page(path: &str) -> Result<String, String> {
         .replace("{{FG}}", &settings.color_fg)
         .replace("{{BG}}", &settings.color_bg)
         .replace("{{SIZE}}", &font_size_pt(&settings.font_size).to_string())
+        .replace("{{WIDTH}}", &reader_width_cm(&settings.margin).to_string())
         .replace("{{FONT}}", &body_font)
         .replace("{{FONT_CODE}}", &code_font)
         .replace("{{USER}}", &escape_html(&host_user_label()))
@@ -1495,7 +1519,8 @@ const SHARED_PAGE_TEMPLATE: &str = r##"<!doctype html>
     --color-fg: {{FG}};
     --color-bg: {{BG}};
     --font-size: {{SIZE}}pt;
-    --reader-margin: 8%;
+    --reader-width: {{WIDTH}}cm;
+    --reader-gutter: 1.5rem;
     --font-serif: {{FONT}};
     --font-code: {{FONT_CODE}};
     --color-muted: color-mix(in srgb, var(--color-fg) 52%, transparent);
@@ -1513,9 +1538,9 @@ const SHARED_PAGE_TEMPLATE: &str = r##"<!doctype html>
     line-height: 1.7;
   }
   .prose {
-    max-width: 46rem;
+    max-width: var(--reader-width);
     margin: 0 auto;
-    padding: 3rem var(--reader-margin) 6rem;
+    padding: 3rem var(--reader-gutter) 6rem;
     word-wrap: break-word;
   }
   .prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
@@ -1557,9 +1582,9 @@ const SHARED_PAGE_TEMPLATE: &str = r##"<!doctype html>
   .prose .mermaid { text-align: center; }
 
   .share-footer {
-    max-width: 46rem;
+    max-width: var(--reader-width);
     margin: 0 auto;
-    padding: 1.5rem var(--reader-margin) 3rem;
+    padding: 1.5rem var(--reader-gutter) 3rem;
     border-top: 1px solid var(--color-border);
     text-align: center;
     font-size: 0.8rem;
@@ -1593,7 +1618,7 @@ const SHARED_PAGE_TEMPLATE: &str = r##"<!doctype html>
   #cfg-panel[hidden] { display: none; }
   #cfg-panel label { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 14px; }
   #cfg-panel input[type="color"] { width: 42px; height: 28px; padding: 0; border: 1px solid var(--color-border); background: none; }
-  #cfg-size-label { min-width: 3ch; text-align: right; font-variant-numeric: tabular-nums; }
+  #cfg-size-label, #cfg-width-label { min-width: 3ch; text-align: right; font-variant-numeric: tabular-nums; }
 </style>
 </head>
 <body>
@@ -1605,6 +1630,7 @@ const SHARED_PAGE_TEMPLATE: &str = r##"<!doctype html>
   <label>Text <input id="cfg-fg" type="color" /></label>
   <label>Background <input id="cfg-bg" type="color" /></label>
   <label>Size <input id="cfg-size" type="range" min="8" max="32" step="1" /><span id="cfg-size-label"></span></label>
+  <label>Width <input id="cfg-width" type="range" min="10" max="30" step="0.5" /><span id="cfg-width-label"></span></label>
 </div>
 <article class="prose">{{CONTENT}}</article>
 <footer class="share-footer">
@@ -1620,6 +1646,8 @@ const SHARED_PAGE_TEMPLATE: &str = r##"<!doctype html>
     var bg = document.getElementById("cfg-bg");
     var size = document.getElementById("cfg-size");
     var sizeLabel = document.getElementById("cfg-size-label");
+    var width = document.getElementById("cfg-width");
+    var widthLabel = document.getElementById("cfg-width-label");
 
     function cssVar(name) {
       return getComputedStyle(root).getPropertyValue(name).trim();
@@ -1627,14 +1655,22 @@ const SHARED_PAGE_TEMPLATE: &str = r##"<!doctype html>
     function normalizeHex(value, fallback) {
       return /^#[0-9a-fA-F]{6}$/.test(value) ? value : fallback;
     }
+    function clampWidth(v) {
+      var n = parseFloat(v);
+      if (!isFinite(n)) return 16;
+      n = Math.min(30, Math.max(10, n));
+      return Math.round(n * 2) / 2; // snap to 0.5cm steps
+    }
 
     var savedFg = localStorage.getItem("emede-share-fg");
     var savedBg = localStorage.getItem("emede-share-bg");
     var savedSize = localStorage.getItem("emede-share-size");
+    var savedWidth = localStorage.getItem("emede-share-width");
 
     var initFg = normalizeHex(savedFg, normalizeHex(cssVar("--color-fg"), "#2c2c2c"));
     var initBg = normalizeHex(savedBg, normalizeHex(cssVar("--color-bg"), "#faf8f5"));
     var initSize = parseInt(savedSize || cssVar("--font-size"), 10) || 12;
+    var initWidth = clampWidth(savedWidth || cssVar("--reader-width") || 16);
 
     function applyFg(v) { root.style.setProperty("--color-fg", v); fg.value = v; }
     function applyBg(v) { root.style.setProperty("--color-bg", v); bg.value = v; }
@@ -1643,10 +1679,16 @@ const SHARED_PAGE_TEMPLATE: &str = r##"<!doctype html>
       size.value = v;
       sizeLabel.textContent = v + "pt";
     }
+    function applyWidth(v) {
+      root.style.setProperty("--reader-width", v + "cm");
+      width.value = v;
+      widthLabel.textContent = v + "cm";
+    }
 
     applyFg(initFg);
     applyBg(initBg);
     applySize(initSize);
+    applyWidth(initWidth);
 
     toggle.addEventListener("click", function () { panel.hidden = !panel.hidden; });
     document.getElementById("home-btn").addEventListener("click", function () {
@@ -1666,6 +1708,10 @@ const SHARED_PAGE_TEMPLATE: &str = r##"<!doctype html>
     size.addEventListener("input", function () {
       applySize(size.value);
       localStorage.setItem("emede-share-size", size.value);
+    });
+    width.addEventListener("input", function () {
+      applyWidth(width.value);
+      localStorage.setItem("emede-share-width", width.value);
     });
 
     var mermaidLib = null;
@@ -2000,6 +2046,21 @@ mod tests {
         assert_eq!(font_size_pt("14pt"), 14);
         assert_eq!(font_size_pt("12"), 12);
         assert_eq!(font_size_pt("oops"), 12);
+    }
+
+    #[test]
+    fn reader_width_cm_parses_and_clamps() {
+        assert_eq!(reader_width_cm("16cm"), 16.0);
+        assert_eq!(reader_width_cm("18.5cm"), 18.5);
+        // Snapped to the nearest 0.5cm step.
+        assert_eq!(reader_width_cm("18.3cm"), 18.5);
+        // Clamped to the [10, 30] range.
+        assert_eq!(reader_width_cm("5cm"), 10.0);
+        assert_eq!(reader_width_cm("99cm"), 30.0);
+        // Legacy non-cm values fall back to the default.
+        assert_eq!(reader_width_cm("10%"), DEFAULT_READER_WIDTH_CM);
+        assert_eq!(reader_width_cm("72pt"), DEFAULT_READER_WIDTH_CM);
+        assert_eq!(reader_width_cm("oops"), DEFAULT_READER_WIDTH_CM);
     }
 
     #[test]
