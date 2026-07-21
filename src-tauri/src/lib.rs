@@ -59,7 +59,10 @@ fn handle_navigation(app: &AppHandle, url: &Url) -> bool {
 }
 
 /// Handle informational CLI flags (`--help`, `--version`) before the Tauri
-/// application is built so no window flashes open. Prints to stdout and exits.
+/// application is built so no window flashes open. Also rejects unknown flags
+/// here — with a clean message — instead of letting `tauri_plugin_cli` fail at
+/// setup time (which prints a raw parse error after the window is spawning).
+/// Prints to stdout on success, stderr on error, and exits.
 pub fn handle_cli_flags() {
     for arg in std::env::args().skip(1) {
         match arg.as_str() {
@@ -67,13 +70,22 @@ pub fn handle_cli_flags() {
                 print_help();
                 std::process::exit(0);
             }
-            "-V" | "--version" => {
+            "-v" | "-V" | "--version" => {
                 println!("{} {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
                 std::process::exit(0);
             }
-            // Stop scanning once a non-flag (e.g. the file path) is reached.
-            other if !other.starts_with('-') => break,
-            _ => {}
+            // `--` terminates flag parsing; everything after it is a file path.
+            "--" => break,
+            // Any remaining flag is unknown — report it cleanly and exit.
+            other if other.starts_with('-') => {
+                eprintln!(
+                    "{name}: unknown option '{other}'\n\nUSAGE:\n    {name} [OPTIONS] [FILE]\n\nTry '{name} --help' for more information.",
+                    name = env!("CARGO_PKG_NAME"),
+                );
+                std::process::exit(2);
+            }
+            // Reached the first positional argument (the file path); stop scanning.
+            _ => break,
         }
     }
 }
@@ -92,11 +104,12 @@ USAGE:
     {name} [OPTIONS] [FILE]
 
 ARGS:
-    <FILE>    Path to a markdown file to open
+    <FILE>    Path to a markdown file to open. Use '--' before a path
+              that begins with '-'.
 
 OPTIONS:
     -h, --help       Print this help message and exit
-    -V, --version    Print version information and exit",
+    -v, -V, --version    Print version information and exit",
         name = name,
         version = env!("CARGO_PKG_VERSION"),
         description = env!("CARGO_PKG_DESCRIPTION"),
