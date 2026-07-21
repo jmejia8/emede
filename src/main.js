@@ -1452,6 +1452,7 @@ function updateContextMenuState() {
     reload: hasDoc,
     share: hasLocalDoc,
     print: true,
+    "close-file": hasDoc,
     quit: true,
   };
   for (const item of contextMenuItems()) {
@@ -1506,6 +1507,17 @@ function moveContextActive(delta) {
   setActiveContextItem(items[next]);
 }
 
+// Dismiss the current document and return to the home/welcome screen, matching
+// the state emede shows on a fresh launch with no file open.
+async function closeFile() {
+  toggleSearch(false);
+  flushViewState(currentDocPath, contentEl);
+  lastOpenTarget = null;
+  activeOpenToken++;
+  setReaderState("empty");
+  await setWindowTitle("emede");
+}
+
 async function runContextAction(action) {
   switch (action) {
     case "open-file":
@@ -1541,6 +1553,9 @@ async function runContextAction(action) {
       break;
     case "print":
       window.print();
+      break;
+    case "close-file":
+      await closeFile();
       break;
     case "quit":
       await getCurrentWindow().close();
