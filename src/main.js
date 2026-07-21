@@ -2040,6 +2040,7 @@ async function boot() {
   errorOpenBtn?.addEventListener("click", () => void handlePickAndOpenFile());
 
   const startupFilePromise = invoke("get_startup_file");
+  const printTargetPromise = invoke("get_print_target").catch(() => null);
   const settingsPromise = invoke("get_settings");
   invoke("get_app_version").then((v) => {
     const el = document.querySelector(".about-version");
@@ -2071,6 +2072,31 @@ async function boot() {
     initialGpuAccel = settings.gpu_acceleration;
   } catch (err) {
     console.warn("Startup initialization failed", err);
+  }
+
+  // Headless PDF export: render the document fully — including math and diagrams —
+  // then hand off to the backend to print and exit. The window is never revealed.
+  const printTarget = await printTargetPromise;
+  if (printTarget) {
+    if (startupFile) {
+      setReaderState("loading");
+      await openFile(startupFile);
+      // The render pipeline schedules these asynchronously; await them explicitly
+      // so the PDF isn't captured mid-typeset. Both are idempotent. Mermaid can
+      // inject content, so re-typeset math afterward.
+      await typesetMath();
+      await renderMermaid();
+      await typesetMath();
+      await nextFrame();
+    }
+    // On success the backend exits the process from the print operation; this
+    // call only returns if setup failed, in which case the backend also exits.
+    try {
+      await invoke("print_ready");
+    } catch (err) {
+      console.error("PDF export failed", err);
+    }
+    return;
   }
 
   // Paint the first meaningful frame (loader or empty state) before the window appears.

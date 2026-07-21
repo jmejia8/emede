@@ -142,6 +142,11 @@ struct ActiveSharesFile {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct InstanceEntry {
     port: u16,
+    /// The instance's URL auth key, stored so `--list` (and other processes) can
+    /// build working `?key=` URLs. Defaulted for backward compatibility with
+    /// registry files written before the field existed.
+    #[serde(default)]
+    key: String,
     notes: Vec<ActiveNoteEntry>,
 }
 
@@ -208,7 +213,9 @@ fn sync_active_shares(inner: &ShareStateInner) {
                     title: r.title.clone(),
                 })
                 .collect();
-            file.instances.insert(pid, InstanceEntry { port, notes });
+            let key = inner.server_key.clone().unwrap_or_default();
+            file.instances
+                .insert(pid, InstanceEntry { port, key, notes });
         }
         _ => {
             file.instances.remove(&pid);
@@ -1848,6 +1855,178 @@ pub fn generate_qr_svg(url: &str) -> Result<String, String> {
 #[tauri::command]
 pub fn generate_share_qr(url: String) -> Result<String, String> {
     generate_qr_svg(&url)
+}
+
+// ── Headless CLI sharing ───────────────────────────────────────────────────────
+
+/// One shared note as reported by [`list_active_shares`] / `emede --list`.
+/// Field names are the stable machine contract for `--list --json`.
+#[derive(Debug, Clone, Serialize)]
+pub struct SharedNoteInfo {
+    pub title: String,
+    pub path: String,
+    pub url: String,
+    pub port: u16,
+    pub hash: String,
+}
+
+/// List every note currently shared by any running emede instance, reading the
+/// cross-instance registry and skipping instances whose port is no longer alive.
+/// URLs include the instance's auth key so they work when pasted into a browser.
+pub fn list_active_shares() -> Vec<SharedNoteInfo> {
+    let ip = local_ip()
+        .unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST))
+        .to_string();
+
+    let file = load_active_shares();
+    let mut out = Vec::new();
+    for entry in file.instances.values() {
+        if !is_port_alive(entry.port) {
+            continue;
+        }
+        for note in &entry.notes {
+            let url = format!(
+                "http://{ip}:{}/{}?key={}",
+                entry.port, note.hash, entry.key
+            );
+            out.push(SharedNoteInfo {
+                title: note.title.clone(),
+                path: note.path.clone(),
+                url,
+                port: entry.port,
+                hash: note.hash.clone(),
+            });
+        }
+    }
+    out.sort_by(|a, b| a.title.cmp(&b.title));
+    out
+}
+
+/// Serve `paths` on the LAN without opening a window, blocking the calling thread
+/// until interrupted (Ctrl+C). Reuses the same rendering, routing, hashing, key,
+/// and registry machinery as the in-app `start_share` command.
+pub fn serve_files_headless(paths: &[String]) -> Result<(), String> {
+    if paths.is_empty() {
+        return Err("--share requires at least one file".to_string());
+    }
+
+    // Render each note up front so obvious errors surface before we bind a port.
+    // Canonicalize local paths so hashes/image-confinement match the GUI's shares.
+    let mut notes: Vec<(String, String)> = Vec::new();
+    for p in paths {
+        let result = markdown::render_markdown_any(p).map_err(|e| format!("{p}: {e}"))?;
+        let key_path = if markdown::is_remote_url(p) {
+            p.clone()
+        } else {
+            Path::new(p)
+                .canonicalize()
+                .map(|c| c.to_string_lossy().into_owned())
+                .unwrap_or_else(|_| p.clone())
+        };
+        notes.push((key_path, result.title));
+    }
+
+    let mut routes = load_share_routes();
+    let key = routes
+        .key
+        .clone()
+        .filter(|k| k.len() >= MIN_KEY_LEN)
+        .unwrap_or_else(generate_key);
+
+    let (server, port) = try_bind_server(routes.preferred_port)?;
+
+    // Assign (or reuse) a stable hash per note and build the served route map.
+    let route_map: Arc<RwLock<HashMap<String, NoteRoute>>> =
+        Arc::new(RwLock::new(HashMap::new()));
+    {
+        let mut map = route_map.write().unwrap_or_else(|e| e.into_inner());
+        for (path, title) in &notes {
+            let hash = routes
+                .routes
+                .get(path)
+                .map(|e| e.hash.clone())
+                .unwrap_or_else(random_hash);
+            routes
+                .routes
+                .insert(path.clone(), ShareRouteEntry { hash: hash.clone() });
+            map.insert(
+                hash.clone(),
+                NoteRoute {
+                    path: path.clone(),
+                    title: title.clone(),
+                    hash,
+                },
+            );
+        }
+    }
+    routes.key = Some(key.clone());
+    routes.preferred_port = Some(port);
+    save_share_routes(&routes);
+
+    // Populate a ShareStateInner purely so we can reuse `sync_active_shares` to
+    // advertise these notes in the cross-instance registry.
+    let mut inner = ShareStateInner::default();
+    inner.server = Some(Arc::clone(&server));
+    inner.port = Some(port);
+    inner.route_map = Arc::clone(&route_map);
+    inner.server_key = Some(key.clone());
+    {
+        let map = route_map.read().unwrap_or_else(|e| e.into_inner());
+        for route in map.values() {
+            inner
+                .path_to_hash
+                .insert(route.path.clone(), route.hash.clone());
+        }
+    }
+    inner.last_path = notes.first().map(|(p, _)| p.clone());
+    sync_active_shares(&inner);
+
+    // Print the URLs for the user.
+    let ip = local_ip()
+        .unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST))
+        .to_string();
+    let plural = if notes.len() == 1 { "" } else { "s" };
+    println!(
+        "emede \u{2014} sharing {} note{plural} on http://{ip}:{port}",
+        notes.len()
+    );
+    {
+        let map = route_map.read().unwrap_or_else(|e| e.into_inner());
+        let mut list: Vec<&NoteRoute> = map.values().collect();
+        list.sort_by(|a, b| a.title.cmp(&b.title));
+        for route in list {
+            println!(
+                "  {}\n    http://{ip}:{port}/{}?key={key}",
+                route.title, route.hash
+            );
+        }
+    }
+    println!("\nHome (all notes):  http://{ip}:{port}/?key={key}");
+    println!("\nServing\u{2026} press Ctrl+C to stop.");
+
+    // Unblock the accept loop on Ctrl+C so we fall through to cleanup. If a
+    // handler can't be installed, sharing still works; only graceful registry
+    // cleanup on Ctrl+C is lost.
+    {
+        let server = Arc::clone(&server);
+        let _ = ctrlc::set_handler(move || server.unblock());
+    }
+
+    // Accept loop on the calling (main) thread.
+    for request in server.incoming_requests() {
+        let response = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            handle_share_request(&request, &route_map, port, &key)
+        }))
+        .unwrap_or_else(|_| html_response("Internal error".to_string(), 500));
+        let _ = request.respond(response);
+    }
+
+    // Interrupted: drop ourselves from the cross-instance registry so `--list`
+    // and other instances' home pages don't advertise a dead port.
+    let cleanup = ShareStateInner::default();
+    sync_active_shares(&cleanup);
+    println!("\nStopped sharing.");
+    Ok(())
 }
 
 #[cfg(test)]

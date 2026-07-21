@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sample Document — emede</title>
+<script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [["\\(", "\\)"], ["$", "$"]],
+      displayMath: [["\\[", "\\]"], ["$$", "$$"]],
+    },
+    options: {
+      skipHtmlTags: ["script", "noscript", "style", "textarea", "pre", "code"],
+    },
+  };
+</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+<style>
+  :root {
+    --color-fg: #433422;
+    --color-bg: #f4ecd8;
+    --font-size: 15pt;
+    --reader-width: 24.5cm;
+    --reader-gutter: 1.5rem;
+    --font-serif: "C059", serif;
+    --font-code: "IBM Plex Mono", "JetBrains Mono", "Fira Code", monospace;
+    --color-muted: color-mix(in srgb, var(--color-fg) 52%, transparent);
+    --color-link: color-mix(in srgb, #3d5a80 72%, var(--color-fg));
+    --color-code-bg: color-mix(in srgb, var(--color-fg) 10%, var(--color-bg));
+    --color-border: color-mix(in srgb, var(--color-fg) 16%, var(--color-bg));
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-serif);
+    font-size: var(--font-size);
+    line-height: 1.7;
+  }
+  .prose {
+    max-width: var(--reader-width);
+    margin: 0 auto;
+    padding: 3rem var(--reader-gutter) 6rem;
+    word-wrap: break-word;
+  }
+  .prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
+    line-height: 1.25;
+    margin: 1.6em 0 0.6em;
+  }
+  .prose h1 { font-size: 1.9em; }
+  .prose h2 { font-size: 1.5em; }
+  .prose h3 { font-size: 1.25em; }
+  .prose p, .prose ul, .prose ol, .prose blockquote, .prose pre, .prose table, .prose figure {
+    margin: 0 0 1em;
+  }
+  .prose a { color: var(--color-link); }
+  .prose img { max-width: 100%; height: auto; }
+  .prose code {
+    font-family: var(--font-code);
+    font-size: 0.9em;
+    background: var(--color-code-bg);
+    padding: 0.1em 0.35em;
+    border-radius: 4px;
+  }
+  .prose pre {
+    font-family: var(--font-code);
+    background: var(--color-code-bg);
+    padding: 1em;
+    border-radius: 8px;
+    overflow-x: auto;
+  }
+  .prose pre code { background: none; padding: 0; }
+  .prose blockquote {
+    margin-inline: 0;
+    padding-left: 1em;
+    border-left: 3px solid var(--color-border);
+    color: var(--color-muted);
+  }
+  .prose table { border-collapse: collapse; width: 100%; display: block; overflow-x: auto; }
+  .prose th, .prose td { border: 1px solid var(--color-border); padding: 0.4em 0.7em; }
+  .prose hr { border: none; border-top: 1px solid var(--color-border); }
+  .prose .mermaid { text-align: center; }
+
+  .share-footer {
+    max-width: var(--reader-width);
+    margin: 0 auto;
+    padding: 1.5rem var(--reader-gutter) 3rem;
+    border-top: 1px solid var(--color-border);
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--color-muted);
+    line-height: 1.7;
+  }
+  .share-footer .who { display: block; margin-bottom: 0.35rem; }
+  .share-footer a { color: var(--color-link); text-decoration: none; }
+  .share-footer a:hover { text-decoration: underline; }
+
+  .top-btns {
+    position: fixed; top: 12px; right: 12px; z-index: 10;
+    display: flex; gap: 8px;
+  }
+  .top-btns button {
+    width: 40px; height: 40px; border-radius: 50%;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg); color: var(--color-fg);
+    font-size: 18px; cursor: pointer; display: flex;
+    align-items: center; justify-content: center;
+    transition: background 0.15s;
+  }
+  .top-btns button:hover { background: var(--color-code-bg); }
+  #cfg-panel {
+    position: fixed; top: 60px; right: 12px; z-index: 10;
+    background: var(--color-bg); color: var(--color-fg);
+    border: 1px solid var(--color-border); border-radius: 10px;
+    padding: 14px; display: grid; gap: 12px; min-width: 200px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.18);
+  }
+  #cfg-panel[hidden] { display: none; }
+  #cfg-panel label { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 14px; }
+  #cfg-panel input[type="color"] { width: 42px; height: 28px; padding: 0; border: 1px solid var(--color-border); background: none; }
+  #cfg-size-label, #cfg-width-label { min-width: 3ch; text-align: right; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<div class="top-btns">
+  <button id="home-btn" type="button" aria-label="Home" title="Shared notes home">⌂</button>
+  <button id="cfg-toggle" type="button" aria-label="Display settings">⚙</button>
+</div>
+<div id="cfg-panel" hidden>
+  <label>Text <input id="cfg-fg" type="color" /></label>
+  <label>Background <input id="cfg-bg" type="color" /></label>
+  <label>Size <input id="cfg-size" type="range" min="8" max="32" step="1" /><span id="cfg-size-label"></span></label>
+  <label>Width <input id="cfg-width" type="range" min="10" max="30" step="0.5" /><span id="cfg-width-label"></span></label>
+</div>
+<article class="prose"><h1><a href="#sample-document" class="anchor" id="sample-document" rel="noopener noreferrer"></a>Sample Document</h1>
+<p>Inline math: $E = mc^2$ and display:</p>
+<p>$$
+
+\int_0^1 x^2 \, dx = \frac{1}{3}
+
+$$</p>
+<h2><a href="#lists" class="anchor" id="lists" rel="noopener noreferrer"></a>Lists</h2>
+<ul>
+<li>First item</li>
+<li>Second item with <strong>bold</strong> and <em>italic</em></li>
+</ul>
+<blockquote>
+<p>A blockquote for immersive reading.</p>
+</blockquote>
+<pre><code class="language-python">def hello():
+    print("emede")
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Col A</th>
+<th>Col B</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>one</td>
+<td>two</td>
+</tr>
+</tbody>
+</table>
+<pre><code class="language-mermaid">graph LR
+    A[Square Rect] -- Link text --&gt; B((Circle))
+    A --&gt; C(Round Rect)
+    B --&gt; D{Rhombus}
+    C --&gt; D
+</code></pre>
+<pre><code class="language-mermaid">sequenceDiagram
+    Alice -&gt;&gt; Bob: Hello Bob, how are you?
+    Bob--&gt;&gt;John: How about you John?
+    Bob--x Alice: I am good thanks!
+    Bob-x John: I am good thanks!
+    Note right of John: Bob thinks a long&lt;br/&gt;long time, so long&lt;br/&gt;that the text does&lt;br/&gt;not fit on a row.
+
+    Bob--&gt;Alice: Checking with John...
+    Alice-&gt;John: Yes... John, how are you?
+</code></pre>
+<pre><code class="language-mermaid">pie title What Voldemort doesn't have?
+         "FRIENDS" : 2
+         "FAMILY" : 3
+         "NOSE" : 45
+
+</code></pre>
+<pre><code class="language-mermaid">graph TB
+    sq[Square shape] --&gt; ci((Circle shape))
+
+    subgraph A
+        od&gt;Odd shape]-- Two line&lt;br/&gt;edge comment --&gt; ro
+        di{Diamond with &lt;br/&gt; line break} -.-&gt; ro(Rounded&lt;br&gt;square&lt;br&gt;shape)
+        di==&gt;ro2(Rounded square shape)
+    end
+
+    %% Notice that no text in shape are added here instead that is appended further down
+    e --&gt; od3&gt;Really long text with linebreak&lt;br&gt;in an Odd shape]
+
+    %% Comments after double percent signs
+    e((Inner / circle&lt;br&gt;and some odd &lt;br&gt;special characters)) --&gt; f(,.?!+-*ز)
+
+    cyr[Cyrillic]--&gt;cyr2((Circle shape Начало));
+
+     classDef green fill:#9f6,stroke:#333,stroke-width:2px;
+     classDef orange fill:#f96,stroke:#333,stroke-width:4px;
+     class sq,e green
+     class di orange
+</code></pre>
+</article>
+<footer class="share-footer">
+<span class="who">Shared by Jesus@thinkpad</span>
+<span>Powered by <a href="https://github.com/jmejia8/emede" target="_blank" rel="noopener noreferrer">emede</a></span>
+</footer>
+<script>
+  (function () {
+    var root = document.documentElement;
+    var toggle = document.getElementById("cfg-toggle");
+    var panel = document.getElementById("cfg-panel");
+    var fg = document.getElementById("cfg-fg");
+    var bg = document.getElementById("cfg-bg");
+    var size = document.getElementById("cfg-size");
+    var sizeLabel = document.getElementById("cfg-size-label");
+    var width = document.getElementById("cfg-width");
+    var widthLabel = document.getElementById("cfg-width-label");
+
+    function cssVar(name) {
+      return getComputedStyle(root).getPropertyValue(name).trim();
+    }
+    function normalizeHex(value, fallback) {
+      return /^#[0-9a-fA-F]{6}$/.test(value) ? value : fallback;
+    }
+    function clampWidth(v) {
+      var n = parseFloat(v);
+      if (!isFinite(n)) return 16;
+      n = Math.min(30, Math.max(10, n));
+      return Math.round(n * 2) / 2; // snap to 0.5cm steps
+    }
+
+    var savedFg = localStorage.getItem("emede-share-fg");
+    var savedBg = localStorage.getItem("emede-share-bg");
+    var savedSize = localStorage.getItem("emede-share-size");
+    var savedWidth = localStorage.getItem("emede-share-width");
+
+    var initFg = normalizeHex(savedFg, normalizeHex(cssVar("--color-fg"), "#2c2c2c"));
+    var initBg = normalizeHex(savedBg, normalizeHex(cssVar("--color-bg"), "#faf8f5"));
+    var initSize = parseInt(savedSize || cssVar("--font-size"), 10) || 12;
+    var initWidth = clampWidth(savedWidth || cssVar("--reader-width") || 16);
+
+    function applyFg(v) { root.style.setProperty("--color-fg", v); fg.value = v; }
+    function applyBg(v) { root.style.setProperty("--color-bg", v); bg.value = v; }
+    function applySize(v) {
+      root.style.setProperty("--font-size", v + "pt");
+      size.value = v;
+      sizeLabel.textContent = v + "pt";
+    }
+    function applyWidth(v) {
+      root.style.setProperty("--reader-width", v + "cm");
+      width.value = v;
+      widthLabel.textContent = v + "cm";
+    }
+
+    applyFg(initFg);
+    applyBg(initBg);
+    applySize(initSize);
+    applyWidth(initWidth);
+
+    toggle.addEventListener("click", function () { panel.hidden = !panel.hidden; });
+    document.getElementById("home-btn").addEventListener("click", function () {
+      // Auth rides in the cookie, so the home link stays key-free.
+      location.href = location.origin + "/";
+    });
+    fg.addEventListener("input", function () {
+      applyFg(fg.value);
+      localStorage.setItem("emede-share-fg", fg.value);
+      renderMermaid();
+    });
+    bg.addEventListener("input", function () {
+      applyBg(bg.value);
+      localStorage.setItem("emede-share-bg", bg.value);
+      renderMermaid();
+    });
+    size.addEventListener("input", function () {
+      applySize(size.value);
+      localStorage.setItem("emede-share-size", size.value);
+    });
+    width.addEventListener("input", function () {
+      applyWidth(width.value);
+      localStorage.setItem("emede-share-width", width.value);
+    });
+
+    var mermaidLib = null;
+    // Custom properties read back as their literal source text, so a value like
+    // color-mix(...) reaches Mermaid unresolved and its color parser throws.
+    // Paint the value onto a 1x1 canvas and read the pixel back. This forces the
+    // browser to resolve any modern syntax (color-mix(), color(srgb ...), etc.)
+    // down to plain 0-255 RGBA that Mermaid's color parser understands.
+    var probeCanvas = document.createElement("canvas");
+    probeCanvas.width = 1;
+    probeCanvas.height = 1;
+    var probeCtx = probeCanvas.getContext("2d");
+    function resolveColor(value) {
+      if (!probeCtx) return value;
+      probeCtx.clearRect(0, 0, 1, 1);
+      probeCtx.fillStyle = "#000";
+      probeCtx.fillStyle = value;
+      probeCtx.fillRect(0, 0, 1, 1);
+      var d = probeCtx.getImageData(0, 0, 1, 1).data;
+      return "rgb(" + d[0] + ", " + d[1] + ", " + d[2] + ")";
+    }
+    function resolveRgbData(value) {
+      if (!probeCtx) return null;
+      probeCtx.clearRect(0, 0, 1, 1);
+      probeCtx.fillStyle = "#000";
+      probeCtx.fillStyle = value;
+      probeCtx.fillRect(0, 0, 1, 1);
+      return probeCtx.getImageData(0, 0, 1, 1).data;
+    }
+    // Distinct multi-color palette (pie slices, cScale) tuned for the theme bg.
+    // Low saturation + a blend toward the background keep it muted and on-theme.
+    function autoPalette(count, bgData, dark) {
+      var sat = 38;
+      var light = dark ? 58 : 52;
+      var blend = 0.28;
+      var out = [];
+      for (var i = 0; i < count; i++) {
+        var hue = Math.round((i * 137.5) % 360);
+        var c = resolveRgbData("hsl(" + hue + ", " + sat + "%, " + light + "%)");
+        if (!c || !bgData) {
+          out.push(resolveColor("hsl(" + hue + ", " + sat + "%, " + light + "%)"));
+          continue;
+        }
+        var r = Math.round(c[0] * (1 - blend) + bgData[0] * blend);
+        var g = Math.round(c[1] * (1 - blend) + bgData[1] * blend);
+        var b = Math.round(c[2] * (1 - blend) + bgData[2] * blend);
+        out.push("rgb(" + r + ", " + g + ", " + b + ")");
+      }
+      return out;
+    }
+    function renderMermaid() {
+      var blocks = document.querySelectorAll("pre > code.language-mermaid, div.mermaid[data-src]");
+      if (!blocks.length || !mermaidLib) return;
+      var style = getComputedStyle(root);
+      var fgc = resolveColor(style.getPropertyValue("--color-fg").trim());
+      var bgc = resolveColor(style.getPropertyValue("--color-bg").trim());
+      var codeBg = resolveColor(style.getPropertyValue("--color-code-bg").trim());
+      var link = resolveColor(style.getPropertyValue("--color-link").trim());
+      var bgData = resolveRgbData(style.getPropertyValue("--color-bg").trim());
+      var dark = bgData
+        ? (0.2126 * bgData[0] + 0.7152 * bgData[1] + 0.0722 * bgData[2]) / 255 < 0.5
+        : true;
+      var palette = autoPalette(12, bgData, dark);
+      var themeVars = {
+        background: bgc,
+        primaryColor: codeBg,
+        primaryTextColor: fgc,
+        primaryBorderColor: fgc,
+        lineColor: fgc,
+        mainBkg: codeBg,
+        nodeBorder: fgc,
+        nodeTextColor: fgc,
+        labelColor: fgc,
+        edgeLabelBackground: bgc,
+        linkColor: link,
+        pieStrokeColor: fgc,
+        pieOuterStrokeColor: fgc,
+        pieSectionTextColor: fgc,
+        pieTitleTextColor: fgc,
+        pieOpacity: 1,
+      };
+      for (var p = 0; p < palette.length; p++) {
+        themeVars["pie" + (p + 1)] = palette[p];
+        themeVars["cScale" + p] = palette[p];
+      }
+      mermaidLib.initialize({
+        startOnLoad: false,
+        theme: "base",
+        themeVariables: themeVars,
+      });
+      var nodes = [];
+      document.querySelectorAll("pre > code.language-mermaid").forEach(function (code) {
+        var div = document.createElement("div");
+        div.className = "mermaid";
+        div.dataset.src = code.textContent;
+        div.textContent = code.textContent;
+        code.parentElement.replaceWith(div);
+        nodes.push(div);
+      });
+      document.querySelectorAll("div.mermaid[data-src]").forEach(function (div) {
+        if (nodes.indexOf(div) !== -1) return;
+        div.removeAttribute("data-processed");
+        div.textContent = div.dataset.src;
+        nodes.push(div);
+      });
+      mermaidLib.run({ nodes: nodes }).catch(function (e) { console.warn(e); });
+    }
+
+    var script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js";
+    script.onload = function () { mermaidLib = window.mermaid; renderMermaid(); };
+    script.onerror = function () { console.warn("Failed to load Mermaid"); };
+    document.head.appendChild(script);
+  })();
+</script>
+</body>
+</html>

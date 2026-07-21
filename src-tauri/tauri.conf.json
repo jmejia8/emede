@@ -39,19 +39,7 @@
       }
     }
   },
-  "plugins": {
-    "cli": {
-      "description": "Read markdown files",
-      "args": [
-        {
-          "name": "file",
-          "index": 1,
-          "takesValue": true,
-          "multiple": true
-        }
-      ]
-    }
-  },
+  "plugins": {},
   "bundle": {
     "active": true,
     "targets": ["deb", "rpm"],

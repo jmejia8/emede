@@ -15,7 +15,6 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = ["protocol-asset"] }
-tauri-plugin-cli = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 dirs = "6"
@@ -30,6 +29,14 @@ qrcode = { version = "0.14", features = ["svg"] }
 getrandom = "0.3"
 subtle = "2.6"
 notify = "8"
+ctrlc = "3"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-window-state = "2"
+
+# PDF export (`--print`) drives the bundled WebKitGTK engine directly. These
+# match the versions wry already pulls in, so they add no new engine — only the
+# Rust bindings needed to call the print operation.
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
+webkit2gtk = { version = "2.0", features = ["v2_40"] }

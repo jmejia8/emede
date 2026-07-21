@@ -13,7 +13,6 @@
     "core:window:allow-toggle-maximize",
     "core:window:allow-close",
     "core:window:allow-destroy",
-    "cli:default",
     "opener:default",
     "dialog:default",
     "window-state:default"
