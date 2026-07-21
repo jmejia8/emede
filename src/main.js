@@ -15,7 +15,7 @@ import {
 const { invoke, convertFileSrc } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 const { getCurrentWindow } = window.__TAURI__.window;
-const { openUrl } = window.__TAURI__.opener;
+const { openUrl, revealItemInDir } = window.__TAURI__.opener;
 
 const DEFAULT_FONT = '"Literata", "Source Serif 4", "Noto Serif", serif';
 const DEFAULT_FONT_CODE = '"IBM Plex Mono", "JetBrains Mono", "Fira Code", monospace';
@@ -1406,6 +1406,208 @@ function wireShare() {
   });
 }
 
+// ── Right-click context menu ──────────────────────────────────────────────────
+const contextMenu = document.getElementById("context-menu");
+let contextMenuPrevFocus = null;
+
+function contextMenuItems() {
+  return Array.from(contextMenu.querySelectorAll(".context-menu-item"));
+}
+
+function contextMenuEnabledItems() {
+  return contextMenuItems().filter((el) => !el.disabled);
+}
+
+function isContextMenuOpen() {
+  return !contextMenu.classList.contains("hidden");
+}
+
+// Enable file-scoped actions only for a document backed by a local file.
+function updateContextMenuState() {
+  const hasLocalDoc = lastOpenTarget?.kind === "file" && !!currentDocPath;
+  const hasDoc = !!currentDocPath;
+  const enablement = {
+    "open-file": true,
+    "open-new-window": true,
+    reveal: hasLocalDoc,
+    "copy-path": hasLocalDoc,
+    reload: hasDoc,
+    share: hasLocalDoc,
+    print: true,
+    quit: true,
+  };
+  for (const item of contextMenuItems()) {
+    const on = enablement[item.dataset.action] ?? true;
+    item.disabled = !on;
+    item.setAttribute("aria-disabled", String(!on));
+  }
+}
+
+function setActiveContextItem(item) {
+  for (const el of contextMenuItems()) el.classList.remove("is-active");
+  if (item) {
+    item.classList.add("is-active");
+    item.focus();
+  }
+}
+
+function showContextMenuAt(x, y) {
+  contextMenuPrevFocus = document.activeElement;
+  contextMenu.classList.remove("hidden");
+
+  // Measure after it's laid out, then clamp so it stays fully on-screen.
+  const { width, height } = contextMenu.getBoundingClientRect();
+  const margin = 8;
+  let left = x;
+  let top = y;
+  if (left + width > window.innerWidth - margin) left = x - width;
+  if (top + height > window.innerHeight - margin) top = y - height;
+  left = Math.max(margin, left);
+  top = Math.max(margin, top);
+  contextMenu.style.left = `${left}px`;
+  contextMenu.style.top = `${top}px`;
+
+  setActiveContextItem(contextMenuEnabledItems()[0] || null);
+}
+
+function hideContextMenu() {
+  if (!isContextMenuOpen()) return;
+  contextMenu.classList.add("hidden");
+  for (const el of contextMenuItems()) el.classList.remove("is-active");
+  const prev = contextMenuPrevFocus;
+  contextMenuPrevFocus = null;
+  if (prev && typeof prev.focus === "function") prev.focus();
+}
+
+function moveContextActive(delta) {
+  const items = contextMenuEnabledItems();
+  if (!items.length) return;
+  const current = contextMenu.querySelector(".context-menu-item.is-active");
+  const idx = items.indexOf(current);
+  const next = (idx + delta + items.length) % items.length;
+  setActiveContextItem(items[next]);
+}
+
+async function runContextAction(action) {
+  switch (action) {
+    case "open-file":
+      await handlePickAndOpenFile();
+      break;
+    case "open-new-window": {
+      const selected = await invoke("plugin:dialog|open", {
+        options: {
+          multiple: false,
+          filters: [{ name: "Markdown", extensions: ["md", "markdown"] }],
+        },
+      });
+      if (selected) {
+        await invoke("open_in_new_window", { path: selected });
+      }
+      break;
+    }
+    case "reveal":
+      if (currentDocPath) await revealItemInDir(currentDocPath);
+      break;
+    case "copy-path":
+      if (currentDocPath) await navigator.clipboard.writeText(currentDocPath);
+      break;
+    case "reload":
+      if (lastOpenTarget?.kind === "url") {
+        await openFromUrl(lastOpenTarget.value);
+      } else if (currentDocPath) {
+        await openFile(currentDocPath);
+      }
+      break;
+    case "share":
+      await startShare();
+      break;
+    case "print":
+      window.print();
+      break;
+    case "quit":
+      await getCurrentWindow().close();
+      break;
+  }
+}
+
+function wireContextMenu() {
+  document.addEventListener("contextmenu", (e) => {
+    // Don't reposition when right-clicking the menu itself.
+    if (contextMenu.contains(e.target)) {
+      e.preventDefault();
+      return;
+    }
+    // Leave the native menu for editable fields (copy/paste/select-all).
+    if (e.target.closest?.("input, textarea, [contenteditable='']," + " [contenteditable='true']")) {
+      return;
+    }
+    // Text selected → keep the native menu so native Copy stays available.
+    const selection = window.getSelection();
+    if (selection && selection.toString().trim()) return;
+
+    e.preventDefault();
+    updateContextMenuState();
+    showContextMenuAt(e.clientX, e.clientY);
+  });
+
+  contextMenu.addEventListener("click", (e) => {
+    const item = e.target.closest(".context-menu-item");
+    if (!item || item.disabled) return;
+    const { action } = item.dataset;
+    hideContextMenu();
+    void runContextAction(action).catch((err) =>
+      console.warn(`Context action "${action}" failed`, err),
+    );
+  });
+
+  contextMenu.addEventListener("keydown", (e) => {
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+        moveContextActive(1);
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        moveContextActive(-1);
+        break;
+      case "Home":
+        e.preventDefault();
+        setActiveContextItem(contextMenuEnabledItems()[0] || null);
+        break;
+      case "End": {
+        e.preventDefault();
+        const items = contextMenuEnabledItems();
+        setActiveContextItem(items[items.length - 1] || null);
+        break;
+      }
+      case "Enter":
+      case " ": {
+        e.preventDefault();
+        const active = contextMenu.querySelector(".context-menu-item.is-active");
+        active?.click();
+        break;
+      }
+      case "Escape":
+        e.preventDefault();
+        hideContextMenu();
+        break;
+      case "Tab":
+        hideContextMenu();
+        break;
+    }
+  });
+
+  // Dismiss on outside interaction.
+  document.addEventListener("pointerdown", (e) => {
+    if (isContextMenuOpen() && !contextMenu.contains(e.target)) {
+      hideContextMenu();
+    }
+  });
+  window.addEventListener("blur", hideContextMenu);
+  window.addEventListener("scroll", () => hideContextMenu(), true);
+  window.addEventListener("resize", hideContextMenu);
+}
+
 function toggleSettings(open) {
   const show = open ?? settingsPanel.classList.contains("hidden");
   const hadFocus = settingsPanel.contains(document.activeElement);
@@ -1793,6 +1995,7 @@ async function boot() {
   wireDragDrop();
   wireKeybindings();
   wireShare();
+  wireContextMenu();
 
   openFileBtn.addEventListener("click", () => {
     void handlePickAndOpenFile();

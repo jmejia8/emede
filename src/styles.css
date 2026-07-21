@@ -2163,6 +2163,82 @@ mark[data-find-match].find-active {
   animation: match-pulse 1.5s ease-in-out 2;
 }
 
+/* ── Right-click context menu ─────────────────────────────────────────────── */
+.context-menu {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 45;
+  min-width: 210px;
+  padding: 4px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-fg) 8%, transparent),
+    0 16px 40px color-mix(in srgb, var(--color-fg) 16%, transparent);
+  font-family: system-ui, sans-serif;
+  font-size: 0.85rem;
+  color: var(--color-fg);
+  touch-action: manipulation;
+  user-select: none;
+  animation: context-menu-in 0.09s ease-out;
+}
+
+@keyframes context-menu-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.context-menu-item {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: left;
+  padding: 0.4rem 0.75rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+.context-menu-item:hover,
+.context-menu-item.is-active {
+  background: color-mix(in srgb, var(--color-fg) 7%, transparent);
+}
+
+.context-menu-item:focus-visible {
+  outline: 2px solid var(--color-link);
+  outline-offset: -2px;
+}
+
+.context-menu-item[disabled],
+.context-menu-item[aria-disabled="true"] {
+  color: var(--color-muted);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.context-menu-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--color-border);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .context-menu {
+    animation: none;
+  }
+}
+
 @media print {
   *,
   *::before,
@@ -2201,6 +2277,7 @@ mark[data-find-match].find-active {
   #toc-panel,
   #search-bar,
   #about-overlay,
+  #context-menu,
   #drag-overlay,
   #loading-state,
   #empty-state,

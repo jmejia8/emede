@@ -159,6 +159,7 @@ pub fn run() {
             get_startup_file,
             get_app_version,
             restart_app,
+            open_in_new_window,
         ])
         .setup(|app| {
             capture_cli_file(app.handle());
@@ -186,6 +187,16 @@ fn get_startup_file(state: tauri::State<StartupFile>) -> Option<String> {
 #[tauri::command]
 fn get_app_version(app: tauri::AppHandle) -> String {
     app.package_info().version.to_string()
+}
+
+#[tauri::command]
+fn open_in_new_window(path: String) -> Result<(), String> {
+    let exe = std::env::current_exe().map_err(|e| format!("failed to get current exe path: {e}"))?;
+    std::process::Command::new(exe)
+        .arg(&path)
+        .spawn()
+        .map_err(|e| format!("failed to open new window: {e}"))?;
+    Ok(())
 }
 
 #[tauri::command]

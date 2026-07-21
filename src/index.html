@@ -286,6 +286,19 @@
       </div>
     </div>
 
+    <div id="context-menu" class="context-menu hidden" role="menu" aria-label="Actions" tabindex="-1">
+      <button type="button" class="context-menu-item" role="menuitem" data-action="open-file">Open File…</button>
+      <button type="button" class="context-menu-item" role="menuitem" data-action="open-new-window">Open in New Window…</button>
+      <button type="button" class="context-menu-item" role="menuitem" data-action="reveal">Open Containing Folder</button>
+      <div class="context-menu-sep" role="separator"></div>
+      <button type="button" class="context-menu-item" role="menuitem" data-action="copy-path">Copy File Path</button>
+      <button type="button" class="context-menu-item" role="menuitem" data-action="reload">Reload</button>
+      <button type="button" class="context-menu-item" role="menuitem" data-action="share">Share…</button>
+      <button type="button" class="context-menu-item" role="menuitem" data-action="print">Print…</button>
+      <div class="context-menu-sep" role="separator"></div>
+      <button type="button" class="context-menu-item" role="menuitem" data-action="quit">Quit</button>
+    </div>
+
     <main id="reader">
       <div id="loading-state" class="loading-state hidden" role="status" aria-live="polite" aria-label="Loading document">
         <img src="assets/logo.png" alt="" class="state-logo" width="128" height="128" />
