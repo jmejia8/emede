@@ -256,13 +256,39 @@ fn title_from_markdown(content: &str, path: &Path) -> String {
     for line in body.lines() {
         let trimmed = line.trim();
         if let Some(rest) = trimmed.strip_prefix("# ") {
-            if !rest.is_empty() {
-                return rest.to_string();
+            let plain = strip_inline_markdown(rest);
+            if !plain.is_empty() {
+                return plain;
             }
         }
     }
 
     title_from_path(path)
+}
+
+/// Strip inline markdown syntax (emphasis, code spans, links, etc.) from a
+/// string, returning its plain-text content. Used so window titles derived
+/// from a `# ` heading read as plain text instead of raw markdown.
+fn strip_inline_markdown(text: &str) -> String {
+    let arena = Arena::new();
+    let options = Options::default();
+    let root = parse_document(&arena, text, &options);
+
+    fn collect<'a>(node: &'a comrak::nodes::AstNode<'a>, out: &mut String) {
+        match &node.data.borrow().value {
+            NodeValue::Text(t) => out.push_str(t),
+            NodeValue::Code(c) => out.push_str(&c.literal),
+            NodeValue::SoftBreak | NodeValue::LineBreak => out.push(' '),
+            _ => {}
+        }
+        for child in node.children() {
+            collect(child, out);
+        }
+    }
+
+    let mut out = String::new();
+    collect(root, &mut out);
+    out.trim().to_string()
 }
 
 /// Wrap YAML/metadata preamble (`---` or `~~~`) in a fenced code block.
@@ -864,6 +890,24 @@ mod tests {
         assert_eq!(
             title_from_markdown(src, Path::new("notes.md")),
             "Lecture Notes"
+        );
+    }
+
+    #[test]
+    fn title_strips_inline_markdown() {
+        let src = "# Title **bold** -- text `code`\n";
+        assert_eq!(
+            title_from_markdown(src, Path::new("notes.md")),
+            "Title bold -- text code"
+        );
+    }
+
+    #[test]
+    fn title_strips_link_markup() {
+        let src = "# See [the docs](https://example.com) now\n";
+        assert_eq!(
+            title_from_markdown(src, Path::new("notes.md")),
+            "See the docs now"
         );
     }
 
