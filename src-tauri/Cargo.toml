@@ -2,7 +2,8 @@
 name = "emede"
 version = "0.2.1"
 description = "Immersive markdown reader"
-authors = ["you"]
+authors = ["Jesus Mejia"]
+repository = "https://github.com/jmejia8/emede"
 edition = "2021"
 
 [lib]

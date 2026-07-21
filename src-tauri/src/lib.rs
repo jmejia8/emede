@@ -58,6 +58,53 @@ fn handle_navigation(app: &AppHandle, url: &Url) -> bool {
     scheme == "tauri" || scheme == "data"
 }
 
+/// Handle informational CLI flags (`--help`, `--version`) before the Tauri
+/// application is built so no window flashes open. Prints to stdout and exits.
+pub fn handle_cli_flags() {
+    for arg in std::env::args().skip(1) {
+        match arg.as_str() {
+            "-h" | "--help" => {
+                print_help();
+                std::process::exit(0);
+            }
+            "-V" | "--version" => {
+                println!("{} {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
+                std::process::exit(0);
+            }
+            // Stop scanning once a non-flag (e.g. the file path) is reached.
+            other if !other.starts_with('-') => break,
+            _ => {}
+        }
+    }
+}
+
+fn print_help() {
+    let name = env!("CARGO_PKG_NAME");
+    println!(
+        "\
+{name} {version}
+{description}
+
+Author:  {authors}
+Repo:    {repository}
+
+USAGE:
+    {name} [OPTIONS] [FILE]
+
+ARGS:
+    <FILE>    Path to a markdown file to open
+
+OPTIONS:
+    -h, --help       Print this help message and exit
+    -V, --version    Print version information and exit",
+        name = name,
+        version = env!("CARGO_PKG_VERSION"),
+        description = env!("CARGO_PKG_DESCRIPTION"),
+        authors = env!("CARGO_PKG_AUTHORS"),
+        repository = env!("CARGO_PKG_REPOSITORY"),
+    );
+}
+
 pub fn apply_gpu_setting() {
     #[cfg(target_os = "linux")]
     {
