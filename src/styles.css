@@ -282,6 +282,20 @@ body.frame-emede .prose :is(h1, h2, h3, h4, h5, h6) {
   padding: 0;
 }
 
+/* Verbatim plain-text documents: preserve line breaks but read like prose —
+   wrap long lines, use the body font, and drop the code-block chrome. */
+.prose pre.plain-text {
+  overflow-x: visible;
+  padding: 0;
+  background: none;
+  border-radius: 0;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .prose img {
   max-width: 100%;
   height: auto;

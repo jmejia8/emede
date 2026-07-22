@@ -3,6 +3,8 @@ use comrak::html::ChildRendering;
 use comrak::nodes::NodeValue;
 use comrak::{parse_document, Arena, Options};
 use serde::Serialize;
+use serde_json::Value;
+use std::collections::HashSet;
 use std::fmt::Write as _;
 use std::io::Read as _;
 use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
@@ -118,6 +120,10 @@ fn sanitize_html(html: &str) -> String {
         .add_tags(["input"])
         .add_generic_attributes(["class", "id", "align"])
         .add_tag_attributes("input", ["type", "checked", "disabled"])
+        // Drop `<script>`/`<style>` *contents* too — otherwise Ammonia keeps the
+        // inner text of a disallowed tag, leaking script/CSS source as visible
+        // text when we render a full HTML document.
+        .clean_content_tags(HashSet::from(["script", "style"]))
         .url_relative(ammonia::UrlRelative::PassThrough)
         .clean(html)
         .to_string()
@@ -559,8 +565,154 @@ create_formatter!(MathJaxFormatter, {
     },
 });
 
+/// How a loaded resource should be interpreted before rendering. emede opens
+/// arbitrary paths and URLs from its home screen, so the bytes are not always
+/// Markdown; this drives the normalization in [`render_content`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ContentKind {
+    Markdown,
+    Html,
+    Json,
+    PlainText,
+    /// A recognized-but-unsupported text format, shown in a fenced code block
+    /// tagged with this language.
+    Code(&'static str),
+}
+
+/// Map an HTTP `Content-Type` header to a [`ContentKind`]. The charset and
+/// other parameters after `;` are ignored. Returns `None` for types we don't
+/// recognize (callers then fall back to extension / sniffing).
+fn kind_from_content_type(content_type: &str) -> Option<ContentKind> {
+    let mime = content_type
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    let kind = match mime.as_str() {
+        "text/markdown" | "text/x-markdown" => ContentKind::Markdown,
+        "text/html" | "application/xhtml+xml" => ContentKind::Html,
+        "application/json" => ContentKind::Json,
+        "text/plain" => ContentKind::PlainText,
+        "application/xml" | "text/xml" => ContentKind::Code("xml"),
+        "text/csv" => ContentKind::Code("csv"),
+        "text/yaml" | "application/yaml" | "application/x-yaml" => ContentKind::Code("yaml"),
+        "application/toml" => ContentKind::Code("toml"),
+        "application/javascript" | "text/javascript" => ContentKind::Code("javascript"),
+        "text/css" => ContentKind::Code("css"),
+        _ if mime.ends_with("+json") => ContentKind::Json,
+        _ if mime.ends_with("+xml") => ContentKind::Code("xml"),
+        _ => return None,
+    };
+    Some(kind)
+}
+
+/// Map a file extension to a [`ContentKind`]. Returns `None` for unknown
+/// extensions (callers then fall back to content sniffing).
+fn kind_from_extension(path: &Path) -> Option<ContentKind> {
+    let ext = path.extension()?.to_str()?.to_ascii_lowercase();
+    let kind = match ext.as_str() {
+        "md" | "markdown" | "mdown" | "mkd" | "mkdn" => ContentKind::Markdown,
+        "html" | "htm" | "xhtml" => ContentKind::Html,
+        "json" => ContentKind::Json,
+        "txt" | "text" | "log" => ContentKind::PlainText,
+        "xml" => ContentKind::Code("xml"),
+        "csv" => ContentKind::Code("csv"),
+        "tsv" => ContentKind::Code("tsv"),
+        "yaml" | "yml" => ContentKind::Code("yaml"),
+        "toml" => ContentKind::Code("toml"),
+        "ini" | "cfg" | "conf" => ContentKind::Code("ini"),
+        "rs" => ContentKind::Code("rust"),
+        "py" => ContentKind::Code("python"),
+        "js" | "mjs" | "cjs" => ContentKind::Code("javascript"),
+        "ts" => ContentKind::Code("typescript"),
+        "jsx" => ContentKind::Code("jsx"),
+        "tsx" => ContentKind::Code("tsx"),
+        "c" | "h" => ContentKind::Code("c"),
+        "cpp" | "cc" | "cxx" | "hpp" | "hxx" => ContentKind::Code("cpp"),
+        "go" => ContentKind::Code("go"),
+        "java" => ContentKind::Code("java"),
+        "rb" => ContentKind::Code("ruby"),
+        "php" => ContentKind::Code("php"),
+        "sh" | "bash" | "zsh" => ContentKind::Code("bash"),
+        "css" => ContentKind::Code("css"),
+        "sql" => ContentKind::Code("sql"),
+        _ => return None,
+    };
+    Some(kind)
+}
+
+/// Last-resort classification by inspecting the leading bytes: used only when
+/// neither the `Content-Type` header nor a file extension is conclusive.
+/// Defaults to Markdown, which is the historical behavior for prose.
+fn sniff_kind(content: &str) -> ContentKind {
+    let trimmed = strip_bom(content).trim_start();
+    match trimmed.chars().next() {
+        Some('<') => {
+            let head = trimmed[..trimmed.len().min(64)].to_ascii_lowercase();
+            if head.starts_with("<?xml") {
+                ContentKind::Code("xml")
+            } else {
+                ContentKind::Html
+            }
+        }
+        Some('{') | Some('[') if serde_json::from_str::<Value>(trimmed).is_ok() => {
+            ContentKind::Json
+        }
+        _ => ContentKind::Markdown,
+    }
+}
+
+/// Extract a [`ContentKind`] from a URL's path extension, ignoring the query
+/// string and fragment (e.g. `.../data.json?v=2#top` → Json).
+fn url_path_kind(url: &str) -> Option<ContentKind> {
+    let path = url
+        .split('#')
+        .next()
+        .unwrap_or(url)
+        .split('?')
+        .next()
+        .unwrap_or(url);
+    kind_from_extension(Path::new(path))
+}
+
+/// Decide how to interpret a fetched URL body. `Content-Type` wins when it maps
+/// to a specific format, but the generic `text/plain` / `application/octet-stream`
+/// types are treated as inconclusive so that, e.g., raw Markdown served as
+/// `text/plain` still renders as Markdown. Falls back to the URL extension, then
+/// content sniffing.
+fn resolve_url_kind(content_type: Option<&str>, url: &str, body: &str) -> ContentKind {
+    if let Some(ct) = content_type {
+        let mime = ct.split(';').next().unwrap_or("").trim().to_ascii_lowercase();
+        if mime != "text/plain" && mime != "application/octet-stream" {
+            if let Some(kind) = kind_from_content_type(&mime) {
+                return kind;
+            }
+        }
+    }
+    url_path_kind(url).unwrap_or_else(|| sniff_kind(body))
+}
+
+/// Decide how to interpret a local file: extension is authoritative, with
+/// content sniffing as the fallback for extensionless files.
+fn resolve_local_kind(path: &Path, content: &str) -> ContentKind {
+    kind_from_extension(path).unwrap_or_else(|| sniff_kind(content))
+}
+
 /// Largest local markdown file (bytes) we will read and render.
 const MAX_LOCAL_FILE_BYTES: u64 = 50 * 1024 * 1024;
+
+/// Decode file bytes as UTF-8 text, rejecting binary content. Returns `None`
+/// for files that are not valid UTF-8 or that contain NUL bytes (the common
+/// signature of binary formats like PDF, images, and archives), so callers can
+/// surface a clear "not a valid text file" message instead of a raw decode error.
+fn decode_text(bytes: Vec<u8>) -> Option<String> {
+    let text = String::from_utf8(bytes).ok()?;
+    if text.as_bytes().contains(&0) {
+        return None;
+    }
+    Some(text)
+}
 
 pub fn render_markdown_inner(path: &str) -> Result<RenderResult, String> {
     let resolved = resolve_path(path);
@@ -581,27 +733,16 @@ pub fn render_markdown_inner(path: &str) -> Result<RenderResult, String> {
         }
     }
 
-    let raw = std::fs::read_to_string(&resolved).map_err(|e| e.to_string())?;
-    let with_front_matter = preprocess_front_matter(&raw);
-    let with_fences = preprocess_math_fences(&with_front_matter);
-    let preprocessed = preprocess_tex_delimiters(&with_fences);
-    let title = title_from_markdown(&raw, &resolved);
-
-    let arena = Arena::new();
-    let options = comrak_options_for(&resolved);
-    let root = parse_document(&arena, &preprocessed, &options);
-
-    let mut html = String::new();
-    MathJaxFormatter::format_document(root, &options, &mut html)
-        .map_err(|e| format!("Failed to render markdown: {e}"))?;
-    let html = rewrite_html_image_srcs(&html, &resolved);
-    let html = sanitize_html(&html);
-
-    Ok(RenderResult {
-        html,
-        title,
-        path: resolved.to_string_lossy().into_owned(),
-    })
+    let bytes = std::fs::read(&resolved).map_err(|e| e.to_string())?;
+    let raw = decode_text(bytes).ok_or_else(|| {
+        format!(
+            "Not a valid text file: {}. emede opens Markdown and other text-based files, not binary files such as PDFs, images, or archives.",
+            resolved.display()
+        )
+    })?;
+    let kind = resolve_local_kind(&resolved, &raw);
+    let source_id = resolved.to_string_lossy().into_owned();
+    render_content(&raw, kind, &resolved, &source_id, true)
 }
 
 #[tauri::command]
@@ -611,8 +752,36 @@ pub fn render_markdown(path: String) -> Result<RenderResult, String> {
     Ok(result)
 }
 
-pub fn render_markdown_from_str(content: &str, source_path: &Path, source_id: &str) -> Result<RenderResult, String> {
-    let title = title_from_markdown(content, source_path);
+/// Normalize a raw resource of the given [`ContentKind`] into a rendered
+/// [`RenderResult`]. `local` is true for on-disk files (enables resolving
+/// relative `<img>` paths and using the filename for titles).
+fn render_content(
+    raw: &str,
+    kind: ContentKind,
+    source_path: &Path,
+    source_id: &str,
+    local: bool,
+) -> Result<RenderResult, String> {
+    match kind {
+        ContentKind::Markdown => {
+            let title = title_from_markdown(raw, source_path);
+            render_markdown_core(raw, title, source_path, source_id, local)
+        }
+        ContentKind::Html => render_html_content(raw, source_path, source_id, local),
+        ContentKind::Json => render_json_content(raw, source_path, source_id, local),
+        ContentKind::PlainText => Ok(render_plain_text(raw, source_path, source_id)),
+        ContentKind::Code(lang) => render_code_content(raw, lang, source_path, source_id, local),
+    }
+}
+
+/// Core Markdown → HTML pipeline shared by every entry point.
+fn render_markdown_core(
+    content: &str,
+    title: String,
+    source_path: &Path,
+    source_id: &str,
+    rewrite_local_images: bool,
+) -> Result<RenderResult, String> {
     let with_front_matter = preprocess_front_matter(content);
     let with_fences = preprocess_math_fences(&with_front_matter);
     let preprocessed = preprocess_tex_delimiters(&with_fences);
@@ -624,6 +793,11 @@ pub fn render_markdown_from_str(content: &str, source_path: &Path, source_id: &s
     let mut html = String::new();
     MathJaxFormatter::format_document(root, &options, &mut html)
         .map_err(|e| format!("Failed to render markdown: {e}"))?;
+    let html = if rewrite_local_images {
+        rewrite_html_image_srcs(&html, source_path)
+    } else {
+        html
+    };
     let html = sanitize_html(&html);
 
     Ok(RenderResult {
@@ -631,6 +805,201 @@ pub fn render_markdown_from_str(content: &str, source_path: &Path, source_id: &s
         title,
         path: source_id.to_string(),
     })
+}
+
+/// Choose a title for non-Markdown content: the source filename when available,
+/// otherwise the last path segment of the source id (e.g. a URL).
+fn fallback_title(source_path: &Path, source_id: &str) -> String {
+    let from_path = title_from_path(source_path);
+    if from_path != "Untitled" {
+        return from_path;
+    }
+    let path = source_id
+        .split('#')
+        .next()
+        .unwrap_or(source_id)
+        .split('?')
+        .next()
+        .unwrap_or(source_id);
+    path.trim_end_matches('/')
+        .rsplit('/')
+        .find(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| "Untitled".to_string())
+}
+
+/// A fenced-code delimiter guaranteed to be longer than any run of backticks in
+/// `content`, so embedded backticks can't prematurely close the fence.
+fn fence_for(content: &str) -> String {
+    let mut max_run = 0usize;
+    let mut cur = 0usize;
+    for ch in content.chars() {
+        if ch == '`' {
+            cur += 1;
+            max_run = max_run.max(cur);
+        } else {
+            cur = 0;
+        }
+    }
+    "`".repeat(max_run.max(2) + 1)
+}
+
+/// Slice out the inner content of `<body>…</body>`, falling back to the whole
+/// document when there is no `<body>` element.
+fn extract_html_body(html: &str) -> &str {
+    let lower = html.to_ascii_lowercase();
+    let Some(open) = lower.find("<body") else {
+        return html;
+    };
+    let Some(gt) = lower[open..].find('>') else {
+        return html;
+    };
+    let start = open + gt + 1;
+    let end = lower[start..]
+        .find("</body>")
+        .map(|i| start + i)
+        .unwrap_or(html.len());
+    &html[start..end]
+}
+
+/// Extract the trimmed text of the document's `<title>` element, if any.
+fn html_title(html: &str) -> Option<String> {
+    let lower = html.to_ascii_lowercase();
+    let open = lower.find("<title")?;
+    let gt = lower[open..].find('>')? + open + 1;
+    let close = lower[gt..].find("</title>")? + gt;
+    let title = html[gt..close].trim();
+    (!title.is_empty()).then(|| title.to_string())
+}
+
+/// Render an HTML document as "simple HTML": extract `<body>`, resolve local
+/// image paths, and sanitize it for direct display.
+fn render_html_content(
+    raw: &str,
+    source_path: &Path,
+    source_id: &str,
+    local: bool,
+) -> Result<RenderResult, String> {
+    let body = extract_html_body(raw);
+    let rewritten;
+    let body = if local {
+        rewritten = rewrite_html_image_srcs(body, source_path);
+        rewritten.as_str()
+    } else {
+        body
+    };
+    let html = sanitize_html(body);
+    let title = html_title(raw).unwrap_or_else(|| fallback_title(source_path, source_id));
+    Ok(RenderResult {
+        html,
+        title,
+        path: source_id.to_string(),
+    })
+}
+
+fn json_type_name(v: &Value) -> &'static str {
+    match v {
+        Value::Null => "null",
+        Value::Bool(_) => "boolean",
+        Value::Number(_) => "number",
+        Value::String(_) => "string",
+        Value::Array(_) => "array",
+        Value::Object(_) => "object",
+    }
+}
+
+fn plural(n: usize) -> &'static str {
+    if n == 1 {
+        ""
+    } else {
+        "s"
+    }
+}
+
+/// A one-line description of a JSON value's type, including collection sizes.
+fn json_value_label(v: &Value) -> String {
+    match v {
+        Value::Array(a) => format!("array ({} item{})", a.len(), plural(a.len())),
+        Value::Object(o) => format!("object ({} key{})", o.len(), plural(o.len())),
+        other => json_type_name(other).to_string(),
+    }
+}
+
+/// Build the Markdown "structure summary" shown above the pretty-printed JSON.
+fn json_summary_markdown(value: &Value) -> String {
+    let mut out = String::new();
+    match value {
+        Value::Object(map) => {
+            let _ = writeln!(out, "**JSON object — {} key{}**", map.len(), plural(map.len()));
+            let _ = writeln!(out);
+            for (k, v) in map {
+                let _ = writeln!(out, "- `{}`: {}", k, json_value_label(v));
+            }
+        }
+        Value::Array(arr) => {
+            let _ = writeln!(out, "**JSON array — {} item{}**", arr.len(), plural(arr.len()));
+            let _ = writeln!(out);
+            let mut types: Vec<&'static str> = Vec::new();
+            for v in arr {
+                let t = json_type_name(v);
+                if !types.contains(&t) {
+                    types.push(t);
+                }
+            }
+            if !types.is_empty() {
+                let _ = writeln!(out, "- element type{}: {}", plural(types.len()), types.join(", "));
+            }
+        }
+        other => {
+            let _ = writeln!(out, "**JSON {}**", json_type_name(other));
+        }
+    }
+    out
+}
+
+/// Render JSON as a structure summary followed by pretty-printed JSON in a
+/// fenced block. Malformed JSON falls back to a plain code block.
+fn render_json_content(
+    raw: &str,
+    source_path: &Path,
+    source_id: &str,
+    local: bool,
+) -> Result<RenderResult, String> {
+    let Ok(value) = serde_json::from_str::<Value>(raw) else {
+        return render_code_content(raw, "json", source_path, source_id, local);
+    };
+    let pretty = serde_json::to_string_pretty(&value).unwrap_or_else(|_| raw.to_string());
+    let fence = fence_for(&pretty);
+    let md = format!(
+        "{summary}\n{fence}json\n{pretty}\n{fence}\n",
+        summary = json_summary_markdown(&value),
+    );
+    let title = fallback_title(source_path, source_id);
+    render_markdown_core(&md, title, source_path, source_id, local)
+}
+
+/// Render plain text verbatim: HTML-escaped inside a wrapping `<pre>` block.
+fn render_plain_text(raw: &str, source_path: &Path, source_id: &str) -> RenderResult {
+    let html = format!("<pre class=\"plain-text\">{}</pre>", html_escape(raw));
+    RenderResult {
+        html,
+        title: fallback_title(source_path, source_id),
+        path: source_id.to_string(),
+    }
+}
+
+/// Render arbitrary source in a fenced code block tagged with `lang`.
+fn render_code_content(
+    raw: &str,
+    lang: &str,
+    source_path: &Path,
+    source_id: &str,
+    local: bool,
+) -> Result<RenderResult, String> {
+    let fence = fence_for(raw);
+    let md = format!("{fence}{lang}\n{raw}\n{fence}\n");
+    let title = fallback_title(source_path, source_id);
+    render_markdown_core(&md, title, source_path, source_id, local)
 }
 
 /// Largest remote document (bytes) we will fetch and render.
@@ -709,6 +1078,10 @@ fn fetch_and_render_url(url: &str) -> Result<RenderResult, String> {
         .call()
         .map_err(|e| format!("Failed to fetch URL: {e}"))?;
 
+    // Capture the content type before consuming the body so we can pick the
+    // right renderer (Markdown / HTML / JSON / plain text / code).
+    let content_type = response.header("Content-Type").map(|s| s.to_string());
+
     // Cap the body: read one byte past the limit so we can detect overflow
     // instead of silently truncating (ureq's into_string caps at 10 MB quietly).
     let mut content = String::new();
@@ -724,7 +1097,8 @@ fn fetch_and_render_url(url: &str) -> Result<RenderResult, String> {
         ));
     }
 
-    render_markdown_from_str(&content, Path::new("."), url)
+    let kind = resolve_url_kind(content_type.as_deref(), url, &content);
+    render_content(&content, kind, Path::new("."), url, false)
 }
 
 /// Render a local file path or a remote URL, routing to the right backend.
@@ -773,6 +1147,32 @@ mod tests {
         for ip in allowed {
             assert!(is_public_ip(ip.parse().unwrap()), "{ip} should be allowed");
         }
+    }
+
+    #[test]
+    fn decode_text_accepts_utf8_and_rejects_binary() {
+        assert_eq!(decode_text(b"# hello".to_vec()).as_deref(), Some("# hello"));
+        // PDF header followed by a NUL byte, as in a real binary file.
+        assert!(decode_text(b"%PDF-1.7\x00\x01binary".to_vec()).is_none());
+        // Invalid UTF-8 sequence.
+        assert!(decode_text(vec![0xff, 0xfe, 0x00]).is_none());
+    }
+
+    #[test]
+    fn rejects_binary_file_with_clear_message() {
+        let dir = std::env::temp_dir();
+        let path = dir.join("emede_test_binary.pdf");
+        std::fs::write(&path, b"%PDF-1.7\x00\x01\x02 binary payload").unwrap();
+        let result = render_markdown_inner(&path.to_string_lossy());
+        std::fs::remove_file(&path).ok();
+        let err = match result {
+            Ok(_) => panic!("binary file should be rejected"),
+            Err(err) => err,
+        };
+        assert!(
+            err.contains("Not a valid text file"),
+            "unexpected error message: {err}"
+        );
     }
 
     #[test]
@@ -1156,6 +1556,192 @@ mod tests {
         assert!(
             html.contains("checked=\"\""),
             "expected checked attribute on completed item, got: {html}"
+        );
+    }
+
+    #[test]
+    fn content_type_maps_to_kind() {
+        assert_eq!(
+            kind_from_content_type("text/html; charset=utf-8"),
+            Some(ContentKind::Html)
+        );
+        assert_eq!(
+            kind_from_content_type("application/json"),
+            Some(ContentKind::Json)
+        );
+        assert_eq!(
+            kind_from_content_type("application/vnd.api+json"),
+            Some(ContentKind::Json)
+        );
+        assert_eq!(
+            kind_from_content_type("text/plain"),
+            Some(ContentKind::PlainText)
+        );
+        assert_eq!(
+            kind_from_content_type("text/xml"),
+            Some(ContentKind::Code("xml"))
+        );
+        assert_eq!(kind_from_content_type("application/octet-stream"), None);
+    }
+
+    #[test]
+    fn extension_maps_to_kind() {
+        assert_eq!(
+            kind_from_extension(Path::new("a.md")),
+            Some(ContentKind::Markdown)
+        );
+        assert_eq!(
+            kind_from_extension(Path::new("a.html")),
+            Some(ContentKind::Html)
+        );
+        assert_eq!(
+            kind_from_extension(Path::new("a.json")),
+            Some(ContentKind::Json)
+        );
+        assert_eq!(
+            kind_from_extension(Path::new("a.txt")),
+            Some(ContentKind::PlainText)
+        );
+        assert_eq!(
+            kind_from_extension(Path::new("a.rs")),
+            Some(ContentKind::Code("rust"))
+        );
+        assert_eq!(kind_from_extension(Path::new("a.unknownext")), None);
+        assert_eq!(kind_from_extension(Path::new("noext")), None);
+    }
+
+    #[test]
+    fn sniff_classifies_leading_bytes() {
+        assert_eq!(sniff_kind("<!doctype html><html></html>"), ContentKind::Html);
+        assert_eq!(sniff_kind("  <div>hi</div>"), ContentKind::Html);
+        assert_eq!(sniff_kind("<?xml version=\"1.0\"?>"), ContentKind::Code("xml"));
+        assert_eq!(sniff_kind("{\"a\": 1}"), ContentKind::Json);
+        assert_eq!(sniff_kind("[1, 2, 3]"), ContentKind::Json);
+        // JSON-looking but invalid → falls back to Markdown.
+        assert_eq!(sniff_kind("{not json"), ContentKind::Markdown);
+        assert_eq!(sniff_kind("# Heading\n\ntext"), ContentKind::Markdown);
+    }
+
+    #[test]
+    fn url_kind_prefers_specific_type_but_sniffs_generic() {
+        // Raw Markdown is commonly served as text/plain; must stay Markdown.
+        assert_eq!(
+            resolve_url_kind(Some("text/plain; charset=utf-8"), "https://x/readme", "# Hi"),
+            ContentKind::Markdown
+        );
+        // ...but a text/plain URL that ends in .txt is plain text.
+        assert_eq!(
+            resolve_url_kind(Some("text/plain"), "https://x/notes.txt", "hello"),
+            ContentKind::PlainText
+        );
+        // A specific content type wins outright.
+        assert_eq!(
+            resolve_url_kind(Some("application/json"), "https://x/api", "{}"),
+            ContentKind::Json
+        );
+        // No content type at all: fall back to URL extension.
+        assert_eq!(
+            resolve_url_kind(None, "https://x/data.json?v=2#top", "{}"),
+            ContentKind::Json
+        );
+    }
+
+    #[test]
+    fn renders_html_document_as_sanitized_body() {
+        let raw = "<html><head><title>My Page</title><style>body{color:red}</style></head><body><h1>Hello</h1><p>World</p><script>alert(1)</script></body></html>";
+        let result =
+            render_content(raw, ContentKind::Html, Path::new("."), "page.html", false).unwrap();
+        assert_eq!(result.title, "My Page");
+        assert!(result.html.contains("<h1>Hello</h1>"), "kept heading: {}", result.html);
+        assert!(result.html.contains("<p>World</p>"), "kept paragraph");
+        assert!(!result.html.contains("<script"), "script stripped");
+        assert!(!result.html.contains("alert(1)"), "script content stripped: {}", result.html);
+        assert!(!result.html.contains("color:red"), "style content stripped: {}", result.html);
+    }
+
+    #[test]
+    fn renders_json_with_structure_summary() {
+        let raw = r#"{"name": "x", "tags": [1, 2, 3], "meta": {"a": 1, "b": 2}}"#;
+        let result =
+            render_content(raw, ContentKind::Json, Path::new("data.json"), "data.json", true)
+                .unwrap();
+        assert!(
+            result.html.contains("JSON object") && result.html.contains("3 keys"),
+            "expected object summary, got: {}",
+            result.html
+        );
+        assert!(
+            result.html.contains("array (3 items)") && result.html.contains("object (2 keys)"),
+            "expected value labels, got: {}",
+            result.html
+        );
+        assert!(
+            result.html.contains("language-json"),
+            "expected json code block, got: {}",
+            result.html
+        );
+    }
+
+    #[test]
+    fn malformed_json_falls_back_to_code_block() {
+        let raw = "{ this is not valid json ";
+        let result =
+            render_content(raw, ContentKind::Json, Path::new("data.json"), "data.json", true)
+                .unwrap();
+        assert!(
+            result.html.contains("language-json") && !result.html.contains("JSON object"),
+            "expected raw code block fallback, got: {}",
+            result.html
+        );
+    }
+
+    #[test]
+    fn renders_plain_text_verbatim() {
+        let raw = "# not a heading\n* not a list\n<b>literal</b>";
+        let result =
+            render_content(raw, ContentKind::PlainText, Path::new("notes.txt"), "notes.txt", true)
+                .unwrap();
+        assert!(
+            result.html.contains(r#"<pre class="plain-text">"#),
+            "expected plain-text pre, got: {}",
+            result.html
+        );
+        assert!(!result.html.contains("<h1"), "hash not a heading: {}", result.html);
+        assert!(
+            result.html.contains("&lt;b&gt;literal&lt;/b&gt;"),
+            "literal html escaped: {}",
+            result.html
+        );
+        assert_eq!(result.title, "notes");
+    }
+
+    #[test]
+    fn renders_code_content_in_fenced_block() {
+        let raw = "SELECT * FROM t;";
+        let result =
+            render_content(raw, ContentKind::Code("sql"), Path::new("q.sql"), "q.sql", true)
+                .unwrap();
+        assert!(
+            result.html.contains("language-sql") && result.html.contains("SELECT"),
+            "expected sql code block, got: {}",
+            result.html
+        );
+    }
+
+    #[test]
+    fn code_content_with_embedded_backticks_stays_fenced() {
+        let raw = "run ```code``` here";
+        let result =
+            render_content(raw, ContentKind::Code(""), Path::new("a.txt"), "a.txt", true).unwrap();
+        assert!(
+            result.html.contains("```code```") || result.html.contains("code"),
+            "embedded backticks preserved, got: {}",
+            result.html
+        );
+        assert!(
+            result.html.contains("<pre"),
+            "content stays inside a code block, got: {}",
+            result.html
         );
     }
 }
