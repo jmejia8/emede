@@ -5,6 +5,7 @@ import {
   renderKeybindingHelp,
 } from "./keybindings.js";
 import { getScrollRoot } from "./scroll.js";
+import { DEFAULT_READING_WPM, computeDocStats, statsRows } from "./stats.js";
 import {
   applyViewState,
   flushViewState,
@@ -173,6 +174,8 @@ const tocPanel = document.getElementById("toc-panel");
 const tocToggle = document.getElementById("toc-toggle");
 const tocClose = document.getElementById("toc-close");
 const tocList = document.getElementById("toc-list");
+const docStats = document.getElementById("doc-stats");
+const docStatsBody = document.getElementById("doc-stats-body");
 const settingsPanel = document.getElementById("settings-panel");
 const settingsToggle = document.getElementById("settings-toggle");
 const printToggle = document.getElementById("print-toggle");
@@ -207,6 +210,8 @@ const settingKeybindings = document.getElementById("setting-keybindings");
 const settingGpu = document.getElementById("setting-gpu");
 const settingJustify = document.getElementById("setting-justify");
 const settingMermaid = document.getElementById("setting-mermaid");
+const settingReadingWpm = document.getElementById("setting-reading-wpm");
+const settingReadingWpmLabel = document.getElementById("setting-reading-wpm-label");
 const keybindingsHelp = document.getElementById("keybindings-help");
 const titlebarTitle = document.getElementById("titlebar-title");
 const winMinimize = document.getElementById("win-minimize");
@@ -517,8 +522,13 @@ function applySettings(settings) {
   settingGpu.checked = settings.gpu_acceleration;
   settingJustify.checked = settings.justify_text;
   settingMermaid.checked = settings.mermaid_diagrams ?? true;
+  const wpm = Number(settings.reading_wpm) > 0 ? Number(settings.reading_wpm) : DEFAULT_READING_WPM;
+  settingReadingWpm.value = wpm;
+  settingReadingWpmLabel.textContent = `${wpm} wpm`;
   shareUsername.value = settings.share_username ?? "";
   contentEl.classList.toggle("prose-justify", settings.justify_text);
+  // Read time is derived from the reading speed, so refresh it in place.
+  if (!docStats.hidden) buildStats();
   void applyWindowFrame(settings.window_frame);
   scheduleMermaid();
 }
@@ -537,6 +547,7 @@ function settingsFromForm() {
     keybindings: settingKeybindings.value,
     gpu_acceleration: settingGpu.checked,
     justify_text: settingJustify.checked,
+    reading_wpm: Number(settingReadingWpm.value) || DEFAULT_READING_WPM,
     mermaid_diagrams: settingMermaid.checked,
     share_username: shareUsername.value.trim(),
   };
@@ -553,6 +564,9 @@ function scheduleSave() {
 
 function clearToc() {
   tocList.replaceChildren();
+  docStatsBody.replaceChildren();
+  docStats.hidden = true;
+  currentDocSource = "";
   tocToggle.classList.add("hidden");
   toggleToc(false);
 }
@@ -856,6 +870,7 @@ async function applyDocument(result, { reload = false, openToken } = {}) {
   }
 
   contentEl.innerHTML = result.html;
+  currentDocSource = result.source ?? "";
   rewriteLocalImageSrcs(contentEl);
   wrapTables(contentEl);
   emptyStateEl.classList.add("hidden");
@@ -875,7 +890,7 @@ async function applyDocument(result, { reload = false, openToken } = {}) {
     });
   }
 
-  buildToc();
+  buildContentsPanel();
 
   if (reload) {
     scrollRoot.scrollTop = scrollTop;
@@ -1000,8 +1015,12 @@ function buildToc() {
 
   const headings = contentEl.querySelectorAll("h1, h2, h3, h4");
   if (headings.length === 0) {
-    tocToggle.classList.add("hidden");
-    toggleToc(false);
+    // No tree to draw, but the panel still carries the statistics section, so
+    // say why it is empty rather than leaving a blank slab.
+    const note = document.createElement("p");
+    note.className = "toc-empty";
+    note.textContent = "No headings in this document.";
+    tocList.appendChild(note);
     return;
   }
 
@@ -1012,7 +1031,75 @@ function buildToc() {
   }
 
   tocList.appendChild(tree);
-  tocToggle.classList.remove("hidden");
+}
+
+// ── Document statistics ───────────────────────────────────────────────────────
+
+/// Remembers whether the statistics section is expanded, across documents and
+/// across restarts.
+const STATS_OPEN_KEY = "emede:stats-open";
+
+/// Raw markdown of the open document, kept so the token estimate can be
+/// recomputed when the reading speed changes without re-reading the file.
+let currentDocSource = "";
+
+function readingWpm() {
+  const wpm = Number(currentSettings?.reading_wpm);
+  return wpm > 0 ? wpm : DEFAULT_READING_WPM;
+}
+
+function buildStats() {
+  if (!contentEl.textContent.trim()) {
+    docStats.hidden = true;
+    docStatsBody.replaceChildren();
+    return;
+  }
+
+  const stats = computeDocStats(contentEl, currentDocSource, readingWpm());
+  const nodes = [];
+
+  for (const row of statsRows(stats)) {
+    if (row === null) {
+      const divider = document.createElement("div");
+      divider.className = "doc-stats-divider";
+      nodes.push(divider);
+      continue;
+    }
+    const dt = document.createElement("dt");
+    dt.textContent = row.label;
+    const dd = document.createElement("dd");
+    dd.textContent = row.value;
+    if (row.title) {
+      dt.title = row.title;
+      dd.title = row.title;
+    }
+    nodes.push(dt, dd);
+  }
+
+  docStatsBody.replaceChildren(...nodes);
+  docStats.hidden = false;
+}
+
+/// Rebuild both halves of the contents panel for the current document. The
+/// panel is reachable whenever there is a document, since the statistics
+/// section is useful even when there are no headings to list.
+function buildContentsPanel() {
+  buildToc();
+  buildStats();
+  const hasDocument = Boolean(contentEl.textContent.trim());
+  tocToggle.classList.toggle("hidden", !hasDocument);
+  if (!hasDocument) toggleToc(false);
+}
+
+function initStats() {
+  docStats.open = localStorage.getItem(STATS_OPEN_KEY) === "true";
+  docStats.addEventListener("toggle", () => {
+    try {
+      localStorage.setItem(STATS_OPEN_KEY, String(docStats.open));
+    } catch {
+      // Private-mode or quota failures are not worth interrupting the reader.
+    }
+  });
 }
 
 function toggleTocSection(button) {
@@ -1706,6 +1793,7 @@ function toggleTocPanel() {
 }
 
 function wireToc() {
+  initStats();
   tocToggle.addEventListener("click", () => toggleToc(true));
   tocClose.addEventListener("click", () => toggleToc(false));
 
@@ -1804,6 +1892,11 @@ function wireSettings() {
 
   settingJustify.addEventListener("input", scheduleSave);
   settingMermaid.addEventListener("input", scheduleSave);
+
+  settingReadingWpm.addEventListener("input", () => {
+    settingReadingWpmLabel.textContent = `${Number(settingReadingWpm.value)} wpm`;
+    scheduleSave();
+  });
 
   settingGpu.addEventListener("change", async () => {
     scheduleSave();

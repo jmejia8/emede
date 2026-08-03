@@ -85,6 +85,13 @@
         <button id="toc-close" class="toc-close" aria-label="Close contents">&times;</button>
       </header>
       <nav id="toc-list" class="toc-body" aria-label="Table of contents"></nav>
+      <details id="doc-stats" class="doc-stats">
+        <summary class="doc-stats-summary">
+          <span class="toc-chevron doc-stats-chevron" aria-hidden="true"></span>
+          <span class="doc-stats-title">Statistics</span>
+        </summary>
+        <dl id="doc-stats-body" class="doc-stats-body"></dl>
+      </details>
     </aside>
 
     <button id="settings-toggle" class="reader-control settings-toggle" title="Settings (Ctrl+,)" aria-label="Settings">
@@ -221,6 +228,14 @@
           <label class="setting-toggle">
             <span class="setting-toggle-label">Mermaid diagrams</span>
             <input id="setting-mermaid" type="checkbox" role="switch" />
+          </label>
+
+          <label>
+            Reading speed
+            <span class="range-row">
+              <input id="setting-reading-wpm" type="range" min="100" max="600" step="1" />
+              <span id="setting-reading-wpm-label" class="range-value"></span>
+            </span>
           </label>
 
           <label class="setting-toggle">

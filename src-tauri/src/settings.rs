@@ -40,6 +40,11 @@ pub struct Settings {
     pub gpu_acceleration: bool,
     #[serde(default)]
     pub justify_text: bool,
+    /// Reading speed (words per minute) behind the read-time estimate in the
+    /// contents panel. Defaults to 238, the silent non-fiction rate from
+    /// Brysbaert's 2019 meta-analysis.
+    #[serde(default = "default_reading_wpm")]
+    pub reading_wpm: u32,
     #[serde(default = "default_mermaid_diagrams")]
     pub mermaid_diagrams: bool,
     /// Name shown as the host on LAN-shared pages. Defaults to the `USER`
@@ -62,6 +67,10 @@ fn default_gpu_acceleration() -> bool {
 
 fn default_mermaid_diagrams() -> bool {
     true
+}
+
+fn default_reading_wpm() -> u32 {
+    238
 }
 
 /// Default shared-host footer text, e.g. "Shared by jesus". Shown verbatim on
@@ -111,6 +120,7 @@ impl Default for Settings {
             keybindings: default_keybindings(),
             gpu_acceleration: default_gpu_acceleration(),
             justify_text: false,
+            reading_wpm: default_reading_wpm(),
             mermaid_diagrams: default_mermaid_diagrams(),
             share_username: default_share_username(),
         }

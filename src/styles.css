@@ -1238,6 +1238,103 @@ body:has(.settings-panel:not(.hidden)) .settings-toggle {
   opacity: 0.92;
 }
 
+.toc-empty {
+  margin: 0.5rem 1.25rem;
+  color: var(--color-muted);
+  font-style: italic;
+}
+
+/* Document statistics — a collapsible footer pinned below the heading tree. */
+.doc-stats {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-fg) 3%, transparent);
+  max-height: 55%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.doc-stats[hidden] {
+  display: none;
+}
+
+.doc-stats-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.8rem 1.25rem;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  color: var(--color-muted);
+  font-size: 0.95em;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  position: sticky;
+  top: 0;
+  background: color-mix(in srgb, var(--color-bg) 92%, var(--color-fg));
+}
+
+/* Safari/WebKit still needs the pseudo-element form to drop the marker. */
+.doc-stats-summary::-webkit-details-marker {
+  display: none;
+}
+
+.doc-stats-summary:hover {
+  color: var(--color-fg);
+}
+
+.doc-stats-summary:focus-visible {
+  outline: 2px solid var(--color-link);
+  outline-offset: -2px;
+}
+
+.doc-stats-chevron {
+  flex: 0 0 auto;
+  transform: rotate(-45deg) translate(-1px, -1px);
+}
+
+.doc-stats[open] .doc-stats-chevron {
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+
+.doc-stats-body {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.3rem 1rem;
+  margin: 0;
+  padding: 0 1.25rem 1rem;
+}
+
+.doc-stats-body dt {
+  color: var(--color-muted);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.doc-stats-body dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Separates the prose counts from the structural element counts. */
+.doc-stats-divider {
+  grid-column: 1 / -1;
+  height: 1px;
+  margin: 0.35rem 0;
+  background: var(--color-border);
+}
+
+.doc-stats-empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--color-muted);
+  font-style: italic;
+}
+
 .settings-panel {
   position: fixed;
   top: 0;

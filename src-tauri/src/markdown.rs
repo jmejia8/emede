@@ -17,6 +17,11 @@ pub struct RenderResult {
     pub html: String,
     pub title: String,
     pub path: String,
+    /// The undecorated source text as it was read from disk or the network,
+    /// before any preprocessing. The frontend estimates LLM token counts from
+    /// this rather than from `html`, since markdown syntax, front matter and
+    /// TeX delimiters are all tokens too. Filled in by [`render_content`].
+    pub source: String,
 }
 
 fn resolve_path(path: &str) -> PathBuf {
@@ -762,7 +767,7 @@ fn render_content(
     source_id: &str,
     local: bool,
 ) -> Result<RenderResult, String> {
-    match kind {
+    let mut result = match kind {
         ContentKind::Markdown => {
             let title = title_from_markdown(raw, source_path);
             render_markdown_core(raw, title, source_path, source_id, local)
@@ -771,7 +776,11 @@ fn render_content(
         ContentKind::Json => render_json_content(raw, source_path, source_id, local),
         ContentKind::PlainText => Ok(render_plain_text(raw, source_path, source_id)),
         ContentKind::Code(lang) => render_code_content(raw, lang, source_path, source_id, local),
-    }
+    }?;
+    // Every rendering path funnels through here, so this is the one place the
+    // untouched source is still in hand.
+    result.source = raw.to_string();
+    Ok(result)
 }
 
 /// Core Markdown → HTML pipeline shared by every entry point.
@@ -804,6 +813,7 @@ fn render_markdown_core(
         html,
         title,
         path: source_id.to_string(),
+        source: String::new(),
     })
 }
 
@@ -894,6 +904,7 @@ fn render_html_content(
         html,
         title,
         path: source_id.to_string(),
+        source: String::new(),
     })
 }
 
@@ -985,6 +996,7 @@ fn render_plain_text(raw: &str, source_path: &Path, source_id: &str) -> RenderRe
         html,
         title: fallback_title(source_path, source_id),
         path: source_id.to_string(),
+        source: String::new(),
     }
 }
 
