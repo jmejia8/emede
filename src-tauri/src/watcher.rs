@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::Mutex;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 /// How long to keep draining filesystem events after the first one before
 /// re-rendering, so a burst of writes (editors often write in several steps)
@@ -80,8 +80,16 @@ pub fn watch_document(
 
 /// Stop watching the current document, if any.
 #[tauri::command]
-pub fn unwatch_document(state: State<WatcherState>) -> Result<(), String> {
+pub fn unwatch_document(
+    state: State<WatcherState>,
+    baselines: State<crate::changes::BaselineState>,
+) -> Result<(), String> {
     let mut guard = state.0.lock().map_err(|e| e.to_string())?;
+    // Closing a document drops its snapshot baseline too, so reopening it
+    // starts from a clean page rather than against session-old content.
+    if let Some(active) = guard.as_ref() {
+        crate::changes::forget_baseline(&baselines, &active.path);
+    }
     *guard = None;
     Ok(())
 }
@@ -140,8 +148,9 @@ fn run_watch_loop(
 /// delay to ride out the brief window where an editor has removed the file but
 /// not yet written the replacement.
 fn emit_update(app: &AppHandle, render_path: &str) {
+    let baselines = app.state::<crate::changes::BaselineState>();
     for attempt in 0..2 {
-        match crate::markdown::render_markdown_inner(render_path) {
+        match crate::changes::render_markdown_tracked(render_path, &baselines, app) {
             Ok(result) => {
                 let _ = app.emit("document-updated", &result);
                 return;

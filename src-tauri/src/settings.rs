@@ -40,6 +40,11 @@ pub struct Settings {
     pub gpu_acceleration: bool,
     #[serde(default)]
     pub justify_text: bool,
+    /// Tint text that differs from the document's baseline (the committed
+    /// version for a git-tracked file, otherwise the content emede opened).
+    /// Off by default: it costs a second parse and a diff on every reload.
+    #[serde(default)]
+    pub change_highlighting: bool,
     /// Reading speed (words per minute) behind the read-time estimate in the
     /// contents panel. Defaults to 238, the silent non-fiction rate from
     /// Brysbaert's 2019 meta-analysis.
@@ -120,6 +125,7 @@ impl Default for Settings {
             keybindings: default_keybindings(),
             gpu_acceleration: default_gpu_acceleration(),
             justify_text: false,
+            change_highlighting: false,
             reading_wpm: default_reading_wpm(),
             mermaid_diagrams: default_mermaid_diagrams(),
             share_username: default_share_username(),

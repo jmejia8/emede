@@ -1,88 +1,14 @@
-function normalizeTextNodes(root) {
-  const elements = [root];
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+import {
+  normalizeTextNodes,
+  collectTextSegments,
+  resolveTextPosition,
+  wrapRange,
+  unwrap,
+} from "./textrange.js";
 
-  let element;
-  while ((element = walker.nextNode())) {
-    elements.push(element);
-  }
-
-  for (const parent of elements) {
-    let child = parent.firstChild;
-    while (child) {
-      if (child.nodeType === Node.TEXT_NODE) {
-        let next = child.nextSibling;
-        while (next && next.nodeType === Node.TEXT_NODE) {
-          child.textContent += next.textContent;
-          const remove = next;
-          next = next.nextSibling;
-          parent.removeChild(remove);
-        }
-      }
-      child = child.nextSibling;
-    }
-  }
-}
-
-function collectTextSegments(container, shouldSkipTextNode) {
-  const segments = [];
-  let text = '';
-
-  const walker = document.createTreeWalker(
-    container,
-    NodeFilter.SHOW_TEXT,
-    {
-      acceptNode: (node) => (
-        shouldSkipTextNode(node)
-          ? NodeFilter.FILTER_REJECT
-          : NodeFilter.FILTER_ACCEPT
-      ),
-    },
-  );
-
-  let node;
-  while ((node = walker.nextNode())) {
-    const content = node.textContent;
-    if (!content) continue;
-
-    const start = text.length;
-    text += content;
-    segments.push({ node, start, end: start + content.length });
-  }
-
-  return { text, segments };
-}
-
-function resolveTextPosition(segments, index) {
-  for (const segment of segments) {
-    const length = segment.node.textContent.length;
-    const segmentEnd = segment.start + length;
-    if (index < segmentEnd || (index === segmentEnd && segment === segments.at(-1))) {
-      return { node: segment.node, offset: index - segment.start };
-    }
-    if (index === segmentEnd) {
-      continue;
-    }
-  }
-
-  const last = segments.at(-1);
-  if (!last) return null;
-  return { node: last.node, offset: last.node.textContent.length };
-}
-
-function wrapRange(range) {
-  const mark = document.createElement('mark');
+/** Brands a wrapper as a find hit, so `stop()` can find it again. */
+function markFindHit(mark) {
   mark.setAttribute('data-find-match', '');
-
-  try {
-    range.surroundContents(mark);
-  } catch {
-    const fragment = range.extractContents();
-    mark.appendChild(fragment);
-    range.insertNode(mark);
-  }
-
-  return mark;
 }
 
 export class FindInPage {
@@ -94,10 +20,13 @@ export class FindInPage {
   }
 
   stop() {
+    // Unwrap rather than flatten to a text node: a hit that spans inline markup
+    // (`foo <em>bar</em>`) is wrapped via `wrapRange`'s `extractContents`
+    // fallback, so its children are real elements — and change highlighting may
+    // have its own marks nested inside.
     const marks = this.container.querySelectorAll('mark[data-find-match]');
     for (const mark of marks) {
-      const text = document.createTextNode(mark.textContent);
-      mark.parentNode.replaceChild(text, mark);
+      unwrap(mark);
     }
     normalizeTextNodes(this.container);
     this.matches = [];
@@ -152,7 +81,7 @@ export class FindInPage {
       const range = document.createRange();
       range.setStart(startPos.node, startPos.offset);
       range.setEnd(endPos.node, endPos.offset);
-      this.matches.unshift(wrapRange(range));
+      this.matches.unshift(wrapRange(range, markFindHit));
     }
 
     if (this.matches.length > 0) {

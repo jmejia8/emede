@@ -140,6 +140,14 @@ function handleAppShortcuts(event, actions) {
 
   if (event.key === "Escape") {
     let handled = false;
+    // The change popup takes Escape on its own rather than joining the
+    // close-everything sweep below: it is a transient thing opened over the
+    // document, and dismissing it should not also close the panels behind it.
+    if (actions.changePopup && !actions.changePopup.classList.contains("hidden")) {
+      actions.hideChangePopup();
+      event.preventDefault();
+      return true;
+    }
     if (actions.searchPanel && !actions.searchPanel.classList.contains("hidden")) {
       if (actions.toggleSearch) actions.toggleSearch(false);
       handled = true;

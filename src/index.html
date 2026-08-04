@@ -230,6 +230,16 @@
             <input id="setting-mermaid" type="checkbox" role="switch" />
           </label>
 
+          <label class="setting-toggle">
+            <span class="setting-toggle-label">Highlight changes</span>
+            <input id="setting-changes" type="checkbox" role="switch" />
+          </label>
+
+          <p class="setting-gpu-note">
+            Tints text that differs from the last commit, or from the version
+            emede opened when the file is not tracked by git.
+          </p>
+
           <label>
             Reading speed
             <span class="range-row">
@@ -299,6 +309,11 @@
           Stop Sharing
         </button>
       </div>
+    </div>
+
+    <div id="change-popup" class="change-popup hidden" role="dialog" aria-label="Previous wording" tabindex="-1">
+      <div id="change-popup-label" class="change-popup-label"></div>
+      <div id="change-popup-text" class="change-popup-text"></div>
     </div>
 
     <div id="context-menu" class="context-menu hidden" role="menu" aria-label="Actions" tabindex="-1">

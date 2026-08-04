@@ -2411,6 +2411,89 @@ mark[data-find-match].find-active {
   }
 }
 
+/* ── Change highlighting ──────────────────────────────────────────────────────
+ *
+ * The hues are fixed rather than drawn from a theme variable: green/amber/red
+ * carry the meaning here, and a theme that recolored them would be saying
+ * something wrong. Mixing each with `transparent` lets the theme's own
+ * background composite through, so they stay legible light and dark, and
+ * `color: inherit` keeps the theme's text color throughout.
+ *
+ * `padding: 0` is load-bearing, unlike the find highlight's `0 2px`: these
+ * marks are inserted before `applyDocument` restores the scroll position, so
+ * anything that reflows text would make a restored position drift.
+ */
+.emede-change {
+  background: color-mix(in srgb, #4caf50 22%, transparent);
+  color: inherit;
+  padding: 0;
+  border-radius: 2px;
+  cursor: help;
+}
+
+.emede-change--changed {
+  background: color-mix(in srgb, #ffa726 24%, transparent);
+}
+
+/* Zero-width: it marks a point between words, not a range. */
+.emede-change-deleted {
+  display: inline-block;
+  width: 0;
+  border-left: 2px solid color-mix(in srgb, #e53935 70%, var(--color-fg));
+  margin-left: -1px;
+  align-self: stretch;
+  height: 1em;
+  vertical-align: text-bottom;
+  cursor: help;
+}
+
+/* The fallback mark: a bar in the margin, used whenever a block changed
+ * wholesale or its token stream could not be verified against the DOM. */
+.emede-change-block {
+  box-shadow: -3px 0 0 color-mix(in srgb, #ffa726 55%, var(--color-fg));
+  cursor: help;
+}
+
+.emede-change-block--added {
+  box-shadow: -3px 0 0 color-mix(in srgb, #4caf50 55%, var(--color-fg));
+  cursor: auto;
+}
+
+.change-popup {
+  position: fixed;
+  top: 0;
+  left: 0;
+  /* Above the search bar (35), below the context menu (45) and modals (50). */
+  z-index: 44;
+  max-width: min(420px, 70vw);
+  padding: 0.5rem 0.7rem;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-fg) 8%, transparent),
+    0 16px 40px color-mix(in srgb, var(--color-fg) 16%, transparent);
+  font-family: system-ui, sans-serif;
+  font-size: 0.85rem;
+  color: var(--color-fg);
+}
+
+.change-popup-label {
+  margin-bottom: 0.2rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-muted);
+}
+
+.change-popup-text {
+  max-height: 40vh;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+
 @media print {
   *,
   *::before,
@@ -2450,6 +2533,7 @@ mark[data-find-match].find-active {
   #search-bar,
   #about-overlay,
   #context-menu,
+  #change-popup,
   #drag-overlay,
   #loading-state,
   #empty-state,
@@ -2460,6 +2544,21 @@ mark[data-find-match].find-active {
 
   .prose {
     opacity: 1 !important;
+  }
+
+  /* Diff markup is a reading aid, not part of the document. `--print` is
+   * suppressed in Rust as well; this covers the in-app Print dialog. */
+  .emede-change {
+    background: none !important;
+  }
+
+  .emede-change-deleted {
+    display: none !important;
+  }
+
+  .emede-change-block,
+  .emede-change-block--added {
+    box-shadow: none !important;
   }
 
   h1, h2, h3, h4, h5, h6 {

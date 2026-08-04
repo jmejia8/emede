@@ -1,3 +1,5 @@
+mod baseline;
+mod changes;
 pub mod cli;
 mod markdown;
 mod persist;
@@ -18,7 +20,10 @@ struct StartupFile(Mutex<Option<String>>);
 /// When present, this invocation is a headless PDF export: the value is the
 /// output path. The frontend polls it via `get_print_target` to switch into the
 /// print-and-exit flow instead of revealing a window.
-struct PrintTarget(Mutex<Option<String>>);
+/// `pub(crate)` so change highlighting can tell it is running inside a PDF
+/// export and stay out of the output. `get_print_target` never clears it, so
+/// reading it at any point during the process is meaningful.
+pub(crate) struct PrintTarget(Mutex<Option<String>>);
 
 pub use cli::Mode;
 
@@ -269,9 +274,11 @@ fn run_inner(files: Vec<String>, print_target: Option<String>) {
         .manage(PrintTarget(Mutex::new(print_target)))
         .manage(share::ShareState(Mutex::new(share::ShareStateInner::default())))
         .manage(watcher::WatcherState::default())
+        .manage(changes::BaselineState::default())
         .invoke_handler(tauri::generate_handler![
             markdown::render_markdown,
             markdown::render_markdown_url,
+            changes::get_document_changes,
             settings::get_settings,
             settings::set_settings,
             settings::read_color_template,

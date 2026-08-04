@@ -1,4 +1,5 @@
 import { FindInPage } from "./find.js";
+import { applyChanges, clearChanges } from "./changes.js";
 import {
   createKeybindingController,
   normalizeKeybindingMode,
@@ -210,6 +211,7 @@ const settingKeybindings = document.getElementById("setting-keybindings");
 const settingGpu = document.getElementById("setting-gpu");
 const settingJustify = document.getElementById("setting-justify");
 const settingMermaid = document.getElementById("setting-mermaid");
+const settingChanges = document.getElementById("setting-changes");
 const settingReadingWpm = document.getElementById("setting-reading-wpm");
 const settingReadingWpmLabel = document.getElementById("setting-reading-wpm-label");
 const keybindingsHelp = document.getElementById("keybindings-help");
@@ -234,6 +236,9 @@ const missingOpenBtn = document.getElementById("missing-open-btn");
 const errorRetryBtn = document.getElementById("error-retry-btn");
 const errorOpenBtn = document.getElementById("error-open-btn");
 const dragOverlay = document.getElementById("drag-overlay");
+const changePopup = document.getElementById("change-popup");
+const changePopupLabel = document.getElementById("change-popup-label");
+const changePopupText = document.getElementById("change-popup-text");
 
 let currentSettings = null;
 let currentDocPath = null;
@@ -522,6 +527,7 @@ function applySettings(settings) {
   settingGpu.checked = settings.gpu_acceleration;
   settingJustify.checked = settings.justify_text;
   settingMermaid.checked = settings.mermaid_diagrams ?? true;
+  settingChanges.checked = settings.change_highlighting ?? false;
   const wpm = Number(settings.reading_wpm) > 0 ? Number(settings.reading_wpm) : DEFAULT_READING_WPM;
   settingReadingWpm.value = wpm;
   settingReadingWpmLabel.textContent = `${wpm} wpm`;
@@ -549,6 +555,7 @@ function settingsFromForm() {
     justify_text: settingJustify.checked,
     reading_wpm: Number(settingReadingWpm.value) || DEFAULT_READING_WPM,
     mermaid_diagrams: settingMermaid.checked,
+    change_highlighting: settingChanges.checked,
     share_username: shareUsername.value.trim(),
   };
 }
@@ -567,6 +574,7 @@ function clearToc() {
   docStatsBody.replaceChildren();
   docStats.hidden = true;
   currentDocSource = "";
+  currentDocChanges = null;
   tocToggle.classList.add("hidden");
   toggleToc(false);
 }
@@ -871,8 +879,12 @@ async function applyDocument(result, { reload = false, openToken } = {}) {
 
   contentEl.innerHTML = result.html;
   currentDocSource = result.source ?? "";
+  currentDocChanges = result.changes ?? null;
   rewriteLocalImageSrcs(contentEl);
   wrapTables(contentEl);
+  // Before the contents panel is built and before math and mermaid replace
+  // their regions, while the DOM still matches what the backend diffed.
+  applyChanges(contentEl, currentDocChanges);
   emptyStateEl.classList.add("hidden");
   missingStateEl.classList.add("hidden");
   errorStateEl.classList.add("hidden");
@@ -902,6 +914,53 @@ async function applyDocument(result, { reload = false, openToken } = {}) {
   } else {
     scheduleMermaid();
     scheduleTypesetMath();
+  }
+}
+
+/**
+ * Re-render the open document in place, keeping the scroll position.
+ *
+ * Used when a setting changes something the *backend* computes — change
+ * highlighting is diffed in Rust during rendering, so flipping it on cannot be
+ * done from the DOM alone. A no-op for URLs and the empty state.
+ */
+async function reloadCurrentDocument() {
+  if (!currentDocPath || lastOpenTarget?.kind === "url") return;
+  try {
+    const result = await invoke("render_markdown", { path: currentDocPath });
+    if (result?.path === currentDocPath) {
+      await applyDocument(result, { reload: true });
+    }
+  } catch (err) {
+    console.warn("reload failed", err);
+  }
+}
+
+/**
+ * Bring the change marks back in line with the baseline, cheaply.
+ *
+ * Asks the backend to redo just the diff. If the answer is what is already on
+ * screen — the overwhelmingly common case — nothing happens at all. Only when
+ * the baseline has actually moved does this fall back to a full re-render, and
+ * a re-render is required rather than merely convenient: `applyChanges` reads
+ * a block's text out of the DOM, and once MathJax has replaced `$…$` with
+ * `<mjx-container>` that text no longer matches what the backend diffed. Marks
+ * can only be placed on a freshly rendered document.
+ */
+async function refreshChanges() {
+  if (!currentSettings?.change_highlighting) return;
+  if (!currentDocPath || lastOpenTarget?.kind === "url") return;
+
+  try {
+    const update = await invoke("get_document_changes", { path: currentDocPath });
+    // The spans are keyed to one particular render's `data-sourcepos` values,
+    // so a document whose source has moved on is not ours to mark — and the
+    // watcher is already on its way with a full re-render anyway.
+    if (!update || update.source !== currentDocSource) return;
+    if (JSON.stringify(update.changes) === JSON.stringify(currentDocChanges)) return;
+    await reloadCurrentDocument();
+  } catch (err) {
+    console.warn("Refreshing change highlights failed", err);
   }
 }
 
@@ -1042,6 +1101,9 @@ const STATS_OPEN_KEY = "emede:stats-open";
 /// Raw markdown of the open document, kept so the token estimate can be
 /// recomputed when the reading speed changes without re-reading the file.
 let currentDocSource = "";
+/// The backend's last diff for the open document, kept so the change marks can
+/// be rebuilt after find-in-page has torn through the same text nodes.
+let currentDocChanges = null;
 
 function readingWpm() {
   const wpm = Number(currentSettings?.reading_wpm);
@@ -1557,23 +1619,89 @@ function setActiveContextItem(item) {
   }
 }
 
-function showContextMenuAt(x, y) {
-  contextMenuPrevFocus = document.activeElement;
-  contextMenu.classList.remove("hidden");
-
-  // Measure after it's laid out, then clamp so it stays fully on-screen.
-  const { width, height } = contextMenu.getBoundingClientRect();
+/**
+ * Anchor a fixed-position element at (x, y), flipping it back over the anchor
+ * rather than letting it hang off the edge. Must be called while the element is
+ * visible, since it measures the laid-out box.
+ */
+function positionFloating(el, x, y) {
+  const { width, height } = el.getBoundingClientRect();
   const margin = 8;
   let left = x;
   let top = y;
   if (left + width > window.innerWidth - margin) left = x - width;
   if (top + height > window.innerHeight - margin) top = y - height;
-  left = Math.max(margin, left);
-  top = Math.max(margin, top);
-  contextMenu.style.left = `${left}px`;
-  contextMenu.style.top = `${top}px`;
+  el.style.left = `${Math.max(margin, left)}px`;
+  el.style.top = `${Math.max(margin, top)}px`;
+}
 
+function showContextMenuAt(x, y) {
+  contextMenuPrevFocus = document.activeElement;
+  contextMenu.classList.remove("hidden");
+  positionFloating(contextMenu, x, y);
   setActiveContextItem(contextMenuEnabledItems()[0] || null);
+}
+
+function isChangePopupOpen() {
+  return !changePopup.classList.contains("hidden");
+}
+
+function hideChangePopup() {
+  changePopup.classList.add("hidden");
+}
+
+function showChangePopupAt(x, y, label, text) {
+  changePopupLabel.textContent = label;
+  changePopupText.textContent = text;
+  changePopup.classList.remove("hidden");
+  positionFloating(changePopup, x, y);
+}
+
+/// The mark kinds that can explain themselves, most specific first: a caret and
+/// an inline mark both sit inside a block that may itself be marked.
+const CHANGE_MARK_SELECTOR = ".emede-change, .emede-change-deleted, .emede-change-block";
+
+function wireChangePopup() {
+  contentEl.addEventListener("click", (event) => {
+    const mark = event.target.closest(CHANGE_MARK_SELECTOR);
+    if (!mark || !contentEl.contains(mark)) {
+      hideChangePopup();
+      return;
+    }
+    // A click that ends a text selection is not a request for a popup.
+    if (window.getSelection()?.toString().trim()) return;
+
+    const previous = mark.dataset.previous;
+    if (!previous) {
+      // An addition has no previous wording to show — nothing to say.
+      hideChangePopup();
+      return;
+    }
+
+    const label = mark.classList.contains("emede-change-deleted")
+      ? "Deleted"
+      : "Previously";
+    showChangePopupAt(event.clientX, event.clientY, label, previous);
+    event.stopPropagation();
+  });
+
+  document.addEventListener("pointerdown", (event) => {
+    if (isChangePopupOpen() && !changePopup.contains(event.target)) {
+      hideChangePopup();
+    }
+  });
+  window.addEventListener("blur", hideChangePopup);
+  window.addEventListener("scroll", hideChangePopup, true);
+  window.addEventListener("resize", hideChangePopup);
+
+  // Committing in a terminal moves the baseline without touching the file, so
+  // the watcher never fires and the highlights go stale. Refresh them on the way
+  // back into the window — marks only, so the typeset math and rendered diagrams
+  // already on screen are left alone. (`watcher.rs` watches the document's
+  // directory, not `.git/`; widening that is a bigger change than this is worth.)
+  window.addEventListener("focus", () => {
+    void refreshChanges();
+  });
 }
 
 function hideContextMenu() {
@@ -1781,6 +1909,11 @@ function toggleSearch(open) {
     setTimeout(() => {
       searchBar.classList.add("hidden");
       searchBar.classList.remove("search-bar--closing");
+      // No need to rebuild the change marks here: `stop()` unwraps its own
+      // marks rather than flattening them to text, so a change mark nested in
+      // (or split by) a search hit survives intact. Re-applying would in fact
+      // be wrong — by now MathJax has replaced `$…$` with `<mjx-container>`,
+      // so every block holding math would fail verification and degrade.
       if (findInPage) findInPage.stop();
       searchInput.value = "";
       searchCounter.textContent = "";
@@ -1892,6 +2025,24 @@ function wireSettings() {
 
   settingJustify.addEventListener("input", scheduleSave);
   settingMermaid.addEventListener("input", scheduleSave);
+
+  settingChanges.addEventListener("input", () => {
+    // Turning it off clears immediately — the marks are already in the DOM.
+    if (!settingChanges.checked) {
+      clearChanges(contentEl);
+      currentDocChanges = null;
+    }
+    // Turning it on needs a re-render, since the diff is computed in Rust. Save
+    // first rather than through the debounce: the backend reads the setting off
+    // disk when it renders, so a re-render requested before the save landed
+    // would come back with no changes at all.
+    void (async () => {
+      const settings = settingsFromForm();
+      applySettings(settings);
+      await invoke("set_settings", { settings });
+      if (settingChanges.checked) await reloadCurrentDocument();
+    })().catch((err) => console.warn("Applying change-highlighting setting failed", err));
+  });
 
   settingReadingWpm.addEventListener("input", () => {
     settingReadingWpmLabel.textContent = `${Number(settingReadingWpm.value)} wpm`;
@@ -2092,6 +2243,8 @@ function wireKeybindings() {
     tocPanel,
     aboutOverlay,
     searchPanel: searchBar,
+    changePopup,
+    hideChangePopup,
   });
 }
 
@@ -2099,6 +2252,7 @@ async function boot() {
   populateFontOptions();
   await loadBundledColorTemplates();
   wireExternalLinks();
+  wireChangePopup();
   wireToc();
   wireTitlebar();
   printToggle.addEventListener("click", () => window.print());

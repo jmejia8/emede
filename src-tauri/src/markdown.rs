@@ -22,6 +22,11 @@ pub struct RenderResult {
     /// this rather than from `html`, since markdown syntax, front matter and
     /// TeX delimiters are all tokens too. Filled in by [`render_content`].
     pub source: String,
+    /// Blocks that differ from this document's baseline, for the frontend to
+    /// mark up. `None` — and absent from the JSON — whenever change
+    /// highlighting is off, which is the default and every headless path.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub changes: Option<Vec<crate::changes::BlockChange>>,
 }
 
 fn resolve_path(path: &str) -> PathBuf {
@@ -123,7 +128,11 @@ fn rewrite_html_image_srcs(html: &str, markdown_path: &Path) -> String {
 fn sanitize_html(html: &str) -> String {
     ammonia::Builder::default()
         .add_tags(["input"])
-        .add_generic_attributes(["class", "id", "align"])
+        // `data-sourcepos` is the key change highlighting uses to find a
+        // diffed block's element; without it here ammonia strips every key and
+        // the feature silently produces nothing. Listed individually rather
+        // than opening the whole `data-` namespace via a prefix rule.
+        .add_generic_attributes(["class", "id", "align", "data-sourcepos"])
         .add_tag_attributes("input", ["type", "checked", "disabled"])
         // Drop `<script>`/`<style>` *contents* too — otherwise Ammonia keeps the
         // inner text of a disallowed tag, leaking script/CSS source as visible
@@ -300,6 +309,17 @@ fn strip_inline_markdown(text: &str) -> String {
     let mut out = String::new();
     collect(root, &mut out);
     out.trim().to_string()
+}
+
+/// The full source-level preprocessing chain run before comrak sees a document.
+///
+/// Change highlighting parses the baseline separately from the render, and the
+/// two must agree byte-for-byte on what comrak was given — otherwise sourcepos
+/// keys and block texts are computed against different documents.
+pub(crate) fn preprocess_all(content: &str) -> String {
+    let with_front_matter = preprocess_front_matter(content);
+    let with_fences = preprocess_math_fences(&with_front_matter);
+    preprocess_tex_delimiters(&with_fences)
 }
 
 /// Wrap YAML/metadata preamble (`---` or `~~~`) in a fenced code block.
@@ -537,9 +557,18 @@ fn preprocess_tex_delimiters(src: &str) -> String {
     out
 }
 
-fn comrak_options_for(markdown_path: &Path) -> Options<'static> {
+/// Comrak options, optionally emitting `data-sourcepos` attributes.
+///
+/// Sourcepos is what lets change highlighting key a diffed block back to its
+/// rendered element, but comrak decorates *inline* nodes too (`<em
+/// data-sourcepos=…>`), which roughly doubles the attribute count in prose. So
+/// it stays off for everything that produces output a user keeps — `--share`,
+/// `--export`, URL rendering — and is only switched on for the in-app render
+/// that a diff is actually computed for.
+pub(crate) fn comrak_options_ext(markdown_path: &Path, sourcepos: bool) -> Options<'static> {
     let doc_path = markdown_path.to_path_buf();
     let mut options = Options::default();
+    options.render.sourcepos = sourcepos;
     options.extension.math_dollars = true;
     options.extension.math_code = true;
     options.extension.table = true;
@@ -574,7 +603,7 @@ create_formatter!(MathJaxFormatter, {
 /// arbitrary paths and URLs from its home screen, so the bytes are not always
 /// Markdown; this drives the normalization in [`render_content`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ContentKind {
+pub(crate) enum ContentKind {
     Markdown,
     Html,
     Json,
@@ -719,7 +748,26 @@ fn decode_text(bytes: Vec<u8>) -> Option<String> {
     Some(text)
 }
 
-pub fn render_markdown_inner(path: &str) -> Result<RenderResult, String> {
+/// A local document read off disk and classified, before rendering.
+pub(crate) struct LocalDocument {
+    pub resolved: PathBuf,
+    pub raw: String,
+    pub kind: ContentKind,
+    pub source_id: String,
+}
+
+impl LocalDocument {
+    /// True when this document goes through the Markdown pipeline verbatim.
+    /// The other kinds render *synthesized* markdown (a JSON summary, a fenced
+    /// code block), so a diff of their raw source would not line up with the
+    /// blocks comrak produced — change highlighting stays out of them.
+    pub fn is_markdown(&self) -> bool {
+        matches!(self.kind, ContentKind::Markdown)
+    }
+}
+
+/// Read and classify a local document, applying the size and encoding limits.
+pub(crate) fn read_local_document(path: &str) -> Result<LocalDocument, String> {
     let resolved = resolve_path(path);
     if !resolved.exists() {
         return Err(format!("File not found: {}", resolved.display()));
@@ -747,12 +795,48 @@ pub fn render_markdown_inner(path: &str) -> Result<RenderResult, String> {
     })?;
     let kind = resolve_local_kind(&resolved, &raw);
     let source_id = resolved.to_string_lossy().into_owned();
-    render_content(&raw, kind, &resolved, &source_id, true)
+    Ok(LocalDocument {
+        resolved,
+        raw,
+        kind,
+        source_id,
+    })
+}
+
+pub fn render_markdown_inner(path: &str) -> Result<RenderResult, String> {
+    render_markdown_inner_opts(path, false)
+}
+
+/// Render a local document, optionally emitting `data-sourcepos` keys.
+pub(crate) fn render_markdown_inner_opts(
+    path: &str,
+    sourcepos: bool,
+) -> Result<RenderResult, String> {
+    let doc = read_local_document(path)?;
+    render_local_document(&doc, sourcepos)
+}
+
+pub(crate) fn render_local_document(
+    doc: &LocalDocument,
+    sourcepos: bool,
+) -> Result<RenderResult, String> {
+    render_content_opts(
+        &doc.raw,
+        doc.kind,
+        &doc.resolved,
+        &doc.source_id,
+        true,
+        sourcepos,
+    )
 }
 
 #[tauri::command]
-pub fn render_markdown(path: String) -> Result<RenderResult, String> {
-    let result = render_markdown_inner(&path)?;
+pub fn render_markdown(
+    path: String,
+    baselines: tauri::State<'_, crate::changes::BaselineState>,
+    app: tauri::AppHandle,
+) -> Result<RenderResult, String> {
+    let result = crate::changes::render_markdown_tracked(&path, &baselines, &app)?;
     crate::recents::add_recent(&result.path, &result.title);
     Ok(result)
 }
@@ -767,10 +851,21 @@ fn render_content(
     source_id: &str,
     local: bool,
 ) -> Result<RenderResult, String> {
+    render_content_opts(raw, kind, source_path, source_id, local, false)
+}
+
+fn render_content_opts(
+    raw: &str,
+    kind: ContentKind,
+    source_path: &Path,
+    source_id: &str,
+    local: bool,
+    sourcepos: bool,
+) -> Result<RenderResult, String> {
     let mut result = match kind {
         ContentKind::Markdown => {
             let title = title_from_markdown(raw, source_path);
-            render_markdown_core(raw, title, source_path, source_id, local)
+            render_markdown_core_opts(raw, title, source_path, source_id, local, sourcepos)
         }
         ContentKind::Html => render_html_content(raw, source_path, source_id, local),
         ContentKind::Json => render_json_content(raw, source_path, source_id, local),
@@ -791,12 +886,28 @@ fn render_markdown_core(
     source_id: &str,
     rewrite_local_images: bool,
 ) -> Result<RenderResult, String> {
-    let with_front_matter = preprocess_front_matter(content);
-    let with_fences = preprocess_math_fences(&with_front_matter);
-    let preprocessed = preprocess_tex_delimiters(&with_fences);
+    render_markdown_core_opts(
+        content,
+        title,
+        source_path,
+        source_id,
+        rewrite_local_images,
+        false,
+    )
+}
+
+fn render_markdown_core_opts(
+    content: &str,
+    title: String,
+    source_path: &Path,
+    source_id: &str,
+    rewrite_local_images: bool,
+    sourcepos: bool,
+) -> Result<RenderResult, String> {
+    let preprocessed = preprocess_all(content);
 
     let arena = Arena::new();
-    let options = comrak_options_for(source_path);
+    let options = comrak_options_ext(source_path, sourcepos);
     let root = parse_document(&arena, &preprocessed, &options);
 
     let mut html = String::new();
@@ -814,6 +925,7 @@ fn render_markdown_core(
         title,
         path: source_id.to_string(),
         source: String::new(),
+        changes: None,
     })
 }
 
@@ -905,6 +1017,7 @@ fn render_html_content(
         title,
         path: source_id.to_string(),
         source: String::new(),
+        changes: None,
     })
 }
 
@@ -997,6 +1110,7 @@ fn render_plain_text(raw: &str, source_path: &Path, source_id: &str) -> RenderRe
         title: fallback_title(source_path, source_id),
         path: source_id.to_string(),
         source: String::new(),
+        changes: None,
     }
 }
 
@@ -1229,7 +1343,7 @@ mod tests {
         let src = "```bash\n# development\nnpm install\n```\n";
         let preprocessed = preprocess_tex_delimiters(&preprocess_math_fences(src));
         let arena = Arena::new();
-        let options = comrak_options_for(Path::new("test.md"));
+        let options = comrak_options_ext(Path::new("test.md"), false);
         let root = parse_document(&arena, &preprocessed, &options);
         let mut html = String::new();
         MathJaxFormatter::format_document(root, &options, &mut html).unwrap();
@@ -1249,7 +1363,7 @@ mod tests {
             let src = "# Hello World\n\n## Section Two\n";
             let preprocessed = preprocess_tex_delimiters(&preprocess_math_fences(src));
             let arena = Arena::new();
-            let options = comrak_options_for(Path::new("test.md"));
+            let options = comrak_options_ext(Path::new("test.md"), false);
             let root = parse_document(&arena, &preprocessed, &options);
             let mut html = String::new();
             MathJaxFormatter::format_document(root, &options, &mut html).unwrap();
@@ -1271,7 +1385,7 @@ mod tests {
         let preprocessed =
             preprocess_tex_delimiters(&preprocess_math_fences(&preprocess_front_matter(src)));
         let arena = Arena::new();
-        let options = comrak_options_for(Path::new("test.md"));
+        let options = comrak_options_ext(Path::new("test.md"), false);
         let root = parse_document(&arena, &preprocessed, &options);
         let mut html = String::new();
         MathJaxFormatter::format_document(root, &options, &mut html).unwrap();
@@ -1352,7 +1466,7 @@ mod tests {
         let preprocessed = preprocess_tex_delimiters(&preprocess_math_fences(src));
         assert!(preprocessed.contains("```javascript\nlisten(\"document-updated\");\n```"));
         let arena = Arena::new();
-        let options = comrak_options_for(Path::new("test.md"));
+        let options = comrak_options_ext(Path::new("test.md"), false);
         let root = parse_document(&arena, &preprocessed, &options);
         let mut html = String::new();
         MathJaxFormatter::format_document(root, &options, &mut html).unwrap();
@@ -1372,7 +1486,7 @@ mod tests {
         let preprocessed = preprocess_tex_delimiters(&preprocess_math_fences(src));
         assert!(preprocessed.contains("```bash\nnpm test\n```"));
         let arena = Arena::new();
-        let options = comrak_options_for(Path::new("test.md"));
+        let options = comrak_options_ext(Path::new("test.md"), false);
         let root = parse_document(&arena, &preprocessed, &options);
         let mut html = String::new();
         MathJaxFormatter::format_document(root, &options, &mut html).unwrap();
@@ -1430,7 +1544,7 @@ mod tests {
             let src = "Inline $E=mc^2$ and display:\n\n$$x^2$$\n";
             let preprocessed = preprocess_tex_delimiters(&preprocess_math_fences(src));
             let arena = Arena::new();
-            let options = comrak_options_for(Path::new("test.md"));
+            let options = comrak_options_ext(Path::new("test.md"), false);
             let root = parse_document(&arena, &preprocessed, &options);
             let mut html = String::new();
             MathJaxFormatter::format_document(root, &options, &mut html).unwrap();
@@ -1446,7 +1560,7 @@ mod tests {
             let src = "![logo](images/logo.png)\n";
             let preprocessed = preprocess_tex_delimiters(&preprocess_math_fences(src));
             let arena = Arena::new();
-            let options = comrak_options_for(Path::new("/home/asdf/foo/file.md"));
+            let options = comrak_options_ext(Path::new("/home/asdf/foo/file.md"), false);
             let root = parse_document(&arena, &preprocessed, &options);
             let mut html = String::new();
             MathJaxFormatter::format_document(root, &options, &mut html).unwrap();
@@ -1543,11 +1657,62 @@ mod tests {
     }
 
     #[test]
+    fn sanitize_keeps_the_sourcepos_key() {
+        // Without this attribute on ammonia's allow-list, change highlighting
+        // has nothing to address and silently produces no marks at all.
+        let clean = sanitize_html(r#"<p data-sourcepos="3:1-3:9">text</p>"#);
+        assert!(clean.contains(r#"data-sourcepos="3:1-3:9""#), "{clean}");
+    }
+
+    #[test]
+    fn sanitize_still_strips_other_data_attributes() {
+        // `data-sourcepos` is allow-listed individually; the `data-` namespace
+        // as a whole stays closed.
+        let clean = sanitize_html(r#"<p data-evil="x">text</p>"#);
+        assert!(!clean.contains("data-evil"), "{clean}");
+    }
+
+    #[test]
+    fn sourcepos_is_off_unless_asked_for() {
+        // The guard for `--share`, `--export` and URL rendering: comrak
+        // decorates inline nodes too, and that bloat must not leak into output
+        // a user keeps.
+        let src = "# Title\n\nSome *emphasized* prose.\n";
+        let plain = render_markdown_core(src, "t".into(), Path::new("test.md"), "test.md", false)
+            .unwrap()
+            .html;
+        assert!(!plain.contains("data-sourcepos"), "{plain}");
+
+        let keyed = render_markdown_core_opts(
+            src,
+            "t".into(),
+            Path::new("test.md"),
+            "test.md",
+            false,
+            true,
+        )
+        .unwrap()
+        .html;
+        assert!(keyed.contains("data-sourcepos"), "{keyed}");
+    }
+
+    #[test]
+    fn render_results_carry_no_changes_by_default() {
+        let result =
+            render_content("hello\n", ContentKind::Markdown, Path::new("a.md"), "a.md", false)
+                .unwrap();
+        assert!(result.changes.is_none());
+        // `skip_serializing_if` keeps the key out of the payload entirely.
+        let json = serde_json::to_string(&result).unwrap();
+        assert!(!json.contains("changes"), "{json}");
+    }
+
+    #[test]
     fn renders_tasklist_with_classes() {
         let html = {
             let src = "- [ ] Todo\n- [x] Done\n";
             let arena = Arena::new();
-            let options = comrak_options_for(Path::new("test.md"));
+            let options = comrak_options_ext(Path::new("test.md"), false);
             let root = parse_document(&arena, src, &options);
             let mut html = String::new();
             MathJaxFormatter::format_document(root, &options, &mut html).unwrap();
