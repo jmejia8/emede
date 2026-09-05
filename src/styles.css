@@ -395,7 +395,8 @@ body.frame-emede .prose :is(h1, h2, h3, h4, h5, h6) {
   color: var(--color-muted);
 }
 
-.empty-state {
+.empty-state,
+.blank-state {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -408,7 +409,8 @@ body.frame-emede .prose :is(h1, h2, h3, h4, h5, h6) {
 
 /* In the custom frame, #reader has a definite height, so filling its content
    box centers the column exactly (and never overflows the reader padding). */
-body.frame-emede .empty-state {
+body.frame-emede .empty-state,
+body.frame-emede .blank-state {
   min-height: 100%;
 }
 
@@ -899,6 +901,67 @@ body.frame-emede .empty-state {
 
 .missing-hint {
   margin: 0;
+}
+
+/* ── blank document ────────────────────────────────────────────────────
+   A file that renders to nothing (empty, only front matter, only comments)
+   would otherwise leave the reader as a bare background with no sign that
+   anything was opened at all. */
+
+.blank-state {
+  padding: 0 clamp(1.5rem, 5vw, 4rem);
+}
+
+.blank-icon {
+  display: block;
+  width: 5.5rem;
+  height: 5.5rem;
+  margin: 0 auto 1.5rem;
+  color: var(--color-muted);
+  opacity: 0.75;
+}
+
+/* Dashed rules stand in for the text that is not there. */
+.blank-icon-lines {
+  stroke-dasharray: 5 5;
+  opacity: 0.5;
+}
+
+.blank-eyebrow {
+  margin: 0 0 0.75rem;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.blank-title {
+  margin: 0 0 1rem;
+  color: var(--color-fg);
+  font-size: clamp(1.5rem, 4vw, 2.4rem);
+  line-height: 1.1;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.blank-file {
+  margin: 0 auto 1rem;
+  max-width: 46ch;
+  padding: 0.55rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-fg) 4%, transparent);
+  color: var(--color-fg);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.blank-hint {
+  margin: 0;
+  max-width: 46ch;
+  font-size: 0.9rem;
+  line-height: 1.5;
 }
 
 .error-state {
@@ -2537,6 +2600,7 @@ mark[data-find-match].find-active {
   #drag-overlay,
   #loading-state,
   #empty-state,
+  #blank-state,
   #missing-state,
   #error-state {
     display: none !important;

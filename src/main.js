@@ -166,6 +166,9 @@ const FONT_PRESETS = {
 
 const contentEl = document.getElementById("content");
 const emptyStateEl = document.getElementById("empty-state");
+const blankStateEl = document.getElementById("blank-state");
+const blankFileEl = document.getElementById("blank-file");
+const blankHintEl = document.getElementById("blank-hint");
 const errorStateEl = document.getElementById("error-state");
 const errorMessageEl = document.getElementById("error-message");
 const loadingStateEl = document.getElementById("loading-state");
@@ -587,6 +590,7 @@ function setReaderState(state, message = "") {
   contentEl.classList.remove("visible");
   loadingStateEl.classList.toggle("hidden", state !== "loading");
   emptyStateEl.classList.toggle("hidden", state !== "empty");
+  blankStateEl.classList.add("hidden");
   missingStateEl.classList.toggle("hidden", state !== "missing");
   errorStateEl.classList.toggle("hidden", state !== "error");
 
@@ -866,6 +870,36 @@ async function restoreSavedViewState(viewState, openToken) {
   }
 }
 
+/**
+ * Does this render put anything on screen?
+ *
+ * An empty file is the obvious case, but a document holding only front matter,
+ * only HTML comments, or only whitespace renders to nothing just the same —
+ * and the reader is a full-bleed background, so all of them look like the app
+ * failed to open the file. Text alone is not the test: an image, a rule or a
+ * table is a perfectly good document with no text in it.
+ */
+function isRenderedBlank(el) {
+  if (el.textContent.trim()) return false;
+  return !el.querySelector("img, svg, picture, video, canvas, iframe, table, hr, input");
+}
+
+// Shown in place of a document that rendered to nothing. The path stays open
+// and watched, so writing to the file swaps this out for the real thing.
+function updateBlankState(result) {
+  const blank = isRenderedBlank(contentEl);
+  blankStateEl.classList.toggle("hidden", !blank);
+  if (!blank) return;
+
+  const isUrlDoc = lastOpenTarget?.kind === "url";
+  const target = isUrlDoc ? lastOpenTarget.value : (result.path ?? "");
+  blankFileEl.textContent = isUrlDoc ? target : target.split(/[\\/]/).pop() || target;
+  blankFileEl.title = target;
+  blankHintEl.textContent = isUrlDoc
+    ? "The document at this address has no content to render."
+    : "Write some Markdown and save — it will show up here the moment the file changes.";
+}
+
 async function applyDocument(result, { reload = false, openToken } = {}) {
   if (openToken !== undefined && openToken !== activeOpenToken) return;
 
@@ -885,6 +919,7 @@ async function applyDocument(result, { reload = false, openToken } = {}) {
   // Before the contents panel is built and before math and mermaid replace
   // their regions, while the DOM still matches what the backend diffed.
   applyChanges(contentEl, currentDocChanges);
+  updateBlankState(result);
   emptyStateEl.classList.add("hidden");
   missingStateEl.classList.add("hidden");
   errorStateEl.classList.add("hidden");

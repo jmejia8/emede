@@ -349,6 +349,21 @@
         <p class="loading-label">Preparing document</p>
       </div>
       <article id="content" class="prose"></article>
+      <div id="blank-state" class="blank-state hidden" role="status" aria-live="polite">
+        <svg class="blank-icon" viewBox="0 0 64 64" width="96" height="96" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M16 6h22l14 14v38a4 4 0 0 1-4 4H16a4 4 0 0 1-4-4V10a4 4 0 0 1 4-4Z" />
+          <path d="M38 6v10a4 4 0 0 0 4 4h10" />
+          <g class="blank-icon-lines">
+            <path d="M22 34h24" />
+            <path d="M22 42h18" />
+            <path d="M22 50h10" />
+          </g>
+        </svg>
+        <p class="blank-eyebrow">Empty document</p>
+        <h1 class="blank-title">There is nothing to read here yet.</h1>
+        <p id="blank-file" class="blank-file"></p>
+        <p id="blank-hint" class="blank-hint"></p>
+      </div>
       <div id="empty-state" class="empty-state hidden">
         <img src="assets/logo.png" alt="" class="state-logo" width="128" height="128" />
         <p class="empty-title">emede</p>
