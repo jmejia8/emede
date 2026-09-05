@@ -2673,3 +2673,88 @@ mark[data-find-match].find-active {
   }
 }
 
+
+/* System font search, under each font select in the settings panel. */
+.font-search {
+  position: relative;
+  margin: -0.35rem 0 0.15rem;
+}
+
+.font-search-input {
+  width: 100%;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-fg);
+  font: inherit;
+  font-size: 0.85em;
+}
+
+.font-search-input::placeholder {
+  color: var(--color-muted);
+}
+
+.font-search-results {
+  position: absolute;
+  z-index: 3;
+  left: 0;
+  right: 0;
+  margin: 0.2rem 0 0;
+  padding: 0.2rem;
+  max-height: 15rem;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--color-fg) 14%, transparent);
+}
+
+.font-search-result {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.3rem 0.4rem;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-fg);
+  cursor: pointer;
+  text-align: left;
+  /* The face itself comes from the inline style; only the size is ours. */
+  font-size: 0.95em;
+}
+
+.font-search-result:hover,
+.font-search-result:focus-visible {
+  background: color-mix(in srgb, var(--color-fg) 8%, transparent);
+  outline: none;
+}
+
+.font-search-generic {
+  flex: none;
+  color: var(--color-muted);
+  font-family: var(--font-ui, sans-serif);
+  font-size: 0.75em;
+}
+
+.font-search-empty {
+  padding: 0.3rem 0.4rem;
+  color: var(--color-muted);
+  font-size: 0.85em;
+}
+
+/* What a preset really resolves to. Both stay selectable — a saved config
+   naming either one must still round-trip. */
+option.font-missing {
+  color: var(--color-muted);
+  font-style: italic;
+}
+
+/* Renders, but through a later family in its own stack. */
+option.font-substituted {
+  color: var(--color-muted);
+}

@@ -1,4 +1,9 @@
 import { FindInPage } from "./find.js";
+import {
+  attachFontSearch,
+  markUnavailableFonts,
+  selectFontStack,
+} from "./fontsearch.js";
 import { applyChanges, clearChanges } from "./changes.js";
 import {
   createKeybindingController,
@@ -284,11 +289,36 @@ function populateFontOptions() {
   populateFontSelect(settingFontCode, { groups: CODE_FONT_GROUPS });
 }
 
+// Flag presets fontconfig cannot resolve, so a silent fallback becomes visible.
+// Fire-and-forget: the selects are fully usable before this resolves.
+function markMissingFontPresets() {
+  return markUnavailableFonts([settingFont, settingFontTitle, settingFontCode], (families) =>
+    invoke("check_fonts_available", { families }),
+  );
+}
+
+function wireFontSearch() {
+  for (const root of document.querySelectorAll("[data-font-search]")) {
+    attachFontSearch(
+      root,
+      (query, limit) => invoke("search_system_fonts", { query, limit }),
+      scheduleSave,
+    );
+  }
+}
+
 function bodyFontFromSettings(settings) {
   return settings.font_family || DEFAULT_FONT;
 }
 
 function syncFontSelect(select, value, fallback) {
+  // A saved value may name a system font that is in none of the curated
+  // optgroups; `selectFontStack` adds an option for it rather than letting the
+  // assignment silently fail and reset the control.
+  if (value) {
+    selectFontStack(select, value);
+    if (select.value === value) return;
+  }
   select.value = value ?? "";
   if (!select.value && fallback) select.value = fallback;
 }
@@ -2285,6 +2315,8 @@ function wireKeybindings() {
 
 async function boot() {
   populateFontOptions();
+  wireFontSearch();
+  void markMissingFontPresets();
   await loadBundledColorTemplates();
   wireExternalLinks();
   wireChangePopup();

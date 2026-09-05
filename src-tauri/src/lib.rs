@@ -1,6 +1,7 @@
 mod baseline;
 mod changes;
 pub mod cli;
+mod fonts;
 mod markdown;
 mod persist;
 mod recents;
@@ -282,6 +283,8 @@ fn run_inner(files: Vec<String>, print_target: Option<String>) {
             settings::get_settings,
             settings::set_settings,
             settings::read_color_template,
+            fonts::search_system_fonts,
+            fonts::check_fonts_available,
             view_state::get_view_state,
             view_state::set_view_state,
             share::start_share,

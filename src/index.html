@@ -150,16 +150,49 @@
             Body font
             <select id="setting-font"></select>
           </label>
+          <div class="font-search" data-font-search="setting-font">
+            <input
+              type="search"
+              class="font-search-input"
+              placeholder="Search system fonts…"
+              autocomplete="off"
+              spellcheck="false"
+              aria-label="Search system fonts for body text"
+            />
+            <ul class="font-search-results" hidden></ul>
+          </div>
 
           <label>
             Titles font
             <select id="setting-font-title"></select>
           </label>
+          <div class="font-search" data-font-search="setting-font-title">
+            <input
+              type="search"
+              class="font-search-input"
+              placeholder="Search system fonts…"
+              autocomplete="off"
+              spellcheck="false"
+              aria-label="Search system fonts for titles"
+            />
+            <ul class="font-search-results" hidden></ul>
+          </div>
 
           <label>
             Code font
             <select id="setting-font-code"></select>
           </label>
+          <div class="font-search" data-font-search="setting-font-code" data-font-search-mono="true">
+            <input
+              type="search"
+              class="font-search-input"
+              placeholder="Search system monospace fonts…"
+              autocomplete="off"
+              spellcheck="false"
+              aria-label="Search system fonts for code"
+            />
+            <ul class="font-search-results" hidden></ul>
+          </div>
 
           <div class="presets">
             <span class="presets-label">Presets</span>
