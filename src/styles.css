@@ -2498,28 +2498,66 @@ mark[data-find-match].find-active {
   background: color-mix(in srgb, #ffa726 24%, transparent);
 }
 
-/* Zero-width: it marks a point between words, not a range. */
+/* A deletion is a point between words, not a range, so the element itself stays
+ * zero-width: anything with layout width would reflow the line and drift the
+ * scroll position restored just after. The mark is an absolutely positioned
+ * pseudo-element instead, tinting the inter-word gap it sits in while occupying
+ * no space on the line. It keeps its pointer events — the old 2px rule was too
+ * thin to click, which left the popup effectively unreachable. */
 .emede-change-deleted {
+  position: relative;
   display: inline-block;
   width: 0;
-  border-left: 2px solid color-mix(in srgb, #e53935 70%, var(--color-fg));
-  margin-left: -1px;
-  align-self: stretch;
   height: 1em;
   vertical-align: text-bottom;
   cursor: help;
 }
 
-/* The fallback mark: a bar in the margin, used whenever a block changed
- * wholesale or its token stream could not be verified against the DOM. */
-.emede-change-block {
-  box-shadow: -3px 0 0 color-mix(in srgb, #ffa726 55%, var(--color-fg));
+.emede-change-deleted::before {
+  content: "";
+  position: absolute;
+  top: -0.05em;
+  bottom: -0.05em;
+  left: -0.3em;
+  right: -0.3em;
+  background: color-mix(in srgb, #e53935 30%, transparent);
+  border-radius: 2px;
+}
+
+/* The fallback mark, used whenever a block changed wholesale or its token
+ * stream could not be verified against the DOM. Tinted far below the inline
+ * marks (11% against their 22–24%): it covers whole paragraphs, and at their
+ * strength the coarse mark would be the loudest thing on the page.
+ *
+ * `background-image` rather than `background`, so the tint composites over a
+ * block that brings its own surface — a `pre` keeps `--color-code-bg` — instead
+ * of replacing it. The `.prose` prefix is what makes that work: `.prose pre`
+ * outranks a bare class, and its `background` shorthand would otherwise reset
+ * the tint to `none`. The bleed past the text is a box-shadow spread, not
+ * padding, for the same reason the caret has no width — it must not move a
+ * single glyph. */
+.prose .emede-change-block {
+  background-image: linear-gradient(
+    color-mix(in srgb, #ffa726 11%, transparent),
+    color-mix(in srgb, #ffa726 11%, transparent)
+  );
+  box-shadow: 0 0 0 0.25em color-mix(in srgb, #ffa726 11%, transparent);
   cursor: help;
 }
 
-.emede-change-block--added {
-  box-shadow: -3px 0 0 color-mix(in srgb, #4caf50 55%, var(--color-fg));
+.prose .emede-change-block--added {
+  background-image: linear-gradient(
+    color-mix(in srgb, #4caf50 11%, transparent),
+    color-mix(in srgb, #4caf50 11%, transparent)
+  );
+  box-shadow: 0 0 0 0.25em color-mix(in srgb, #4caf50 11%, transparent);
   cursor: auto;
+}
+
+/* Deliberately weak, so a block that already has a radius of its own — a code
+ * block's 6px — keeps it, and everything else gets rounded corners. */
+.emede-change-block {
+  border-radius: 4px;
 }
 
 .change-popup {
@@ -2622,6 +2660,7 @@ mark[data-find-match].find-active {
 
   .emede-change-block,
   .emede-change-block--added {
+    background-image: none !important;
     box-shadow: none !important;
   }
 
