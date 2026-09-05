@@ -108,6 +108,11 @@ const BUNDLED_COLOR_TEMPLATES = [
     label: "Mocha",
     path: "themes/catppuccin-mocha.css",
   },
+  {
+    id: "kanagawa-wave",
+    label: "Kanagawa",
+    path: "themes/kanagawa-wave.css",
+  },
 ];
 
 const COLOR_TEMPLATE_PROPERTIES = {

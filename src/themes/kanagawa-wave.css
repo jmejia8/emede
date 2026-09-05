@@ -1,0 +1,18 @@
+/* Kanagawa (Wave) — after rebelot/kanagawa.nvim, itself after Hokusai's
+   "The Great Wave". Ink-blue paper (sumiInk1) under warm off-white text
+   (fujiWhite); crystal-blue titles and spring-blue links carry the accent,
+   quotes recede into spring violet, and inline code takes the calm
+   spring green rather than a bright yellow. */
+:root {
+  --color-fg: #dcd7ba;
+  --color-bg: #1f1f28;
+  --color-title: #7e9cd8;
+  --color-bold: #e6c384;
+  --color-italic: #dcd7ba;
+  --color-quote: #938aa9;
+  --color-link: #7fb4ca;
+  --color-code: #98bb6c;
+  --color-code-bg: #2a2a37;
+  --color-border: #363646;
+  --color-muted: #c8c093;
+}
