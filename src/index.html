@@ -282,6 +282,16 @@
           </label>
 
           <label class="setting-toggle">
+            <span class="setting-toggle-label">Check for updates</span>
+            <input id="setting-update-check" type="checkbox" role="switch" />
+          </label>
+
+          <p class="setting-gpu-note">
+            Asks GitHub once a day whether a newer release exists. emede never
+            installs anything on its own &mdash; it only tells you the command.
+          </p>
+
+          <label class="setting-toggle">
             <span class="setting-toggle-label">GPU acceleration</span>
             <input id="setting-gpu" type="checkbox" role="switch" />
           </label>
@@ -317,6 +327,18 @@
         <h2 class="about-name">emede</h2>
         <p class="about-version"></p>
         <p class="about-desc">A distraction-free markdown reader</p>
+        <div class="about-divider"></div>
+        <div id="about-update" class="about-update">
+          <p id="about-update-status" class="about-update-status" aria-live="polite"></p>
+          <div id="about-update-command" class="about-update-command hidden">
+            <code id="about-update-command-text"></code>
+            <button id="about-update-copy" class="about-update-copy" type="button" aria-label="Copy update command">Copy</button>
+          </div>
+          <div class="about-update-actions">
+            <a id="about-update-notes" class="about-update-notes hidden" href="#" target="_blank" rel="noopener noreferrer">What&rsquo;s new</a>
+            <button id="about-update-check" class="about-update-check" type="button">Check for updates</button>
+          </div>
+        </div>
         <div class="about-divider"></div>
         <p class="about-author">by <strong>jmejia8</strong></p>
         <a href="https://github.com/jmejia8/emede" class="about-github" target="_blank" rel="noopener noreferrer">View on GitHub</a>

@@ -1165,7 +1165,9 @@ fn is_public_ip(ip: IpAddr) -> bool {
 }
 
 /// Shared HTTP agent with hard timeouts and an SSRF-blocking resolver.
-fn http_agent() -> ureq::Agent {
+/// `pub(crate)` so the update check goes out under the same limits as a
+/// user-initiated fetch rather than building a laxer agent of its own.
+pub(crate) fn http_agent() -> ureq::Agent {
     static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
     AGENT
         .get_or_init(|| {

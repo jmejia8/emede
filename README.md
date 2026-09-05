@@ -20,6 +20,17 @@ checksum. Requires the `webkit2gtk` 4.1 runtime
 (`libwebkit2gtk-4.1-0` on Debian/Ubuntu, `webkit2gtk4.1` on Fedora,
 `webkit2gtk-4.1` on Arch) — the installer warns if it's missing.
 
+### Updating
+
+emede checks GitHub once a day for a newer release and shows the result in
+**About emede** (settings panel &rarr; *About emede*), with the command to run.
+It never installs anything on its own — re-running the install command above is
+the upgrade. Turn the check off under **Settings &rarr; Behavior &rarr; Check for
+updates**; it is the only request emede makes on its own.
+
+From a script or shell, `emede --check-update` does the same check and exits 0
+when up to date, 10 when an update is available, and 1 when the check failed.
+
 Pin a version with `EMEDE_VERSION=0.1.5`, or uninstall with:
 
 ```bash
@@ -63,6 +74,7 @@ emede notes/lecture.md
 - Typography and side margins customization.
 - Color presets: Light, Sepia, Dark, Gruvbox; font presets for common type stacks.
 - Settings persisted in `~/.config/emede/settings.json`
+- Daily update check against the GitHub releases API (opt-out, never auto-installs).
 - Keybinding schemes: Vim, Emacs, and Common reader navigation.
 
 ## Math syntax

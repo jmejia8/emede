@@ -52,6 +52,12 @@ pub struct Settings {
     pub reading_wpm: u32,
     #[serde(default = "default_mermaid_diagrams")]
     pub mermaid_diagrams: bool,
+    /// Ask GitHub once a day whether a newer release exists. emede is otherwise
+    /// fully offline (MathJax and Mermaid are vendored), so this is the only
+    /// request the app makes on its own — hence a setting, disclosed in About,
+    /// rather than a silent behavior. It only ever reports; it never installs.
+    #[serde(default = "default_update_check")]
+    pub update_check: bool,
     /// Name shown as the host on LAN-shared pages. Defaults to the `USER`
     /// environment value; empty means "fall back to the env var / anonymous".
     #[serde(default = "default_share_username")]
@@ -71,6 +77,10 @@ fn default_gpu_acceleration() -> bool {
 }
 
 fn default_mermaid_diagrams() -> bool {
+    true
+}
+
+fn default_update_check() -> bool {
     true
 }
 
@@ -128,6 +138,7 @@ impl Default for Settings {
             change_highlighting: false,
             reading_wpm: default_reading_wpm(),
             mermaid_diagrams: default_mermaid_diagrams(),
+            update_check: default_update_check(),
             share_username: default_share_username(),
         }
     }

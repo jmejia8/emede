@@ -207,6 +207,12 @@ const aboutOverlay = document.getElementById("about-overlay");
 const aboutModal = document.getElementById("about-modal");
 const aboutLink = document.getElementById("about-link");
 const aboutClose = document.getElementById("about-close");
+const aboutUpdateStatus = document.getElementById("about-update-status");
+const aboutUpdateCommand = document.getElementById("about-update-command");
+const aboutUpdateCommandText = document.getElementById("about-update-command-text");
+const aboutUpdateCopy = document.getElementById("about-update-copy");
+const aboutUpdateNotes = document.getElementById("about-update-notes");
+const aboutUpdateCheck = document.getElementById("about-update-check");
 const settingFont = document.getElementById("setting-font");
 const settingFontTitle = document.getElementById("setting-font-title");
 const settingFontCode = document.getElementById("setting-font-code");
@@ -224,6 +230,7 @@ const settingKeybindings = document.getElementById("setting-keybindings");
 const settingGpu = document.getElementById("setting-gpu");
 const settingJustify = document.getElementById("setting-justify");
 const settingMermaid = document.getElementById("setting-mermaid");
+const settingUpdateCheck = document.getElementById("setting-update-check");
 const settingChanges = document.getElementById("setting-changes");
 const settingReadingWpm = document.getElementById("setting-reading-wpm");
 const settingReadingWpmLabel = document.getElementById("setting-reading-wpm-label");
@@ -565,6 +572,7 @@ function applySettings(settings) {
   settingGpu.checked = settings.gpu_acceleration;
   settingJustify.checked = settings.justify_text;
   settingMermaid.checked = settings.mermaid_diagrams ?? true;
+  settingUpdateCheck.checked = settings.update_check ?? true;
   settingChanges.checked = settings.change_highlighting ?? false;
   const wpm = Number(settings.reading_wpm) > 0 ? Number(settings.reading_wpm) : DEFAULT_READING_WPM;
   settingReadingWpm.value = wpm;
@@ -593,6 +601,7 @@ function settingsFromForm() {
     justify_text: settingJustify.checked,
     reading_wpm: Number(settingReadingWpm.value) || DEFAULT_READING_WPM,
     mermaid_diagrams: settingMermaid.checked,
+    update_check: settingUpdateCheck.checked,
     change_highlighting: settingChanges.checked,
     share_username: shareUsername.value.trim(),
   };
@@ -1950,6 +1959,106 @@ function toggleToc(open) {
   }
 }
 
+// ── Update checking ──────────────────────────────────────────────────────────
+// emede reports; it never installs. The backend resolves which install channel
+// this binary came from and hands back the right command for it (or none, for a
+// package or a dev build), so all this does is render the answer.
+
+let updateCopyResetTimer = null;
+
+function renderUpdateStatus(status, { pending = false, error = null } = {}) {
+  aboutUpdateCommand.classList.add("hidden");
+  aboutUpdateNotes.classList.add("hidden");
+
+  if (pending) {
+    aboutUpdateStatus.textContent = "Checking\u2026";
+    aboutUpdateStatus.classList.remove("is-available");
+    return;
+  }
+
+  if (error) {
+    aboutUpdateStatus.textContent = error;
+    aboutUpdateStatus.classList.remove("is-available");
+    return;
+  }
+
+  // No check ran: turned off in settings, or a dev build that should not nag.
+  if (!status || !status.checked) {
+    aboutUpdateStatus.textContent = "";
+    aboutUpdateStatus.classList.remove("is-available");
+    return;
+  }
+
+  if (!status.update_available) {
+    aboutUpdateStatus.textContent = "You\u2019re on the latest version.";
+    aboutUpdateStatus.classList.remove("is-available");
+    return;
+  }
+
+  aboutUpdateStatus.textContent = `Version ${status.latest_version} is available.`;
+  aboutUpdateStatus.classList.add("is-available");
+
+  if (status.install_command) {
+    aboutUpdateCommandText.textContent = status.install_command;
+    aboutUpdateCommand.classList.remove("hidden");
+  } else {
+    // A system package or an unrecognized location: emede did not put this
+    // binary here, so it does not get to say how to replace it.
+    aboutUpdateStatus.textContent +=
+      " Update it the way you installed it \u2014 your package manager, or a fresh build.";
+  }
+
+  if (status.release_url) {
+    aboutUpdateNotes.href = status.release_url;
+    aboutUpdateNotes.classList.remove("hidden");
+  }
+}
+
+// Badge the settings gear so an available update is noticeable once, without
+// ever interrupting reading.
+function markUpdateBadge(available) {
+  settingsToggle.classList.toggle("has-update", available);
+  aboutLink.classList.toggle("has-update", available);
+}
+
+async function runUpdateCheck(force) {
+  if (force) renderUpdateStatus(null, { pending: true });
+  try {
+    const status = await invoke("check_for_update", { force });
+    renderUpdateStatus(status);
+    markUpdateBadge(Boolean(status?.update_available));
+    return status;
+  } catch (e) {
+    // Offline, rate-limited, DNS down: the reader carries on exactly as before.
+    // Only say so when the user asked; a silent startup check stays silent.
+    if (force) renderUpdateStatus(null, { error: String(e) });
+    return null;
+  }
+}
+
+function wireUpdateCheck() {
+  aboutUpdateCheck.addEventListener("click", () => void runUpdateCheck(true));
+
+  aboutUpdateCopy.addEventListener("click", async () => {
+    const cmd = aboutUpdateCommandText.textContent;
+    if (!cmd) return;
+    let ok = false;
+    try {
+      await navigator.clipboard.writeText(cmd);
+      ok = true;
+    } catch {
+      ok = false;
+    }
+    aboutUpdateCopy.classList.toggle("copied", ok);
+    aboutUpdateCopy.textContent = ok ? "Copied" : "Failed";
+    clearTimeout(updateCopyResetTimer);
+    updateCopyResetTimer = setTimeout(() => {
+      aboutUpdateCopy.classList.remove("copied");
+      aboutUpdateCopy.textContent = "Copy";
+    }, 1600);
+  });
+}
+
 function toggleAbout(open) {
   const wasOpen = !aboutOverlay.classList.contains("hidden");
   const show = open ?? !wasOpen;
@@ -2095,6 +2204,7 @@ function wireSettings() {
 
   settingJustify.addEventListener("input", scheduleSave);
   settingMermaid.addEventListener("input", scheduleSave);
+  settingUpdateCheck.addEventListener("input", scheduleSave);
 
   settingChanges.addEventListener("input", () => {
     // Turning it off clears immediately — the marks are already in the DOM.
@@ -2348,6 +2458,7 @@ async function boot() {
   wireKeybindings();
   wireShare();
   wireContextMenu();
+  wireUpdateCheck();
 
   openFileBtn.addEventListener("click", () => {
     void handlePickAndOpenFile();
@@ -2426,6 +2537,11 @@ async function boot() {
   }
 
   await revealWindow();
+
+  // Only after the window is up: an update check must never delay the first
+  // frame, and it must never fail loudly. `force = false` means the backend
+  // honours the setting and the daily cache.
+  void runUpdateCheck(false);
 
   if (startupFile) {
     await openFile(startupFile);

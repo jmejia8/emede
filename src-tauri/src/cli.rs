@@ -19,6 +19,8 @@ pub enum Mode {
     Print { file: String, out: Option<String> },
     /// List notes shared by any running emede instance.
     List { json: bool },
+    /// Report whether a newer release exists, then exit.
+    CheckUpdate,
     /// Print help and exit.
     Help,
     /// Print version and exit.
@@ -49,12 +51,13 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Mode {
             "--" => positional_only = true,
             "-h" | "--help" => return Mode::Help,
             "-v" | "-V" | "--version" => return Mode::Version,
-            "--share" | "--export" | "--print" | "--list" => {
+            "--share" | "--export" | "--print" | "--list" | "--check-update" => {
                 let kw: &'static str = match arg.as_str() {
                     "--share" => "share",
                     "--export" => "export",
                     "--print" => "print",
-                    _ => "list",
+                    "--list" => "list",
+                    _ => "check-update",
                 };
                 match mode {
                     Some(existing) if existing != kw => {
@@ -91,6 +94,13 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Mode {
     }
     if json && mode != Some("list") {
         return Mode::Error(format!("{name}: --json is only valid with --list"));
+    }
+
+    if mode == Some("check-update") {
+        if !files.is_empty() {
+            return Mode::Error(format!("{name}: --check-update takes no file arguments"));
+        }
+        return Mode::CheckUpdate;
     }
 
     match mode {
@@ -182,6 +192,21 @@ mod tests {
     #[test]
     fn print_mode() {
         assert!(matches!(parse(&["--print", "a.md"]), Mode::Print { .. }));
+    }
+
+    #[test]
+    fn check_update_mode() {
+        assert!(matches!(parse(&["--check-update"]), Mode::CheckUpdate));
+    }
+
+    #[test]
+    fn check_update_rejects_files_and_conflicts() {
+        assert!(matches!(parse(&["--check-update", "a.md"]), Mode::Error(_)));
+        assert!(matches!(parse(&["--check-update", "--json"]), Mode::Error(_)));
+        assert!(matches!(
+            parse(&["--check-update", "--list"]),
+            Mode::Error(_)
+        ));
     }
 
     #[test]

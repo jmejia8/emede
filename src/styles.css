@@ -1084,6 +1084,43 @@ body.frame-emede .settings-panel {
   left: 1rem;
 }
 
+/* An available update raises the gear from fully hidden to the same faint
+   opacity a hover gives it, and marks it with a dot. Noticeable in passing,
+   never in the way — and it disappears by itself once you've updated. */
+.settings-toggle.has-update {
+  opacity: 0.55;
+}
+
+.settings-toggle.has-update::after {
+  content: "";
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: var(--color-link, #4a7ba7);
+}
+
+body:hover .settings-toggle.has-update,
+.settings-toggle.has-update:hover,
+.settings-toggle.has-update:focus-visible {
+  opacity: 1;
+}
+
+/* The same dot on "About emede", so the reason is one click away. */
+.about-link.has-update::after {
+  content: "";
+  display: inline-block;
+  width: 0.4rem;
+  height: 0.4rem;
+  margin-left: 0.4rem;
+  vertical-align: 0.1em;
+  border-radius: 50%;
+  background: var(--color-link, #4a7ba7);
+}
+
+
 .settings-toggle {
   right: 1rem;
 }
@@ -1949,6 +1986,116 @@ body.has-modal {
 @media (prefers-reduced-motion: reduce) {
   .about-close,
   .about-github {
+    transition: none;
+  }
+}
+
+
+/* ── About: update status ─────────────────────────────────────── */
+
+.about-update {
+  margin: 0 0 1.25rem;
+}
+
+.about-update-status {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--color-muted);
+}
+
+.about-update-status.is-available {
+  color: var(--color-fg);
+  font-weight: 500;
+}
+
+.about-update-status:empty {
+  display: none;
+}
+
+.about-update-command {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  text-align: left;
+}
+
+.about-update-command code {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid color-mix(in srgb, var(--color-fg) 18%, transparent);
+  border-radius: 4px;
+  background: var(--color-code-bg, color-mix(in srgb, var(--color-fg) 5%, transparent));
+  color: var(--color-code, var(--color-fg));
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  /* The install one-liner is long; let it wrap rather than scroll the modal. */
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.about-update-copy {
+  flex: 0 0 auto;
+  padding: 0 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--color-fg) 18%, transparent);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.about-update-copy:hover,
+.about-update-copy:focus-visible {
+  color: var(--color-fg);
+  border-color: var(--color-fg);
+}
+
+.about-update-copy.copied {
+  color: var(--color-link);
+  border-color: var(--color-link);
+}
+
+.about-update-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 0.85rem;
+}
+
+.about-update-notes,
+.about-update-check {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 0.8rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: color 0.15s ease;
+}
+
+.about-update-notes:hover,
+.about-update-notes:focus-visible,
+.about-update-check:hover,
+.about-update-check:focus-visible {
+  color: var(--color-fg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .about-update-copy,
+  .about-update-notes,
+  .about-update-check {
     transition: none;
   }
 }

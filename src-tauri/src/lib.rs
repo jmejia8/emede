@@ -7,6 +7,7 @@ mod persist;
 mod recents;
 mod settings;
 mod share;
+mod update;
 mod view_state;
 mod watcher;
 
@@ -94,6 +95,7 @@ USAGE:
     {name} --export <FILE> [-o OUT]  Write a self-contained HTML file (OUT '-' = stdout)
     {name} --print <FILE> [-o OUT]   Render a PDF (Linux only)
     {name} --list [--json]           List notes shared by any running emede instance
+    {name} --check-update            Report whether a newer release is available
 
 ARGS:
     <FILE>    Path to a markdown file (or an http(s) URL). Use '--' before a
@@ -107,7 +109,11 @@ OPTIONS:
 
 NOTES:
     Exported HTML inlines images but loads MathJax/Mermaid from a CDN, so math
-    and diagrams require internet access to render in a browser.",
+    and diagrams require internet access to render in a browser.
+
+    --check-update queries the GitHub releases API and never installs anything.
+    It exits 0 when up to date, 10 when an update is available, and 1 when the
+    check itself failed — so a script can branch on the result.",
         name = name,
         version = env!("CARGO_PKG_VERSION"),
         description = env!("CARGO_PKG_DESCRIPTION"),
@@ -210,6 +216,48 @@ pub fn run_list(json: bool) -> ! {
     std::process::exit(0);
 }
 
+/// `emede --check-update`: report whether a newer release exists, then exit.
+///
+/// Always a live check — typing the flag is an explicit request, so it bypasses
+/// both the daily cache and the `update_check` setting. Exit codes are the
+/// scriptable part: 0 up to date, 10 update available, 1 check failed.
+pub fn run_check_update() -> ! {
+    let name = env!("CARGO_PKG_NAME");
+
+    let status = match update::check(true) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("{name}: update check failed: {e}");
+            std::process::exit(1);
+        }
+    };
+
+    let latest = status.latest_version.as_deref().unwrap_or("unknown");
+
+    if !status.update_available {
+        println!("{name} {} is up to date.", status.current_version);
+        std::process::exit(0);
+    }
+
+    println!(
+        "{name} {} is installed; {latest} is available.",
+        status.current_version
+    );
+    if let Some(url) = &status.release_url {
+        println!("Release notes: {url}");
+    }
+    match status.install_command {
+        Some(cmd) => println!("\nUpdate with:\n    {cmd}"),
+        // A package or an unrecognized location: emede is not the thing that
+        // put this binary here, so it does not get to say how to replace it.
+        None => println!(
+            "\nemede was not installed by its install script, so update it the \n\
+             way you installed it (your package manager, or a fresh build)."
+        ),
+    }
+    std::process::exit(10);
+}
+
 /// `emede --print ...`: render a PDF via the bundled WebView (Linux only).
 pub fn run_print(file: String, out: Option<String>) {
     #[cfg(not(target_os = "linux"))]
@@ -296,6 +344,7 @@ fn run_inner(files: Vec<String>, print_target: Option<String>) {
             watcher::watch_document,
             watcher::unwatch_document,
             recents::get_recent_files,
+            update::check_for_update,
             get_startup_file,
             get_print_target,
             print_ready,

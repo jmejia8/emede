@@ -13,6 +13,7 @@ fn main() {
         }
         // Headless modes: do their work and exit before any window is built.
         Mode::List { json } => emede_lib::run_list(json),
+        Mode::CheckUpdate => emede_lib::run_check_update(),
         Mode::Export { file, out } => emede_lib::run_export(file, out),
         Mode::Share(files) => emede_lib::run_share(files),
         // Modes that need the WebView.
