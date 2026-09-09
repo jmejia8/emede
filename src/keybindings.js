@@ -99,6 +99,19 @@ function scrollToTop() {
 function scrollToBottom() {
   const root = getScrollRoot();
   root.scrollTop = root.scrollHeight;
+
+  // Blocks the browser is skipping for being off screen stand in at an
+  // estimated height until they are rendered, so the bottom of the document
+  // moves down as the last of them come into view. Chase it until it stops
+  // moving — bounded, since a document that keeps growing is not this key's
+  // problem.
+  let tries = 0;
+  const settle = () => {
+    const before = root.scrollTop;
+    root.scrollTop = root.scrollHeight;
+    if (root.scrollTop > before && ++tries < 10) requestAnimationFrame(settle);
+  };
+  requestAnimationFrame(settle);
 }
 
 function handleAppShortcuts(event, actions) {

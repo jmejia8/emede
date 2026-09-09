@@ -53,6 +53,12 @@ body {
   max-width: 100%;
   min-height: 100vh;
   min-height: 100dvh;
+  /* The scroller paints its own ground rather than letting `body`'s show
+   * through. A scrolling box whose contents are not known to be opaque loses
+   * the engine's "blit what is already painted, repaint only the strip that
+   * came into view" path and repaints the whole viewport every frame — which
+   * is free on the GPU and ruinous with accelerated compositing off. */
+  background-color: var(--color-bg);
   padding-top: clamp(1.5rem, 5vh, 4rem);
   padding-bottom: clamp(3rem, 15vh, 10rem);
   padding-inline: var(--reader-gutter);
@@ -72,6 +78,28 @@ body {
 .prose-justify {
   text-align: justify;
 }
+
+/* Off-screen blocks cost nothing to lay out or paint.
+ *
+ * Always worth having, decisive when accelerated compositing is off (the GPU
+ * setting on Linux): scrolling is then repainted on the CPU, on the main
+ * thread, and a maths-heavy document is tens of thousands of `mjx-*` boxes
+ * deep. Skipping what is off screen makes the per-frame cost a function of the
+ * viewport instead of the document.
+ *
+ * Headings and rules stay out of it: they are cheap, and keeping their boxes
+ * real is what keeps the contents panel and the saved scroll anchor honest.
+ *
+ * `auto` in `contain-intrinsic-size` makes the engine remember each block's
+ * last real size, so scrolling back over ground already covered never shifts.
+ * `main.js` adds the class only once MathJax and Mermaid have measured — both
+ * render into a box whose width they read, and a skipped box has none. */
+.prose.skip-offscreen
+  > :is(p, ul, ol, dl, blockquote, pre, table, figure, details, .table-wrapper, .mermaid) {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 4em;
+}
+
 
 .prose-justify :is(h1, h2, h3, h4, h5, h6) {
   text-align: start;
@@ -2772,6 +2800,17 @@ mark[data-find-match].find-active {
     overflow: visible !important;
     height: auto !important;
     min-height: 0;
+  }
+
+  /* Nothing is "off screen" on paper: a skipped block would print as a 4em
+   * gap. Printing also has no scroller to keep opaque. */
+  .prose.skip-offscreen > * {
+    content-visibility: visible !important;
+    contain-intrinsic-size: none !important;
+  }
+
+  #reader {
+    background: none !important;
   }
 
   #titlebar,

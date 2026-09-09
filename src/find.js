@@ -107,10 +107,28 @@ export class FindInPage {
       this.matches[i].classList.toggle('find-active', i === this.activeIndex);
     }
     const active = this.matches[this.activeIndex];
-    if (active) {
-      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      active.scrollIntoView({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
+    if (!active) return;
+
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const behavior = reduceMotion ? 'auto' : 'smooth';
+
+    // A match can sit inside a block the browser is skipping for being off
+    // screen (`content-visibility: auto`), and skipped contents generate no
+    // boxes: the mark has nothing to scroll to. Bring its block into view
+    // first — that renders the block — then centre the mark on the next frame.
+    if (active.getBoundingClientRect().height === 0) {
+      const block = active.closest('.prose > *');
+      if (block) {
+        block.scrollIntoView({ block: 'center', behavior: 'auto' });
+        requestAnimationFrame(() => {
+          if (this.matches[this.activeIndex] !== active) return;
+          active.scrollIntoView({ block: 'center', behavior });
+        });
+        return;
+      }
     }
+
+    active.scrollIntoView({ block: 'center', behavior });
   }
 
   get matchCount() {

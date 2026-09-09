@@ -14,6 +14,7 @@ import { getScrollRoot } from "./scroll.js";
 import { DEFAULT_READING_WPM, computeDocStats, statsRows } from "./stats.js";
 import {
   applyViewState,
+  captureViewState,
   flushViewState,
   flushViewStateAsync,
   loadViewState,
@@ -695,8 +696,65 @@ async function typesetMath() {
   }
 }
 
-function scheduleTypesetMath() {
-  void typesetMath();
+// WebKitGTK 2.46+ / Safari 18. Older engines simply keep painting everything.
+const SUPPORTS_OFFSCREEN_SKIP =
+  !!window.CSS?.supports?.("content-visibility", "auto") &&
+  window.CSS.supports("contain-intrinsic-size", "auto 4em");
+
+// `--print` drives this same frontend and typesets before handing off to the
+// backend, so the whole document has to stay laid out for real there.
+let offscreenSkipAllowed = true;
+
+/**
+ * Let the browser stop laying out and painting blocks that are off screen.
+ *
+ * Skipping rewrites the document's coordinate system the moment it is turned
+ * on: every block that has not been laid out yet collapses to its estimated
+ * size, so a scroll offset taken before means something else after. The reader
+ * is therefore held by heading anchor across the switch, not by pixel offset.
+ *
+ * Callers must have let MathJax and Mermaid finish first — both measure the box
+ * they render into, and a skipped box has no width to read.
+ */
+async function enableOffscreenSkipping(openToken) {
+  if (!SUPPORTS_OFFSCREEN_SKIP || !offscreenSkipAllowed) return;
+  if (contentEl.classList.contains("skip-offscreen")) return;
+
+  const scrollRoot = getScrollRoot();
+  const here = captureViewState(scrollRoot, contentEl);
+  contentEl.classList.add("skip-offscreen");
+  await nextFrame();
+  if (openToken !== undefined && openToken !== activeOpenToken) return;
+  applyViewState(scrollRoot, contentEl, here);
+}
+
+/** Render the regions MathJax and Mermaid own, then hand the rest to the browser. */
+async function renderDynamicRegions(openToken) {
+  await Promise.allSettled([renderMermaid(), typesetMath()]);
+  if (openToken !== undefined && openToken !== activeOpenToken) return;
+  await enableOffscreenSkipping(openToken);
+}
+
+/**
+ * Run something that needs the document laid out for real — a re-render that
+ * measures, most of all — with skipping suspended, then put it back.
+ *
+ * Both switches move the blocks around the viewport, so the reading position is
+ * carried across each of them by heading anchor.
+ */
+async function withRealBoxes(fn) {
+  const skipping = contentEl.classList.contains("skip-offscreen");
+  if (!skipping) return fn();
+
+  const scrollRoot = getScrollRoot();
+  const here = captureViewState(scrollRoot, contentEl);
+  contentEl.classList.remove("skip-offscreen");
+  applyViewState(scrollRoot, contentEl, here);
+  try {
+    return await fn();
+  } finally {
+    await enableOffscreenSkipping();
+  }
 }
 
 let mermaidScriptLoaded = false;
@@ -871,7 +929,7 @@ async function renderMermaid() {
 }
 
 function scheduleMermaid() {
-  void renderMermaid();
+  void withRealBoxes(renderMermaid);
 }
 
 function isRemoteUrl(src) {
@@ -906,12 +964,14 @@ async function restoreSavedViewState(viewState, openToken) {
   applyViewState(scrollRoot, contentEl, viewState);
 
   const scrollBeforeMath = scrollRoot.scrollTop;
-  await typesetMath();
+  await Promise.allSettled([renderMermaid(), typesetMath()]);
   if (openToken !== undefined && openToken !== activeOpenToken) return;
 
   if (scrollRoot.scrollTop === scrollBeforeMath) {
     applyViewState(scrollRoot, contentEl, viewState);
   }
+
+  await enableOffscreenSkipping(openToken);
 }
 
 /**
@@ -955,6 +1015,9 @@ async function applyDocument(result, { reload = false, openToken } = {}) {
     window.MathJax.typesetClear([contentEl]);
   }
 
+  // Measurement first: MathJax, Mermaid, the contents panel and the stats all
+  // read real boxes. `renderDynamicRegions` puts skipping back on afterwards.
+  contentEl.classList.remove("skip-offscreen");
   contentEl.innerHTML = result.html;
   currentDocSource = result.source ?? "";
   currentDocChanges = result.changes ?? null;
@@ -985,14 +1048,11 @@ async function applyDocument(result, { reload = false, openToken } = {}) {
 
   if (reload) {
     scrollRoot.scrollTop = scrollTop;
-    scheduleMermaid();
-    scheduleTypesetMath();
+    void renderDynamicRegions(openToken);
   } else if (savedViewState) {
-    scheduleMermaid();
     void restoreSavedViewState(savedViewState, openToken);
   } else {
-    scheduleMermaid();
-    scheduleTypesetMath();
+    void renderDynamicRegions(openToken);
   }
 }
 
@@ -2508,6 +2568,7 @@ async function boot() {
   // then hand off to the backend to print and exit. The window is never revealed.
   const printTarget = await printTargetPromise;
   if (printTarget) {
+    offscreenSkipAllowed = false;
     if (startupFile) {
       setReaderState("loading");
       await openFile(startupFile);
