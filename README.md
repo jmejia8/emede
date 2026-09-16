@@ -69,6 +69,7 @@ emede notes/lecture.md
 - Read-only rendering — no editor, distraction-free reader layout.
 - In-process Comrak markdown-to-HTML conversion (no external dependencies).
 - GFM-style extensions: tables, task lists, strikethrough, autolinks.
+- Local `.md` and `.markdown` links open directly in the current emede window.
 - Bundled MathJax for offline math rendering.
 - Table of contents for documents. 
 - Typography and side margins customization.

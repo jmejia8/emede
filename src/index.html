@@ -366,6 +366,29 @@
       </div>
     </div>
 
+    <div id="linked-file-overlay" class="share-overlay linked-file-overlay hidden" aria-hidden="true">
+      <div
+        id="linked-file-modal"
+        class="share-modal linked-file-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="linked-file-title"
+        aria-describedby="linked-file-description linked-file-path"
+      >
+        <button id="linked-file-close" class="share-modal-close" type="button" aria-label="Close">&times;</button>
+        <svg class="linked-file-icon" viewBox="0 0 48 48" width="48" height="48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M10 4h18l10 10v30H10z" />
+          <path d="M28 4v10h10" />
+          <path d="m18 24 12 12M30 24 18 36" />
+        </svg>
+        <p class="linked-file-eyebrow">Linked document</p>
+        <h2 id="linked-file-title" class="linked-file-title">File not found</h2>
+        <p id="linked-file-description" class="linked-file-description">The linked Markdown file does not exist at this path:</p>
+        <code id="linked-file-path" class="linked-file-path"></code>
+        <button id="linked-file-dismiss" class="open-file-btn linked-file-dismiss" type="button">Close</button>
+      </div>
+    </div>
+
     <div id="change-popup" class="change-popup hidden" role="dialog" aria-label="Previous wording" tabindex="-1">
       <div id="change-popup-label" class="change-popup-label"></div>
       <div id="change-popup-text" class="change-popup-text"></div>

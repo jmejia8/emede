@@ -203,6 +203,13 @@ const shareQr = document.getElementById("share-qr");
 const shareUrl = document.getElementById("share-url");
 const shareCopyBtn = document.getElementById("share-copy-btn");
 const shareUsername = document.getElementById("share-username");
+const linkedFileOverlay = document.getElementById("linked-file-overlay");
+const linkedFileModal = document.getElementById("linked-file-modal");
+const linkedFileClose = document.getElementById("linked-file-close");
+const linkedFileDismiss = document.getElementById("linked-file-dismiss");
+const linkedFileTitle = document.getElementById("linked-file-title");
+const linkedFileDescription = document.getElementById("linked-file-description");
+const linkedFilePath = document.getElementById("linked-file-path");
 const settingsClose = document.getElementById("settings-close");
 const aboutOverlay = document.getElementById("about-overlay");
 const aboutModal = document.getElementById("about-modal");
@@ -1344,7 +1351,7 @@ async function revealWindow() {
   }
 }
 
-async function openFile(path) {
+async function openFile(path, fragment = "") {
   toggleSearch(false);
   flushViewState(currentDocPath, contentEl);
   lastOpenTarget = { kind: "file", value: path };
@@ -1357,6 +1364,9 @@ async function openFile(path) {
     void invoke("watch_document", { path: result.path }).catch((e) =>
       console.warn("watch failed", e),
     );
+    if (fragment && openToken === activeOpenToken) {
+      scrollToDocumentFragment(fragment);
+    }
   } catch (err) {
     if (openToken !== activeOpenToken) return;
 
@@ -1364,6 +1374,49 @@ async function openFile(path) {
 
     await setWindowTitle("emede");
   }
+}
+
+async function openLinkedFile(path, fragment = "") {
+  const sourcePath = currentDocPath;
+  if (!sourcePath) return;
+
+  toggleSearch(false);
+  flushViewState(sourcePath, contentEl);
+
+  let result;
+  try {
+    result = await invoke("render_markdown", { path });
+  } catch (err) {
+    if (currentDocPath === sourcePath) {
+      showLinkedFileError(path, err);
+    }
+    return;
+  }
+
+  // A slower read must not replace a document the user opened in the meantime.
+  if (currentDocPath !== sourcePath) return;
+
+  lastOpenTarget = { kind: "file", value: path };
+  const openToken = ++activeOpenToken;
+  await applyDocument(result, { openToken });
+  void invoke("watch_document", { path: result.path }).catch((e) =>
+    console.warn("watch failed", e),
+  );
+  if (fragment && openToken === activeOpenToken) {
+    scrollToDocumentFragment(fragment);
+  }
+}
+
+function scrollToDocumentFragment(fragment) {
+  let id = fragment;
+  try {
+    id = decodeURIComponent(fragment);
+  } catch {
+    // Keep malformed percent escapes literal, matching normal browser behavior.
+  }
+
+  const target = contentEl.querySelector(`#${CSS.escape(id)}`);
+  target?.scrollIntoView({ block: "start" });
 }
 
 async function openFromUrl(url) {
@@ -1587,6 +1640,41 @@ function closeModalFocus() {
   if (previouslyFocused && typeof previouslyFocused.focus === "function") {
     previouslyFocused.focus();
   }
+}
+
+function showLinkedFileError(path, error) {
+  const message = String(error);
+  const missing = message.startsWith("File not found:");
+  linkedFileTitle.textContent = missing ? "File not found" : "Unable to open file";
+  linkedFileDescription.textContent = missing
+    ? "The linked Markdown file does not exist at this path:"
+    : message;
+  linkedFilePath.textContent = path;
+  linkedFileOverlay.classList.remove("hidden");
+  linkedFileOverlay.setAttribute("aria-hidden", "false");
+  document.body.classList.add("has-modal");
+  openModalFocus(linkedFileModal, linkedFileDismiss);
+}
+
+function hideLinkedFileError() {
+  const wasOpen = !linkedFileOverlay.classList.contains("hidden");
+  linkedFileOverlay.classList.add("hidden");
+  linkedFileOverlay.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("has-modal");
+  if (wasOpen) closeModalFocus();
+}
+
+function wireLinkedFileModal() {
+  linkedFileClose.addEventListener("click", hideLinkedFileError);
+  linkedFileDismiss.addEventListener("click", hideLinkedFileError);
+  linkedFileOverlay.addEventListener("click", (event) => {
+    if (event.target === linkedFileOverlay) hideLinkedFileError();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !linkedFileOverlay.classList.contains("hidden")) {
+      hideLinkedFileError();
+    }
+  });
 }
 
 function showShareModal(info) {
@@ -2199,6 +2287,35 @@ function wireExternalLinks() {
     const href = anchor.getAttribute("href");
     if (!href || href.startsWith("#")) return;
 
+    const pathPart = href.split(/[?#]/, 1)[0];
+    let decodedPath = pathPart;
+    try {
+      decodedPath = decodeURIComponent(pathPart);
+    } catch {
+      // The backend will reject a malformed URL if this otherwise looks local.
+    }
+
+    if (
+      lastOpenTarget?.kind === "file" &&
+      /\.(?:md|markdown)$/i.test(decodedPath)
+    ) {
+      event.preventDefault();
+      const sourcePath = currentDocPath;
+      void invoke("resolve_local_markdown_link", {
+        currentPath: sourcePath,
+        href,
+      })
+        .then((link) => {
+          if (link && currentDocPath === sourcePath) {
+            void openLinkedFile(link.path, link.fragment ?? "");
+          }
+        })
+        .catch((err) => {
+          console.warn("Failed to resolve local Markdown link", err);
+        });
+      return;
+    }
+
     let url;
     try {
       url = new URL(href, window.location.href);
@@ -2494,6 +2611,7 @@ async function boot() {
   void markMissingFontPresets();
   await loadBundledColorTemplates();
   wireExternalLinks();
+  wireLinkedFileModal();
   wireChangePopup();
   wireToc();
   wireTitlebar();

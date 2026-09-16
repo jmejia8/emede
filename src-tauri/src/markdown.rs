@@ -29,6 +29,12 @@ pub struct RenderResult {
     pub changes: Option<Vec<crate::changes::BlockChange>>,
 }
 
+#[derive(Serialize)]
+pub struct DocumentLink {
+    pub path: String,
+    pub fragment: Option<String>,
+}
+
 fn resolve_path(path: &str) -> PathBuf {
     let p = PathBuf::from(path);
     if p.is_absolute() {
@@ -38,6 +44,41 @@ fn resolve_path(path: &str) -> PathBuf {
             .unwrap_or_else(|_| PathBuf::from("."))
             .join(p)
     }
+}
+
+/// Resolve a Markdown link against the document that contains it. Using a file
+/// URL as the intermediate representation handles `..`, percent-encoded path
+/// segments and platform-specific absolute paths without exposing WebView URL
+/// semantics to the frontend.
+fn resolve_local_markdown_link_inner(current_path: &str, href: &str) -> Option<DocumentLink> {
+    if is_remote_url(current_path) || href.trim().is_empty() || href.starts_with('#') {
+        return None;
+    }
+
+    let base = tauri::Url::from_file_path(resolve_path(current_path)).ok()?;
+    let target = base.join(href).ok()?;
+    if target.scheme() != "file" {
+        return None;
+    }
+
+    let path = target.to_file_path().ok()?;
+    let extension = path.extension()?.to_str()?;
+    if !extension.eq_ignore_ascii_case("md") && !extension.eq_ignore_ascii_case("markdown") {
+        return None;
+    }
+
+    Some(DocumentLink {
+        path: path.to_string_lossy().into_owned(),
+        fragment: target
+            .fragment()
+            .filter(|fragment| !fragment.is_empty())
+            .map(str::to_string),
+    })
+}
+
+#[tauri::command]
+pub fn resolve_local_markdown_link(current_path: String, href: String) -> Option<DocumentLink> {
+    resolve_local_markdown_link_inner(&current_path, &href)
 }
 
 pub(crate) fn is_remote_url(src: &str) -> bool {
@@ -1284,6 +1325,35 @@ mod tests {
         assert!(decode_text(b"%PDF-1.7\x00\x01binary".to_vec()).is_none());
         // Invalid UTF-8 sequence.
         assert!(decode_text(vec![0xff, 0xfe, 0x00]).is_none());
+    }
+
+    #[test]
+    fn resolves_local_markdown_links_relative_to_the_open_document() {
+        let link = resolve_local_markdown_link_inner(
+            "/home/reader/notes/current.md",
+            "../README%20Guide.md#getting-started",
+        )
+        .expect("local Markdown link");
+
+        assert_eq!(link.path, "/home/reader/README Guide.md");
+        assert_eq!(link.fragment.as_deref(), Some("getting-started"));
+    }
+
+    #[test]
+    fn local_markdown_link_resolver_rejects_other_targets() {
+        assert!(
+            resolve_local_markdown_link_inner("/home/reader/notes/current.md", "diagram.png")
+                .is_none()
+        );
+        assert!(resolve_local_markdown_link_inner(
+            "/home/reader/notes/current.md",
+            "https://example.com/README.md"
+        )
+        .is_none());
+        assert!(
+            resolve_local_markdown_link_inner("https://example.com/current.md", "README.md")
+                .is_none()
+        );
     }
 
     #[test]

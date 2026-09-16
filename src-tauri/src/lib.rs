@@ -327,6 +327,7 @@ fn run_inner(files: Vec<String>, print_target: Option<String>) {
         .invoke_handler(tauri::generate_handler![
             markdown::render_markdown,
             markdown::render_markdown_url,
+            markdown::resolve_local_markdown_link,
             changes::get_document_changes,
             settings::get_settings,
             settings::set_settings,
