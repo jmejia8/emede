@@ -20,6 +20,18 @@
   --titlebar-height: 2.25rem;
 }
 
+@property --find-match-strength {
+  syntax: "<percentage>";
+  inherits: true;
+  initial-value: 25%;
+}
+
+@property --find-active-strength {
+  syntax: "<percentage>";
+  inherits: true;
+  initial-value: 48%;
+}
+
 *,
 *::before,
 *::after {
@@ -2527,12 +2539,10 @@ body.has-modal {
   }
 }
 
-@keyframes match-pulse {
-  0%, 100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-link) 30%, transparent);
-  }
-  50% {
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-link) 15%, transparent);
+@keyframes find-highlights-fade-out {
+  to {
+    --find-match-strength: 0%;
+    --find-active-strength: 0%;
   }
 }
 
@@ -2681,17 +2691,32 @@ body.frame-emede .search-bar {
   color: var(--color-fg);
 }
 
-mark[data-find-match] {
-  background: color-mix(in srgb, var(--color-link) 25%, transparent);
+::highlight(emede-find-match) {
+  background-color: color-mix(
+    in srgb,
+    var(--color-link) var(--find-match-strength),
+    transparent
+  );
   color: inherit;
-  border-radius: 3px;
-  padding: 0 2px;
-  transition: background 0.2s ease;
 }
 
-mark[data-find-match].find-active {
-  background: color-mix(in srgb, var(--color-link) 40%, transparent);
-  animation: match-pulse 1.5s ease-in-out 2;
+::highlight(emede-find-active) {
+  background-color: color-mix(
+    in srgb,
+    var(--color-link) var(--find-active-strength),
+    transparent
+  );
+  color: inherit;
+}
+
+.prose.find-highlights-closing {
+  animation: find-highlights-fade-out 180ms ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .prose.find-highlights-closing {
+    animation-duration: 1ms;
+  }
 }
 
 /* ── Right-click context menu ─────────────────────────────────────────────── */

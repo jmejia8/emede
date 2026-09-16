@@ -1,11 +1,10 @@
 /**
  * Shared DOM text-range primitives.
  *
- * Both in-page search (`find.js`) and change highlighting (`changes.js`) need
- * the same trick: locate a run of text inside rendered HTML by character offset
- * and wrap it in an element, without ever re-serializing the markup. These
- * helpers do that by walking text nodes and moving them, so inline structure
- * (`<em>`, `<code>`, links) survives being wrapped and unwrapped.
+ * Change highlighting uses these primitives to locate a run of text inside
+ * rendered HTML by character offset and wrap it without re-serializing the
+ * markup. Find-in-page only shares `collectTextSegments`; its matches are
+ * painted with the CSS Custom Highlight API and never wrap document nodes.
  */
 
 /**

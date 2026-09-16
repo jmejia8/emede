@@ -248,8 +248,8 @@ function intersectsAny(range, mathRanges) {
 /**
  * Place one span in the DOM.
  *
- * Segments are re-collected per span, exactly as `find.js` does: the previous
- * wrap split text nodes, so a mapping captured once would already be stale.
+ * Segments are re-collected per span because the previous wrap split text
+ * nodes, so a mapping captured once would already be stale.
  * That makes this O(spans × nodes), which is fine — both are per-block and
  * small, and correctness is worth more than the cleverness here.
  */
@@ -291,8 +291,7 @@ function applySpan(el, span, owns) {
 /**
  * Attach the previous wording to a mark.
  *
- * Written from JS, so ammonia's attribute stripping never sees it — the same
- * reason `find.js` can rely on `data-find-match`.
+ * Written from JS, so ammonia's attribute stripping never sees it.
  */
 function describe(el, previous, label) {
   if (previous) {

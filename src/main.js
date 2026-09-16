@@ -1303,8 +1303,8 @@ const STATS_OPEN_KEY = "emede:stats-open";
 /// Raw markdown of the open document, kept so the token estimate can be
 /// recomputed when the reading speed changes without re-reading the file.
 let currentDocSource = "";
-/// The backend's last diff for the open document, kept so the change marks can
-/// be rebuilt after find-in-page has torn through the same text nodes.
+/// The backend's last diff for the open document, used to detect whether a
+/// baseline refresh actually changed anything.
 let currentDocChanges = null;
 
 function readingWpm() {
@@ -2021,6 +2021,7 @@ async function closeFile() {
   lastOpenTarget = null;
   activeOpenToken++;
   setReaderState("empty");
+  getScrollRoot().scrollTop = 0;
   await setWindowTitle("emede");
 }
 
@@ -2297,15 +2298,12 @@ function toggleSearch(open) {
     searchBar.classList.add("search-bar--closing");
     searchBar.setAttribute("aria-hidden", "true");
     searchInput.blur();
+    // Fade matches with the search bar, then invalidate WebKit's paint layer so
+    // cleared highlights do not linger until the next scroll.
+    if (findInPage) findInPage.stop({ fade: true });
     setTimeout(() => {
       searchBar.classList.add("hidden");
       searchBar.classList.remove("search-bar--closing");
-      // No need to rebuild the change marks here: `stop()` unwraps its own
-      // marks rather than flattening them to text, so a change mark nested in
-      // (or split by) a search hit survives intact. Re-applying would in fact
-      // be wrong — by now MathJax has replaced `$…$` with `<mjx-container>`,
-      // so every block holding math would fail verification and degrade.
-      if (findInPage) findInPage.stop();
       searchInput.value = "";
       searchCounter.textContent = "";
     }, 200);
