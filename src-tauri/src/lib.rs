@@ -492,6 +492,10 @@ fn get_app_version(app: tauri::AppHandle) -> String {
 
 #[tauri::command]
 fn open_in_new_window(path: String) -> Result<(), String> {
+    // Validate before spawning so callers can report a missing or unreadable
+    // link in the current window instead of opening a process that only shows
+    // an error state.
+    markdown::read_local_document(&path)?;
     spawn_window_for(&path)
 }
 

@@ -78,3 +78,11 @@ graph TB
      class sq,e green
      class di orange
 ```
+
+
+## Links to other MD files
+
+This file is a companion for [README.md](README.md)
+
+
+This file is a companion for [ThisNotExsists.md](ThisNotExsists.md)

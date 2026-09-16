@@ -1407,6 +1407,14 @@ async function openLinkedFile(path, fragment = "") {
   }
 }
 
+async function openLinkedFileInNewWindow(path) {
+  try {
+    await invoke("open_in_new_window", { path });
+  } catch (err) {
+    showLinkedFileError(path, err);
+  }
+}
+
 function scrollToDocumentFragment(fragment) {
   let id = fragment;
   try {
@@ -2301,13 +2309,18 @@ function wireExternalLinks() {
     ) {
       event.preventDefault();
       const sourcePath = currentDocPath;
+      const openInNewWindow = event.ctrlKey || event.metaKey;
       void invoke("resolve_local_markdown_link", {
         currentPath: sourcePath,
         href,
       })
         .then((link) => {
           if (link && currentDocPath === sourcePath) {
-            void openLinkedFile(link.path, link.fragment ?? "");
+            if (openInNewWindow) {
+              void openLinkedFileInNewWindow(link.path);
+            } else {
+              void openLinkedFile(link.path, link.fragment ?? "");
+            }
           }
         })
         .catch((err) => {
