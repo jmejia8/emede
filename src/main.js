@@ -175,6 +175,7 @@ const FONT_PRESETS = {
   },
 };
 
+const readerEl = document.getElementById("reader");
 const contentEl = document.getElementById("content");
 const emptyStateEl = document.getElementById("empty-state");
 const blankStateEl = document.getElementById("blank-state");
@@ -2059,7 +2060,7 @@ async function runContextAction(action) {
       await startShare();
       break;
     case "print":
-      window.print();
+      printDocument();
       break;
     case "close-file":
       await closeFile();
@@ -2068,6 +2069,31 @@ async function runContextAction(action) {
       await getCurrentWindow().close();
       break;
   }
+}
+
+/**
+ * Freeze the reader's current geometry for paged media. Paper is commonly
+ * narrower than the app window; allowing CSS to lay the document out again at
+ * that width changes line breaks and makes the result look like a different
+ * document. WebKit can instead shrink this fixed-width layout to the selected
+ * sheet while preserving the reader's zoom, measure, and centered margins.
+ */
+function capturePrintLayout() {
+  const readerRect = readerEl.getBoundingClientRect();
+  const contentRect = contentEl.getBoundingClientRect();
+  if (readerRect.width <= 0 || contentRect.width <= 0) return;
+
+  const readerStyle = getComputedStyle(readerEl);
+  const rootStyle = document.documentElement.style;
+  rootStyle.setProperty("--print-layout-width", `${readerRect.width}px`);
+  rootStyle.setProperty("--print-content-width", `${contentRect.width}px`);
+  rootStyle.setProperty("--print-padding-top", readerStyle.paddingTop);
+  rootStyle.setProperty("--print-padding-bottom", readerStyle.paddingBottom);
+}
+
+function printDocument() {
+  capturePrintLayout();
+  window.print();
 }
 
 function wireContextMenu() {
@@ -2662,7 +2688,7 @@ function wireKeybindings() {
     toggleSearch,
     adjustFontSize,
     resetFontSize,
-    print: () => window.print(),
+    print: printDocument,
     settingsPanel,
     tocPanel,
     aboutOverlay,
@@ -2682,19 +2708,7 @@ async function boot() {
   wireChangePopup();
   wireToc();
   wireTitlebar();
-  printToggle.addEventListener("click", () => window.print());
-  let savedPrintFontSize = null;
-  window.addEventListener("beforeprint", () => {
-    savedPrintFontSize = document.documentElement.style.getPropertyValue("--font-size");
-    const current = toPt(savedPrintFontSize, 12);
-    document.documentElement.style.setProperty("--font-size", `${Math.max(4, Math.round(current / 2))}pt`);
-  });
-  window.addEventListener("afterprint", () => {
-    if (savedPrintFontSize !== null) {
-      document.documentElement.style.setProperty("--font-size", savedPrintFontSize);
-      savedPrintFontSize = null;
-    }
-  });
+  printToggle.addEventListener("click", printDocument);
   wireSettings();
   wireViewState();
   wireSearch();
@@ -2764,6 +2778,7 @@ async function boot() {
       await renderMermaid();
       await typesetMath();
       await nextFrame();
+      capturePrintLayout();
     }
     // On success the backend exits the process from the print operation; this
     // call only returns if setup failed, in which case the backend also exits.
