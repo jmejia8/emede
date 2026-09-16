@@ -943,11 +943,67 @@ function isRemoteUrl(src) {
   return /^(?:https?:|data:|mailto:|tel:)/i.test(src);
 }
 
+function imageFileName(src) {
+  const path = src.split(/[?#]/, 1)[0].replaceAll("\\", "/");
+  const encodedName = path.split("/").pop();
+  if (!encodedName) return "Unknown image";
+  try {
+    return decodeURIComponent(encodedName);
+  } catch {
+    return encodedName;
+  }
+}
+
+function replaceBrokenImage(img, originalSrc) {
+  if (!img.isConnected) return;
+
+  const alt = img.getAttribute("alt");
+  // An explicitly empty alt marks a decorative image. Its absence should not
+  // interrupt the reading flow with a status card.
+  if (alt !== null && !alt.trim()) {
+    img.remove();
+    return;
+  }
+
+  const fileName = imageFileName(originalSrc);
+  const description = alt?.trim() || fileName;
+  const placeholder = document.createElement("span");
+  placeholder.className = "image-fallback";
+  placeholder.setAttribute("role", "img");
+  placeholder.setAttribute("aria-label", `Image unavailable. ${description}`);
+
+  const icon = document.createElement("span");
+  icon.className = "image-fallback-icon";
+  icon.setAttribute("aria-hidden", "true");
+  icon.innerHTML =
+    '<svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="6.5" width="31" height="27" rx="3"/><circle cx="14" cy="15" r="2.5"/><path d="m8.5 29 8-8 5.5 5.5 3.5-3.5 6 6"/><path d="m8 8 24 24"/></svg>';
+
+  const copy = document.createElement("span");
+  copy.className = "image-fallback-copy";
+  const label = document.createElement("span");
+  label.className = "image-fallback-label";
+  label.textContent = "Image unavailable";
+  const detail = document.createElement("span");
+  detail.className = "image-fallback-detail";
+  detail.textContent = description;
+  copy.append(label, detail);
+
+  placeholder.append(icon, copy);
+  img.replaceWith(placeholder);
+}
+
 function rewriteLocalImageSrcs(root) {
   for (const img of root.querySelectorAll("img[src]")) {
     const src = img.getAttribute("src");
-    if (!src || isRemoteUrl(src)) continue;
-    img.src = convertFileSrc(src);
+    if (!src) continue;
+
+    img.addEventListener("error", () => replaceBrokenImage(img, src), { once: true });
+    if (!isRemoteUrl(src)) img.src = convertFileSrc(src);
+
+    // A cached failure may already be complete before the listener is attached.
+    if (img.complete && img.naturalWidth === 0) {
+      queueMicrotask(() => replaceBrokenImage(img, src));
+    }
   }
 }
 

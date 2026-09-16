@@ -15,7 +15,8 @@ const PROSE_BLOCKS = "p, li, dt, dd, figcaption, blockquote, h1, h2, h3, h4, h5,
 
 /// Removed before prose is measured. `pre.plain-text` is deliberately spared:
 /// emede wraps whole .txt documents in it, and that text really is the prose.
-const NON_PROSE = "pre:not(.plain-text), table, .mermaid, mjx-container, .katex";
+const NON_PROSE =
+  "pre:not(.plain-text), table, .mermaid, mjx-container, .katex, .image-fallback";
 
 /// Words per minute used when no reading speed is configured. From Brysbaert
 /// (2019), a meta-analysis of 190 studies: 238 wpm for silent non-fiction.
@@ -136,7 +137,7 @@ function elementStats(contentEl) {
     codeBlocks,
     diagrams,
     tables: contentEl.querySelectorAll("table").length,
-    figures: contentEl.querySelectorAll("img").length,
+    figures: contentEl.querySelectorAll("img, .image-fallback").length,
   };
 }
 
