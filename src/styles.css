@@ -1237,6 +1237,13 @@ body:has(.settings-panel:not(.hidden)) .settings-toggle {
   background: color-mix(in srgb, var(--color-fg) 8%, transparent);
 }
 
+.panel-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  background: transparent;
+}
+
 .toc-panel {
   position: fixed;
   top: 0;
@@ -2973,6 +2980,7 @@ body.frame-emede .search-bar {
   .reader-control,
   #settings-panel,
   #toc-panel,
+  #panel-backdrop,
   #search-bar,
   #about-overlay,
   #linked-file-overlay,

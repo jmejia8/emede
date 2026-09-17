@@ -186,6 +186,7 @@ const errorMessageEl = document.getElementById("error-message");
 const loadingStateEl = document.getElementById("loading-state");
 const missingStateEl = document.getElementById("missing-state");
 const missingMessageEl = document.getElementById("missing-message");
+const panelBackdrop = document.getElementById("panel-backdrop");
 const tocPanel = document.getElementById("toc-panel");
 const tocToggle = document.getElementById("toc-toggle");
 const tocClose = document.getElementById("toc-close");
@@ -2179,6 +2180,7 @@ function toggleSettings(open) {
   const hadFocus = settingsPanel.contains(document.activeElement);
   settingsPanel.classList.toggle("hidden", !show);
   settingsPanel.setAttribute("aria-hidden", String(!show));
+  syncPanelBackdrop();
   if (show) {
     settingsClose?.focus();
   } else if (hadFocus) {
@@ -2191,11 +2193,27 @@ function toggleToc(open) {
   const hadFocus = tocPanel.contains(document.activeElement);
   tocPanel.classList.toggle("hidden", !show);
   tocPanel.setAttribute("aria-hidden", String(!show));
+  syncPanelBackdrop();
   if (show) {
     tocClose?.focus();
   } else if (hadFocus) {
     tocToggle?.focus();
   }
+}
+
+function syncPanelBackdrop() {
+  const show =
+    !settingsPanel.classList.contains("hidden") ||
+    !tocPanel.classList.contains("hidden");
+  panelBackdrop.classList.toggle("hidden", !show);
+  panelBackdrop.setAttribute("aria-hidden", String(!show));
+}
+
+function wirePanelBackdrop() {
+  panelBackdrop.addEventListener("click", () => {
+    toggleSettings(false);
+    toggleToc(false);
+  });
 }
 
 // ── Update checking ──────────────────────────────────────────────────────────
@@ -2707,6 +2725,7 @@ async function boot() {
   wireLinkedFileModal();
   wireChangePopup();
   wireToc();
+  wirePanelBackdrop();
   wireTitlebar();
   printToggle.addEventListener("click", printDocument);
   wireSettings();
