@@ -1294,6 +1294,67 @@ function buildToc() {
   }
 
   tocList.appendChild(tree);
+  syncActiveTocLink();
+}
+
+function syncActiveTocLink({ reveal = false } = {}) {
+  const links = Array.from(tocList.querySelectorAll("a.toc-link"));
+  if (links.length === 0) return;
+
+  const headings = Array.from(contentEl.querySelectorAll("h1, h2, h3, h4"));
+  const scrollRoot = getScrollRoot();
+  const rootTop =
+    scrollRoot === document.documentElement
+      ? 0
+      : scrollRoot.getBoundingClientRect().top;
+  const viewportHeight =
+    scrollRoot === document.documentElement
+      ? window.innerHeight
+      : scrollRoot.clientHeight;
+  const readingLine = rootTop + Math.min(140, viewportHeight * 0.2);
+
+  let activeId = headings[0]?.id ?? "";
+  for (const heading of headings) {
+    if (heading.getBoundingClientRect().top > readingLine) break;
+    activeId = heading.id;
+  }
+
+  let activeLink = null;
+  for (const link of links) {
+    const isActive = link.getAttribute("href") === `#${activeId}`;
+    if (isActive) {
+      link.setAttribute("aria-current", "location");
+    } else {
+      link.removeAttribute("aria-current");
+    }
+    if (isActive) activeLink = link;
+  }
+
+  if (!reveal || !activeLink || activeLink.offsetParent === null) return;
+
+  const bodyRect = tocList.getBoundingClientRect();
+  const linkRect = activeLink.getBoundingClientRect();
+  const above = linkRect.top < bodyRect.top;
+  const below = linkRect.bottom > bodyRect.bottom;
+  if (above || below) {
+    tocList.scrollTo({
+      top: Math.max(
+        0,
+        tocList.scrollTop + linkRect.top - bodyRect.top - bodyRect.height * 0.3,
+      ),
+      behavior: "auto",
+    });
+  }
+}
+
+let tocSyncFrame = null;
+
+function scheduleActiveTocSync() {
+  if (tocPanel.classList.contains("hidden") || tocSyncFrame !== null) return;
+  tocSyncFrame = requestAnimationFrame(() => {
+    tocSyncFrame = null;
+    syncActiveTocLink();
+  });
 }
 
 // ── Document statistics ───────────────────────────────────────────────────────
@@ -2196,6 +2257,7 @@ function toggleToc(open) {
   syncPanelBackdrop();
   if (show) {
     tocClose?.focus();
+    requestAnimationFrame(() => syncActiveTocLink({ reveal: true }));
   } else if (hadFocus) {
     tocToggle?.focus();
   }
@@ -2362,6 +2424,7 @@ function wireToc() {
   initStats();
   tocToggle.addEventListener("click", () => toggleToc(true));
   tocClose.addEventListener("click", () => toggleToc(false));
+  document.addEventListener("scroll", scheduleActiveTocSync, true);
 
   tocList.addEventListener("click", (event) => {
     const expandBtn = event.target.closest(".toc-expand");

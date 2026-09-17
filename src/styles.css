@@ -1249,57 +1249,72 @@ body:has(.settings-panel:not(.hidden)) .settings-toggle {
   top: 0;
   left: 0;
   z-index: 30;
-  width: min(340px, 90vw);
+  width: min(360px, 92vw);
   height: 100vh;
   height: 100dvh;
-  background: color-mix(in srgb, var(--color-bg) 92%, var(--color-fg));
-  border-right: 1px solid var(--color-border);
-  box-shadow: 4px 0 32px color-mix(in srgb, var(--color-fg) 12%, transparent);
+  background: color-mix(in srgb, var(--color-bg) 97%, var(--color-fg));
+  border-right: 1px solid color-mix(in srgb, var(--color-fg) 10%, var(--color-bg));
+  box-shadow:
+    1px 0 color-mix(in srgb, var(--color-bg) 65%, transparent),
+    12px 0 40px color-mix(in srgb, var(--color-fg) 10%, transparent);
   display: flex;
   flex-direction: column;
   font: inherit;
-  font-size: 0.9em;
+  font-size: 0.88em;
   color-scheme: light dark;
+}
+
+.toc-panel:not(.hidden) {
+  animation: toc-panel-in 180ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+@keyframes toc-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(-0.6rem);
+  }
 }
 
 .toc-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1.1rem 1.25rem;
-  border-bottom: 1px solid var(--color-border);
-  background: linear-gradient(
-    to bottom,
-    color-mix(in srgb, var(--color-fg) 4%, var(--color-bg)),
-    transparent
-  );
+  min-height: 4.6rem;
+  padding: 1.15rem 1.35rem 1rem 1.5rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
 }
 
 .toc-header h2 {
   margin: 0;
-  font-size: 0.95em;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-family: var(--font-title);
+  font-size: 1.2em;
+  font-weight: 650;
+  letter-spacing: -0.01em;
   text-wrap: balance;
-  color: var(--color-muted);
+  color: var(--color-title);
 }
 
 .toc-close {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
   border: none;
-  background: none;
-  font-size: 1.5rem;
+  background: transparent;
+  font-size: 1.35rem;
+  font-weight: 300;
   line-height: 1;
   cursor: pointer;
   color: var(--color-muted);
-  padding: 0.15rem 0.35rem;
-  border-radius: 4px;
+  padding: 0 0 0.12rem;
+  border-radius: 50%;
   touch-action: manipulation;
+  transition: color 0.15s ease, background-color 0.15s ease;
 }
 
 .toc-close:hover {
   color: var(--color-fg);
-  background: color-mix(in srgb, var(--color-fg) 8%, transparent);
+  background: color-mix(in srgb, var(--color-fg) 7%, transparent);
 }
 
 .toc-close:focus-visible {
@@ -1308,11 +1323,26 @@ body:has(.settings-panel:not(.hidden)) .settings-toggle {
 }
 
 .toc-body {
-  padding: 0.65rem 0 1rem;
+  padding: 0.85rem 0.7rem 1.5rem;
   margin: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
   flex: 1;
+}
+
+.toc-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.toc-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.toc-body::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--color-border);
 }
 
 .toc-tree {
@@ -1327,25 +1357,27 @@ body:has(.settings-panel:not(.hidden)) .settings-toggle {
 
 .toc-row {
   display: flex;
-  align-items: flex-start;
-  gap: 0.15rem;
+  align-items: center;
+  gap: 0.2rem;
   min-width: 0;
+  border-radius: 6px;
 }
 
 .toc-spacer {
-  flex: 0 0 1.35rem;
+  flex: 0 0 1.5rem;
 }
 
 .toc-expand {
-  flex: 0 0 1.35rem;
+  flex: 0 0 1.5rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 1.75rem;
+  align-self: stretch;
+  min-height: 2rem;
   margin: 0;
   padding: 0;
   border: none;
-  border-radius: 4px;
+  border-radius: 5px;
   background: transparent;
   color: var(--color-muted);
   cursor: pointer;
@@ -1354,7 +1386,7 @@ body:has(.settings-panel:not(.hidden)) .settings-toggle {
 
 .toc-expand:hover {
   color: var(--color-fg);
-  background: color-mix(in srgb, var(--color-fg) 8%, transparent);
+  background: color-mix(in srgb, var(--color-fg) 6%, transparent);
 }
 
 .toc-expand:focus-visible {
@@ -1364,10 +1396,10 @@ body:has(.settings-panel:not(.hidden)) .settings-toggle {
 
 .toc-chevron {
   display: block;
-  width: 0.45rem;
-  height: 0.45rem;
-  border-right: 1.5px solid currentColor;
-  border-bottom: 1.5px solid currentColor;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-right: 1.25px solid currentColor;
+  border-bottom: 1.25px solid currentColor;
   transform: rotate(-45deg) translate(-1px, -1px);
   transform-origin: center;
   transition: transform 0.2s ease;
@@ -1378,6 +1410,10 @@ body:has(.settings-panel:not(.hidden)) .settings-toggle {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .toc-panel:not(.hidden) {
+    animation: none;
+  }
+
   .toc-chevron {
     transition: none;
   }
@@ -1387,48 +1423,43 @@ body:has(.settings-panel:not(.hidden)) .settings-toggle {
   flex: 1;
   min-width: 0;
   display: block;
-  padding: 0.3rem 1rem 0.3rem 0.15rem;
-  color: var(--color-muted);
+  padding: 0.42rem 0.65rem 0.42rem 0.15rem;
+  font-family: var(--font-title);
+  color: color-mix(in srgb, var(--color-title) 68%, var(--color-muted));
   text-decoration: none;
-  line-height: 1.4;
-  border-radius: 0 4px 4px 0;
-  border-left: 2px solid transparent;
-  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+  line-height: 1.35;
+  border-radius: 5px;
+  transition: color 0.15s ease, background-color 0.15s ease;
 }
 
 .toc-link:hover {
-  color: var(--color-fg);
-  background: color-mix(in srgb, var(--color-fg) 6%, transparent);
+  color: var(--color-title);
+  background: color-mix(in srgb, var(--color-title) 5%, transparent);
 }
 
 .toc-link:focus-visible {
-  color: var(--color-fg);
-  background: color-mix(in srgb, var(--color-fg) 6%, transparent);
+  color: var(--color-title);
+  background: color-mix(in srgb, var(--color-title) 5%, transparent);
   outline: 2px solid var(--color-link);
   outline-offset: -2px;
 }
 
 .toc-item.toc-level-1 > .toc-row .toc-link {
-  font-weight: 600;
-  color: color-mix(in srgb, var(--color-fg) 78%, var(--color-muted));
+  font-size: 1.05em;
+  font-weight: 650;
+  color: color-mix(in srgb, var(--color-title) 92%, var(--color-muted));
 }
 
 .toc-item.toc-level-2 > .toc-row .toc-link {
-  font-weight: 700;
-  color: color-mix(in srgb, var(--color-fg) 85%, var(--color-muted));
-}
-
-.toc-item.toc-level-2 > .toc-row .toc-link:hover,
-.toc-item.toc-level-2 > .toc-row .toc-link:focus-visible {
-  border-left-color: var(--color-link);
+  font-weight: 600;
+  color: color-mix(in srgb, var(--color-title) 82%, var(--color-muted));
 }
 
 .toc-children {
   list-style: none;
   margin: 0;
-  padding: 0 0 0.15rem 0.65rem;
-  border-left: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
-  margin-left: 1.35rem;
+  padding: 0.05rem 0 0.2rem 0.65rem;
+  margin-left: 0.75rem;
 }
 
 .toc-item.toc-collapsed > .toc-children {
@@ -1436,28 +1467,41 @@ body:has(.settings-panel:not(.hidden)) .settings-toggle {
 }
 
 .toc-item.toc-level-3 > .toc-row .toc-link {
-  font-size: 0.95em;
+  font-size: 0.96em;
 }
 
 .toc-item.toc-level-4 > .toc-row .toc-link {
-  font-size: 0.9em;
-  opacity: 0.92;
+  font-size: 0.91em;
+  color: color-mix(in srgb, var(--color-title) 55%, var(--color-muted));
+}
+
+.toc-item > .toc-row .toc-link:hover,
+.toc-item > .toc-row .toc-link:focus-visible,
+.toc-item > .toc-row .toc-link[aria-current="location"] {
+  color: var(--color-title);
+}
+
+.toc-link[aria-current="location"] {
+  background: color-mix(in srgb, var(--color-title) 9%, transparent);
 }
 
 .toc-empty {
-  margin: 0.5rem 1.25rem;
+  margin: 0.8rem 0.75rem;
   color: var(--color-muted);
   font-style: italic;
+  line-height: 1.55;
 }
 
 /* Document statistics — a collapsible footer pinned below the heading tree. */
 .doc-stats {
   flex: 0 0 auto;
-  border-top: 1px solid var(--color-border);
-  background: color-mix(in srgb, var(--color-fg) 3%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 75%, transparent);
+  background: color-mix(in srgb, var(--color-fg) 2%, transparent);
   max-height: 55%;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
 }
 
 .doc-stats[hidden] {
@@ -1468,18 +1512,17 @@ body:has(.settings-panel:not(.hidden)) .settings-toggle {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.8rem 1.25rem;
+  padding: 0.85rem 1.45rem;
   cursor: pointer;
   list-style: none;
   user-select: none;
   color: var(--color-muted);
-  font-size: 0.95em;
+  font-size: 0.87em;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  letter-spacing: 0.025em;
   position: sticky;
   top: 0;
-  background: color-mix(in srgb, var(--color-bg) 92%, var(--color-fg));
+  background: color-mix(in srgb, var(--color-bg) 97%, var(--color-fg));
 }
 
 /* Safari/WebKit still needs the pseudo-element form to drop the marker. */
@@ -1508,9 +1551,10 @@ body:has(.settings-panel:not(.hidden)) .settings-toggle {
 .doc-stats-body {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 0.3rem 1rem;
+  gap: 0.38rem 1rem;
   margin: 0;
-  padding: 0 1.25rem 1rem;
+  padding: 0.1rem 1.45rem 1.15rem;
+  font-size: 0.94em;
 }
 
 .doc-stats-body dt {
