@@ -1,9 +1,10 @@
 use base64::Engine as _;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::net::{IpAddr, Ipv4Addr, TcpStream, UdpSocket};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, RwLock};
+use std::process::Command;
+use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use std::thread::JoinHandle;
 use std::time::Duration;
 use tiny_http::{Header, Method, Response, Server};
@@ -435,6 +436,256 @@ fn reader_width_cm(value: &str) -> f64 {
     (clamped * 2.0).round() / 2.0 // snap to 0.5cm steps
 }
 
+const MAX_INLINE_FONT_BYTES: u64 = 5 * 1024 * 1024;
+const MAX_INLINE_FONTS_BYTES: u64 = 20 * 1024 * 1024;
+
+#[derive(Clone, Copy)]
+struct FontRequest {
+    weight: u16,
+    style: &'static str,
+    weight_pattern: &'static str,
+    slant_pattern: &'static str,
+    needs_bold: bool,
+    needs_italic: bool,
+}
+
+const FONT_REQUESTS: [FontRequest; 4] = [
+    FontRequest {
+        weight: 400,
+        style: "normal",
+        weight_pattern: "regular",
+        slant_pattern: "roman",
+        needs_bold: false,
+        needs_italic: false,
+    },
+    FontRequest {
+        weight: 700,
+        style: "normal",
+        weight_pattern: "bold",
+        slant_pattern: "roman",
+        needs_bold: true,
+        needs_italic: false,
+    },
+    FontRequest {
+        weight: 400,
+        style: "italic",
+        weight_pattern: "regular",
+        slant_pattern: "italic",
+        needs_bold: false,
+        needs_italic: true,
+    },
+    FontRequest {
+        weight: 700,
+        style: "italic",
+        weight_pattern: "bold",
+        slant_pattern: "italic",
+        needs_bold: true,
+        needs_italic: true,
+    },
+];
+
+#[derive(Clone)]
+struct MatchedFontFace {
+    family: String,
+    path: PathBuf,
+    weight: u16,
+    style: &'static str,
+}
+
+fn font_families_from_stack(stack: &str) -> Vec<String> {
+    let mut families = Vec::new();
+    let mut token = String::new();
+    let mut quote = None;
+
+    let finish = |token: &mut String, families: &mut Vec<String>| {
+        let family = token.trim().trim_matches(['"', '\'']).trim();
+        let generic = matches!(
+            family.to_ascii_lowercase().as_str(),
+            "serif"
+                | "sans-serif"
+                | "monospace"
+                | "cursive"
+                | "fantasy"
+                | "system-ui"
+                | "ui-serif"
+                | "ui-sans-serif"
+                | "ui-monospace"
+                | "inherit"
+        );
+        if !family.is_empty() && !generic {
+            families.push(family.to_string());
+        }
+        token.clear();
+    };
+
+    for ch in stack.chars() {
+        match quote {
+            Some(mark) if ch == mark => quote = None,
+            Some(_) => token.push(ch),
+            None if matches!(ch, '"' | '\'') => quote = Some(ch),
+            None if ch == ',' => finish(&mut token, &mut families),
+            None => token.push(ch),
+        }
+    }
+    finish(&mut token, &mut families);
+    families
+}
+
+fn matched_font_face(family: &str, request: FontRequest) -> Option<MatchedFontFace> {
+    let pattern_family = family.replace('\\', "\\\\").replace(':', "\\:");
+    let pattern = format!(
+        "{pattern_family}:weight={}:slant={}",
+        request.weight_pattern, request.slant_pattern
+    );
+    let output = Command::new("fc-match")
+        .args(["--format", "%{family[0]}\t%{style[0]}\t%{file}\n", &pattern])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut fields = text.lines().next()?.splitn(3, '\t');
+    let matched_family = fields.next()?.trim();
+    let matched_style = fields.next()?.trim().to_ascii_lowercase();
+    let path = PathBuf::from(fields.next()?.trim());
+    if !matched_family.eq_ignore_ascii_case(family) {
+        return None;
+    }
+
+    let is_bold = ["bold", "demi", "semibold", "heavy", "black"]
+        .iter()
+        .any(|marker| matched_style.contains(marker));
+    let is_italic = ["italic", "oblique"]
+        .iter()
+        .any(|marker| matched_style.contains(marker));
+    if is_bold != request.needs_bold || is_italic != request.needs_italic {
+        return None;
+    }
+
+    Some(MatchedFontFace {
+        family: matched_family.to_string(),
+        path,
+        weight: request.weight,
+        style: request.style,
+    })
+}
+
+fn faces_for_stack(stack: &str) -> Vec<MatchedFontFace> {
+    for family in font_families_from_stack(stack) {
+        let Some(regular) = matched_font_face(&family, FONT_REQUESTS[0]) else {
+            continue;
+        };
+        let mut faces = vec![regular];
+        faces.extend(
+            FONT_REQUESTS[1..]
+                .iter()
+                .filter_map(|request| matched_font_face(&family, *request)),
+        );
+        return faces;
+    }
+    Vec::new()
+}
+
+fn font_format(path: &Path) -> Option<(&'static str, &'static str)> {
+    match path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(str::to_ascii_lowercase)
+        .as_deref()
+    {
+        Some("ttf") => Some(("font/ttf", "truetype")),
+        Some("otf") => Some(("font/otf", "opentype")),
+        Some("woff") => Some(("font/woff", "woff")),
+        Some("woff2") => Some(("font/woff2", "woff2")),
+        _ => None,
+    }
+}
+
+fn css_string(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace(['\n', '\r'], " ")
+}
+
+fn build_embedded_font_css(stacks: &[&str]) -> String {
+    let mut faces = Vec::new();
+    let mut seen = HashSet::new();
+    for stack in stacks {
+        for face in faces_for_stack(stack) {
+            let key = (
+                face.family.to_ascii_lowercase(),
+                face.path.clone(),
+                face.weight,
+                face.style,
+            );
+            if seen.insert(key) {
+                faces.push(face);
+            }
+        }
+    }
+
+    let mut css = String::new();
+    let mut total_bytes = 0_u64;
+    for face in faces {
+        let Some((mime, format)) = font_format(&face.path) else {
+            continue;
+        };
+        let Ok(metadata) = std::fs::metadata(&face.path) else {
+            continue;
+        };
+        if metadata.len() > MAX_INLINE_FONT_BYTES
+            || total_bytes.saturating_add(metadata.len()) > MAX_INLINE_FONTS_BYTES
+        {
+            continue;
+        }
+        let Ok(bytes) = std::fs::read(&face.path) else {
+            continue;
+        };
+        total_bytes += metadata.len();
+        let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
+        css.push_str(&format!(
+            "@font-face {{ font-family: \"{}\"; src: url(data:{mime};base64,{encoded}) format(\"{format}\"); font-style: {}; font-weight: {}; font-display: swap; }}\n",
+            css_string(&face.family),
+            face.style,
+            face.weight,
+        ));
+    }
+    css
+}
+
+fn embedded_font_css(stacks: &[&str]) -> String {
+    static CACHE: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
+
+    let key = stacks.join("\u{1f}");
+    let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Some(css) = cache
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .get(&key)
+        .cloned()
+    {
+        return css;
+    }
+
+    let css = build_embedded_font_css(stacks);
+    let mut entries = cache.lock().unwrap_or_else(|error| error.into_inner());
+    if entries.len() >= 8 {
+        entries.clear();
+    }
+    entries.insert(key, css.clone());
+    css
+}
+
+fn optional_color<'a>(value: &'a Option<String>, fallback: &'a str) -> &'a str {
+    value
+        .as_deref()
+        .filter(|color| !color.trim().is_empty())
+        .unwrap_or(fallback)
+}
+
 /// Render `path` (local file or remote URL) into a self-contained HTML page for LAN clients.
 pub fn build_shared_page(path: &str) -> Result<String, String> {
     let result = markdown::render_markdown_any(path)?;
@@ -458,6 +709,12 @@ pub fn build_shared_page(path: &str) -> Result<String, String> {
     } else {
         settings.font_code.clone()
     };
+    let title_font = if settings.font_title.trim().is_empty() {
+        body_font.clone()
+    } else {
+        settings.font_title.clone()
+    };
+    let font_faces = embedded_font_css(&[&body_font, &title_font, &code_font]);
 
     let page = SHARED_PAGE_TEMPLATE
         .replace("{{TITLE}}", &escape_html(&result.title))
@@ -466,9 +723,61 @@ pub fn build_shared_page(path: &str) -> Result<String, String> {
         .replace("{{SIZE}}", &font_size_pt(&settings.font_size).to_string())
         .replace("{{WIDTH}}", &reader_width_cm(&settings.margin).to_string())
         .replace("{{FONT}}", &body_font)
+        .replace("{{FONT_TITLE}}", &title_font)
         .replace("{{FONT_CODE}}", &code_font)
+        .replace(
+            "{{COLOR_TITLE}}",
+            optional_color(&settings.color_title, "var(--color-fg)"),
+        )
+        .replace(
+            "{{COLOR_BOLD}}",
+            optional_color(&settings.color_bold, "var(--color-fg)"),
+        )
+        .replace(
+            "{{COLOR_ITALIC}}",
+            optional_color(&settings.color_italic, "var(--color-fg)"),
+        )
+        .replace(
+            "{{COLOR_QUOTE}}",
+            optional_color(&settings.color_quote, "var(--color-muted)"),
+        )
+        .replace(
+            "{{COLOR_LINK}}",
+            optional_color(
+                &settings.color_link,
+                "color-mix(in srgb, #3d5a80 72%, var(--color-fg))",
+            ),
+        )
+        .replace(
+            "{{COLOR_CODE}}",
+            optional_color(&settings.color_code, "var(--color-fg)"),
+        )
+        .replace(
+            "{{COLOR_CODE_BG}}",
+            optional_color(
+                &settings.color_code_bg,
+                "color-mix(in srgb, var(--color-fg) 10%, var(--color-bg))",
+            ),
+        )
+        .replace(
+            "{{COLOR_BORDER}}",
+            optional_color(
+                &settings.color_border,
+                "color-mix(in srgb, var(--color-fg) 16%, var(--color-bg))",
+            ),
+        )
+        .replace(
+            "{{COLOR_MUTED}}",
+            optional_color(
+                &settings.color_muted,
+                "color-mix(in srgb, var(--color-fg) 52%, transparent)",
+            ),
+        )
         .replace("{{USER}}", &escape_html(&host_user_label()))
         .replace("{{REPO}}", EMEDE_REPO_URL)
+        // Keep the multi-megabyte font payload last so the smaller replacements
+        // above do not repeatedly copy it.
+        .replace("{{FONT_FACES}}", &font_faces)
         .replace("{{CONTENT}}", &content);
 
     Ok(page)
@@ -1339,7 +1648,7 @@ pub fn get_note_share_info(
 const SHARED_CSP: &str = "default-src 'none'; \
 script-src 'unsafe-inline' https://cdn.jsdelivr.net; \
 style-src 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; \
-font-src https://fonts.gstatic.com https://cdn.jsdelivr.net; \
+font-src data: https://fonts.gstatic.com https://cdn.jsdelivr.net; \
 img-src data: http: https:; \
 connect-src https://cdn.jsdelivr.net";
 
@@ -1522,18 +1831,25 @@ const SHARED_PAGE_TEMPLATE: &str = r##"<!doctype html>
 </script>
 <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
 <style>
+  {{FONT_FACES}}
   :root {
     --color-fg: {{FG}};
     --color-bg: {{BG}};
+    --color-title: {{COLOR_TITLE}};
+    --color-bold: {{COLOR_BOLD}};
+    --color-italic: {{COLOR_ITALIC}};
+    --color-quote: {{COLOR_QUOTE}};
+    --color-link: {{COLOR_LINK}};
+    --color-code: {{COLOR_CODE}};
+    --color-code-bg: {{COLOR_CODE_BG}};
+    --color-border: {{COLOR_BORDER}};
+    --color-muted: {{COLOR_MUTED}};
     --font-size: {{SIZE}}pt;
     --reader-width: {{WIDTH}}cm;
     --reader-gutter: 1.5rem;
     --font-serif: {{FONT}};
+    --font-title: {{FONT_TITLE}};
     --font-code: {{FONT_CODE}};
-    --color-muted: color-mix(in srgb, var(--color-fg) 52%, transparent);
-    --color-link: color-mix(in srgb, #3d5a80 72%, var(--color-fg));
-    --color-code-bg: color-mix(in srgb, var(--color-fg) 10%, var(--color-bg));
-    --color-border: color-mix(in srgb, var(--color-fg) 16%, var(--color-bg));
   }
   * { box-sizing: border-box; }
   html, body {
@@ -1551,6 +1867,9 @@ const SHARED_PAGE_TEMPLATE: &str = r##"<!doctype html>
     word-wrap: break-word;
   }
   .prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
+    font-family: var(--font-title);
+    color: var(--color-title);
+    font-weight: 600;
     line-height: 1.25;
     margin: 1.6em 0 0.6em;
   }
@@ -1560,11 +1879,14 @@ const SHARED_PAGE_TEMPLATE: &str = r##"<!doctype html>
   .prose p, .prose ul, .prose ol, .prose blockquote, .prose pre, .prose table, .prose figure {
     margin: 0 0 1em;
   }
-  .prose a { color: var(--color-link); }
+  .prose a { color: var(--color-link); text-underline-offset: 0.15em; }
+  .prose strong { color: var(--color-bold); }
+  .prose em { color: var(--color-italic); }
   .prose img { max-width: 100%; height: auto; }
   .prose code {
     font-family: var(--font-code);
     font-size: 0.9em;
+    color: var(--color-code);
     background: var(--color-code-bg);
     padding: 0.1em 0.35em;
     border-radius: 4px;
@@ -1581,10 +1903,11 @@ const SHARED_PAGE_TEMPLATE: &str = r##"<!doctype html>
     margin-inline: 0;
     padding-left: 1em;
     border-left: 3px solid var(--color-border);
-    color: var(--color-muted);
+    color: var(--color-quote);
   }
   .prose table { border-collapse: collapse; width: 100%; display: block; overflow-x: auto; }
   .prose th, .prose td { border: 1px solid var(--color-border); padding: 0.4em 0.7em; }
+  .prose th { font-family: var(--font-title); color: var(--color-title); }
   .prose hr { border: none; border-top: 1px solid var(--color-border); }
   .prose .mermaid { text-align: center; }
 
@@ -2240,6 +2563,38 @@ mod tests {
         assert_eq!(reader_width_cm("10%"), DEFAULT_READER_WIDTH_CM);
         assert_eq!(reader_width_cm("72pt"), DEFAULT_READER_WIDTH_CM);
         assert_eq!(reader_width_cm("oops"), DEFAULT_READER_WIDTH_CM);
+    }
+
+    #[test]
+    fn font_stack_parser_keeps_only_concrete_families() {
+        let stack = r#""Source Serif 4", 'Noto Serif', ui-serif, serif"#;
+        assert_eq!(
+            font_families_from_stack(stack),
+            vec!["Source Serif 4", "Noto Serif"]
+        );
+    }
+
+    #[test]
+    fn shared_template_carries_theme_typography() {
+        let required = [
+            "{{FONT_FACES}}",
+            "--font-title: {{FONT_TITLE}}",
+            "--color-title: {{COLOR_TITLE}}",
+            "--color-bold: {{COLOR_BOLD}}",
+            "--color-italic: {{COLOR_ITALIC}}",
+            "--color-quote: {{COLOR_QUOTE}}",
+            "--color-link: {{COLOR_LINK}}",
+            "--color-code: {{COLOR_CODE}}",
+            "--color-code-bg: {{COLOR_CODE_BG}}",
+            "--color-border: {{COLOR_BORDER}}",
+            "--color-muted: {{COLOR_MUTED}}",
+        ];
+        assert!(
+            required
+                .iter()
+                .all(|fragment| SHARED_PAGE_TEMPLATE.contains(fragment)),
+            "shared page dropped a theme or font placeholder"
+        );
     }
 
     #[test]

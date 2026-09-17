@@ -2138,7 +2138,9 @@ async function runContextAction(action) {
  * narrower than the app window; allowing CSS to lay the document out again at
  * that width changes line breaks and makes the result look like a different
  * document. WebKit can instead shrink this fixed-width layout to the selected
- * sheet while preserving the reader's zoom, measure, and centered margins.
+ * sheet while preserving the reader's zoom and measure. Capture a compact
+ * canvas around the prose so its margins stay centered regardless of the app
+ * window width.
  */
 function capturePrintLayout() {
   const readerRect = readerEl.getBoundingClientRect();
@@ -2146,8 +2148,11 @@ function capturePrintLayout() {
   if (readerRect.width <= 0 || contentRect.width <= 0) return;
 
   const readerStyle = getComputedStyle(readerEl);
+  const paddingLeft = Number.parseFloat(readerStyle.paddingLeft) || 0;
+  const paddingRight = Number.parseFloat(readerStyle.paddingRight) || 0;
+  const layoutWidth = contentRect.width + paddingLeft + paddingRight;
   const rootStyle = document.documentElement.style;
-  rootStyle.setProperty("--print-layout-width", `${readerRect.width}px`);
+  rootStyle.setProperty("--print-layout-width", `${layoutWidth}px`);
   rootStyle.setProperty("--print-content-width", `${contentRect.width}px`);
   rootStyle.setProperty("--print-padding-top", readerStyle.paddingTop);
   rootStyle.setProperty("--print-padding-bottom", readerStyle.paddingBottom);
