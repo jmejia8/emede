@@ -369,6 +369,22 @@ fn run_inner(files: Vec<String>, print_target: Option<String>) {
                     let _ = window.set_background_color(Some(color));
                 }
 
+                #[cfg(target_os = "linux")]
+                if let Err(e) = window.with_webview(|wv| {
+                    use webkit2gtk::{SettingsExt, WebViewExt};
+
+                    // WebKitGTK already treats touchpad gestures as continuous
+                    // input, but applies an additional animation to discrete
+                    // mouse-wheel events. That animation can trail the wheel
+                    // noticeably, especially with high-resolution mice. Keep
+                    // scrolling native while removing that extra interpolation.
+                    if let Some(settings) = wv.inner().settings() {
+                        settings.set_enable_smooth_scrolling(false);
+                    }
+                }) {
+                    eprintln!("emede: failed to configure WebKit scrolling: {e}");
+                }
+
                 // For headless PDF export, the WebView must be *realized* (mapped)
                 // or WebKitGTK never lays out the page and the frontend's render
                 // loop is throttled — so nothing ever prints. Park the window far
