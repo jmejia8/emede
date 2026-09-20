@@ -28,6 +28,14 @@ const { openUrl, revealItemInDir } = window.__TAURI__.opener;
 const DEFAULT_FONT = '"Literata", "Source Serif 4", "Noto Serif", serif';
 const DEFAULT_FONT_CODE = '"IBM Plex Mono", "JetBrains Mono", "Fira Code", monospace';
 
+// Noto is the current default on Fedora, while DejaVu and Liberation remain
+// common across Debian-family installations. Activity presets can lead with a
+// more specialized face without becoming fragile on a typical Linux desktop.
+const LINUX_SERIF_FALLBACK = '"Noto Serif", "DejaVu Serif", "Liberation Serif", serif';
+const LINUX_SANS_FALLBACK = '"Noto Sans", "DejaVu Sans", "Liberation Sans", sans-serif';
+const LINUX_MONO_FALLBACK =
+  '"Noto Sans Mono", "DejaVu Sans Mono", "Liberation Mono", monospace';
+
 const FONT_GROUPS = [
   {
     label: "Serif",
@@ -150,30 +158,33 @@ const FONT_PRESETS = {
     font_title: '"Cantarell", sans-serif',
     font_code: DEFAULT_FONT_CODE,
   },
-  literata: {
-    font_family: DEFAULT_FONT,
+  longform: {
+    font_family: `"Literata", "Source Serif 4", ${LINUX_SERIF_FALLBACK}`,
     font_title: "",
-    font_code: '"JetBrains Mono", monospace',
+    font_code: `"IBM Plex Mono", "JetBrains Mono", "Fira Code", ${LINUX_MONO_FALLBACK}`,
   },
-  source: {
-    font_family: '"Source Serif 4", "Noto Serif", serif',
-    font_title: '"Source Serif 4", "Noto Serif", serif',
-    font_code: '"JetBrains Mono", "Fira Code", monospace',
+  scientific: {
+    font_family:
+      `"STIX Two Text", "Libertinus Serif", "Latin Modern Roman", ${LINUX_SERIF_FALLBACK}`,
+    font_title:
+      `"STIX Two Text", "Libertinus Serif", "Latin Modern Roman", ${LINUX_SERIF_FALLBACK}`,
+    font_code: `"JuliaMono", ${LINUX_MONO_FALLBACK}`,
   },
-  noto: {
-    font_family: '"Noto Serif", serif',
-    font_title: '"Noto Serif", serif',
-    font_code: '"Noto Sans Mono", monospace',
+  documentation: {
+    font_family: LINUX_SANS_FALLBACK,
+    font_title: LINUX_SANS_FALLBACK,
+    font_code: LINUX_MONO_FALLBACK,
   },
-  dejavu: {
-    font_family: '"DejaVu Serif", serif',
-    font_title: '"DejaVu Serif", serif',
-    font_code: '"DejaVu Sans Mono", monospace',
+  editorial: {
+    font_family: `"Source Serif 4", ${LINUX_SERIF_FALLBACK}`,
+    font_title: `"Source Sans 3", ${LINUX_SANS_FALLBACK}`,
+    font_code: `"IBM Plex Mono", "JetBrains Mono", ${LINUX_MONO_FALLBACK}`,
   },
-  technical: {
-    font_family: '"Noto Sans", sans-serif',
-    font_title: '"Cantarell", sans-serif',
-    font_code: '"Fira Code", "JetBrains Mono", monospace',
+  code: {
+    font_family: `"IBM Plex Sans", ${LINUX_SANS_FALLBACK}`,
+    font_title: `"IBM Plex Sans", ${LINUX_SANS_FALLBACK}`,
+    font_code:
+      `"IBM Plex Mono", "JetBrains Mono", "Fira Code", ${LINUX_MONO_FALLBACK}`,
   },
 };
 
@@ -2639,6 +2650,7 @@ function wireSettings() {
         ...preset,
       };
       applySettings(settings);
+      void markMissingFontPresets();
       await invoke("set_settings", { settings });
     });
   });
