@@ -1824,12 +1824,20 @@ const SHARED_PAGE_TEMPLATE: &str = r##"<!doctype html>
       inlineMath: [["\\(", "\\)"], ["$", "$"]],
       displayMath: [["\\[", "\\]"], ["$$", "$$"]],
     },
+    output: {
+      displayOverflow: "linebreak",
+      linebreaks: {
+        inline: true,
+        width: "100%",
+        lineleading: 0.2,
+      },
+    },
     options: {
       skipHtmlTags: ["script", "noscript", "style", "textarea", "pre", "code"],
     },
   };
 </script>
-<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-chtml.js"></script>
 <style>
   {{FONT_FACES}}
   :root {
@@ -2603,8 +2611,12 @@ mod tests {
         let page = build_shared_page(path).expect("build page");
         assert!(page.contains("class=\"prose\""), "missing prose wrapper");
         assert!(
-            page.contains("cdn.jsdelivr.net/npm/mathjax"),
-            "missing MathJax CDN script"
+            page.contains("cdn.jsdelivr.net/npm/mathjax@4/tex-chtml.js"),
+            "shared page must load MathJax 4 for native line breaking"
+        );
+        assert!(
+            page.contains("displayOverflow: \"linebreak\""),
+            "shared page must enable native MathJax line breaking"
         );
         assert!(
             !page.contains("<script>alert"),
