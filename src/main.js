@@ -67,6 +67,8 @@ const CODE_FONT_GROUPS = FONT_GROUPS.filter((group) => group.label === "Monospac
 const DEFAULT_READER_WIDTH_CM = 16;
 const MIN_READER_WIDTH_CM = 10;
 const MAX_READER_WIDTH_CM = 30;
+const DEFAULT_PAPER_SIZE = "none";
+const PAPER_SIZES = new Set(["none", "letter", "legal", "a3", "a4", "a5"]);
 
 const BUNDLED_COLOR_TEMPLATES = [
   {
@@ -176,6 +178,7 @@ const FONT_PRESETS = {
 };
 
 const readerEl = document.getElementById("reader");
+const pageSheet = document.getElementById("page-sheet");
 const contentEl = document.getElementById("content");
 const emptyStateEl = document.getElementById("empty-state");
 const blankStateEl = document.getElementById("blank-state");
@@ -232,6 +235,7 @@ const settingMargin = document.getElementById("setting-margin");
 const settingMarginLabel = document.getElementById("setting-margin-label");
 const settingFg = document.getElementById("setting-fg");
 const settingBg = document.getElementById("setting-bg");
+const settingPaperSize = document.getElementById("setting-paper-size");
 const colorTemplateList = document.getElementById("color-template-list");
 const importColorTemplateBtn = document.getElementById("import-color-template");
 const colorTemplateStatus = document.getElementById("color-template-status");
@@ -419,6 +423,10 @@ function isDarkColor(hex) {
   return luminance < 0.5;
 }
 
+function normalizePaperSize(value) {
+  return PAPER_SIZES.has(value) ? value : DEFAULT_PAPER_SIZE;
+}
+
 function normalizeCssColor(value) {
   const color = value.trim();
   if (!color || !CSS.supports("color", color)) return null;
@@ -555,6 +563,9 @@ function applySettings(settings) {
   document.documentElement.style.setProperty("--color-fg", settings.color_fg);
   document.documentElement.style.setProperty("--color-bg", settings.color_bg);
   localStorage.setItem("emede-color-bg", settings.color_bg);
+  const paperSize = normalizePaperSize(settings.paper_size);
+  readerEl.dataset.paperSize = paperSize;
+  readerEl.classList.toggle("paper-preview", paperSize !== DEFAULT_PAPER_SIZE);
   for (const property of Object.values(COLOR_TEMPLATE_PROPERTIES)) {
     if (property.required) continue;
     if (settings[property.setting]) {
@@ -576,6 +587,7 @@ function applySettings(settings) {
   settingMarginLabel.textContent = `${readerWidthCm} cm`;
   settingFg.value = settings.color_fg;
   settingBg.value = settings.color_bg;
+  settingPaperSize.value = paperSize;
   settingWindowFrame.value = normalizeWindowFrame(settings.window_frame);
   settingKeybindings.value = normalizeKeybindingMode(settings.keybindings);
   renderKeybindingHelp(keybindingsHelp, settings.keybindings);
@@ -604,6 +616,7 @@ function settingsFromForm() {
     font_size: `${Number(settingSize.value)}pt`,
     color_fg: settingFg.value,
     color_bg: settingBg.value,
+    paper_size: normalizePaperSize(settingPaperSize.value),
     margin: `${Number(settingMargin.value)}cm`,
     window_frame: settingWindowFrame.value,
     keybindings: settingKeybindings.value,
@@ -642,6 +655,7 @@ function clearToc() {
 function setReaderState(state, message = "") {
   contentEl.innerHTML = "";
   contentEl.classList.remove("visible");
+  pageSheet.classList.remove("page-sheet--active");
   loadingStateEl.classList.toggle("hidden", state !== "loading");
   emptyStateEl.classList.toggle("hidden", state !== "empty");
   blankStateEl.classList.add("hidden");
@@ -1058,7 +1072,8 @@ function isRenderedBlank(el) {
 function updateBlankState(result) {
   const blank = isRenderedBlank(contentEl);
   blankStateEl.classList.toggle("hidden", !blank);
-  if (!blank) return;
+  pageSheet.classList.toggle("page-sheet--active", !blank);
+  if (!blank) return false;
 
   const isUrlDoc = lastOpenTarget?.kind === "url";
   const target = isUrlDoc ? lastOpenTarget.value : (result.path ?? "");
@@ -1067,6 +1082,7 @@ function updateBlankState(result) {
   blankHintEl.textContent = isUrlDoc
     ? "The document at this address has no content to render."
     : "Write some Markdown and save — it will show up here the moment the file changes.";
+  return true;
 }
 
 async function applyDocument(result, { reload = false, openToken } = {}) {
@@ -2148,14 +2164,19 @@ function capturePrintLayout() {
   if (readerRect.width <= 0 || contentRect.width <= 0) return;
 
   const readerStyle = getComputedStyle(readerEl);
+  const framed = readerEl.classList.contains("paper-preview") &&
+    pageSheet.classList.contains("page-sheet--active");
+  const sheetStyle = framed ? getComputedStyle(pageSheet) : null;
   const paddingLeft = Number.parseFloat(readerStyle.paddingLeft) || 0;
   const paddingRight = Number.parseFloat(readerStyle.paddingRight) || 0;
-  const layoutWidth = contentRect.width + paddingLeft + paddingRight;
+  const layoutWidth = framed
+    ? pageSheet.getBoundingClientRect().width
+    : contentRect.width + paddingLeft + paddingRight;
   const rootStyle = document.documentElement.style;
   rootStyle.setProperty("--print-layout-width", `${layoutWidth}px`);
   rootStyle.setProperty("--print-content-width", `${contentRect.width}px`);
-  rootStyle.setProperty("--print-padding-top", readerStyle.paddingTop);
-  rootStyle.setProperty("--print-padding-bottom", readerStyle.paddingBottom);
+  rootStyle.setProperty("--print-padding-top", sheetStyle?.paddingTop ?? readerStyle.paddingTop);
+  rootStyle.setProperty("--print-padding-bottom", sheetStyle?.paddingBottom ?? readerStyle.paddingBottom);
 }
 
 function printDocument() {
@@ -2548,6 +2569,7 @@ function wireSettings() {
     settingMargin,
     settingFg,
     settingBg,
+    settingPaperSize,
     settingWindowFrame,
     settingKeybindings,
   ].forEach((el) => {

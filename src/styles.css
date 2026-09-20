@@ -76,6 +76,59 @@ body {
   padding-inline: var(--reader-gutter);
 }
 
+.page-sheet {
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+#reader[data-paper-size="letter"] {
+  --paper-width: 8.5in;
+  --paper-height: 11in;
+}
+
+#reader[data-paper-size="legal"] {
+  --paper-width: 8.5in;
+  --paper-height: 14in;
+}
+
+#reader[data-paper-size="a3"] {
+  --paper-width: 29.7cm;
+  --paper-height: 42cm;
+}
+
+#reader[data-paper-size="a4"] {
+  --paper-width: 21cm;
+  --paper-height: 29.7cm;
+}
+
+#reader[data-paper-size="a5"] {
+  --paper-width: 14.8cm;
+  --paper-height: 21cm;
+}
+
+/* A paper preview is a single continuous sheet: it begins at the selected
+ * paper dimensions, then grows vertically with the document. Physical CSS
+ * units keep its outer border aligned with the corresponding print sheet. */
+#reader.paper-preview:has(.page-sheet--active) {
+  overflow-x: auto;
+  padding-block: clamp(1.5rem, 4vh, 3rem);
+  background-color: color-mix(in srgb, var(--color-bg) 90%, black);
+}
+
+#reader.paper-preview .page-sheet--active {
+  box-sizing: border-box;
+  width: var(--paper-width);
+  max-width: none;
+  min-height: var(--paper-height);
+  padding: clamp(1rem, 3vh, 2.25rem) var(--reader-gutter)
+    clamp(3rem, 15vh, 10rem);
+  background: var(--color-bg);
+  border: 1px solid color-mix(in srgb, var(--color-border) 65%, var(--color-bg));
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.12),
+    0 10px 28px rgb(0 0 0 / 0.2);
+}
+
 .prose {
   max-width: var(--reader-width);
   margin: 0 auto;
@@ -3018,6 +3071,18 @@ body.frame-emede .search-bar {
     padding-top: var(--print-padding-top, var(--reader-gutter)) !important;
     padding-bottom: var(--print-padding-bottom, var(--reader-gutter)) !important;
     padding-inline: var(--reader-gutter) !important;
+  }
+
+  .page-sheet,
+  #reader.paper-preview .page-sheet--active {
+    width: auto !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
   }
 
   #titlebar,

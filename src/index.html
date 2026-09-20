@@ -143,6 +143,19 @@
               </p>
             </details>
           </div>
+
+          <label>
+            Page border
+            <select id="setting-paper-size">
+              <option value="none">None</option>
+              <option value="letter">Letter (8.5 × 11 in)</option>
+              <option value="legal">Legal (8.5 × 14 in)</option>
+              <option value="a3">A3 (297 × 420 mm)</option>
+              <option value="a4">A4 (210 × 297 mm)</option>
+              <option value="a5">A5 (148 × 210 mm)</option>
+            </select>
+          </label>
+          <p class="setting-note">Screen only; the border and shadow are not printed or shared.</p>
         </section>
 
         <section class="settings-section">
@@ -428,7 +441,9 @@
         </article>
         <p class="loading-label">Preparing document</p>
       </div>
-      <article id="content" class="prose"></article>
+      <div id="page-sheet" class="page-sheet">
+        <article id="content" class="prose"></article>
+      </div>
       <div id="blank-state" class="blank-state hidden" role="status" aria-live="polite">
         <svg class="blank-icon" viewBox="0 0 64 64" width="96" height="96" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M16 6h22l14 14v38a4 4 0 0 1-4 4H16a4 4 0 0 1-4-4V10a4 4 0 0 1 4-4Z" />

@@ -30,6 +30,10 @@ pub struct Settings {
     pub color_border: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color_muted: Option<String>,
+    /// Optional paper-sized frame around the desktop reader. This is a visual
+    /// preview only; print and LAN-share output do not render the frame.
+    #[serde(default = "default_paper_size")]
+    pub paper_size: String,
     #[serde(default = "default_margin")]
     pub margin: String,
     #[serde(default = "default_window_frame")]
@@ -112,6 +116,10 @@ fn default_margin() -> String {
     "16cm".into()
 }
 
+fn default_paper_size() -> String {
+    "none".into()
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
@@ -130,6 +138,7 @@ impl Default for Settings {
             color_code_bg: None,
             color_border: None,
             color_muted: None,
+            paper_size: default_paper_size(),
             margin: default_margin(),
             window_frame: default_window_frame(),
             keybindings: default_keybindings(),
@@ -180,4 +189,18 @@ pub fn read_color_template(path: String) -> Result<String, String> {
     }
 
     fs::read_to_string(path).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_settings_default_to_no_paper_frame() {
+        let mut legacy = serde_json::to_value(Settings::default()).unwrap();
+        legacy.as_object_mut().unwrap().remove("paper_size");
+
+        let settings: Settings = serde_json::from_value(legacy).unwrap();
+        assert_eq!(settings.paper_size, "none");
+    }
 }
