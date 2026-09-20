@@ -144,8 +144,23 @@
             </details>
           </div>
 
-          <label>
-            Page border
+          <div class="setting-field">
+            <span class="setting-label-with-info">
+              <label for="setting-paper-size">Page border</label>
+              <span class="setting-info">
+                <button
+                  class="setting-info-button"
+                  type="button"
+                  aria-label="About page borders"
+                  aria-expanded="false"
+                  aria-controls="page-border-tip"
+                  aria-describedby="page-border-tip"
+                >?</button>
+                <span id="page-border-tip" class="setting-tip" role="tooltip" hidden>
+                  Screen only; the border and shadow are not printed or shared.
+                </span>
+              </span>
+            </span>
             <select id="setting-paper-size">
               <option value="none">None</option>
               <option value="letter">Letter (8.5 × 11 in)</option>
@@ -154,8 +169,7 @@
               <option value="a4">A4 (210 × 297 mm)</option>
               <option value="a5">A5 (148 × 210 mm)</option>
             </select>
-          </label>
-          <p class="setting-note">Screen only; the border and shadow are not printed or shared.</p>
+          </div>
         </section>
 
         <section class="settings-section">
@@ -278,15 +292,26 @@
             <input id="setting-mermaid" type="checkbox" role="switch" />
           </label>
 
-          <label class="setting-toggle">
-            <span class="setting-toggle-label">Highlight changes</span>
+          <div class="setting-toggle">
+            <span class="setting-label-with-info">
+              <label class="setting-toggle-label" for="setting-changes">Highlight changes</label>
+              <span class="setting-info">
+                <button
+                  class="setting-info-button"
+                  type="button"
+                  aria-label="About change highlighting"
+                  aria-expanded="false"
+                  aria-controls="change-highlighting-tip"
+                  aria-describedby="change-highlighting-tip"
+                >?</button>
+                <span id="change-highlighting-tip" class="setting-tip" role="tooltip" hidden>
+                  Tints text that differs from the last commit, or from the version
+                  emede opened when the file is not tracked by git.
+                </span>
+              </span>
+            </span>
             <input id="setting-changes" type="checkbox" role="switch" />
-          </label>
-
-          <p class="setting-gpu-note">
-            Tints text that differs from the last commit, or from the version
-            emede opened when the file is not tracked by git.
-          </p>
+          </div>
 
           <label>
             Reading speed
@@ -296,22 +321,46 @@
             </span>
           </label>
 
-          <label class="setting-toggle">
-            <span class="setting-toggle-label">Check for updates</span>
+          <div class="setting-toggle">
+            <span class="setting-label-with-info">
+              <label class="setting-toggle-label" for="setting-update-check">Check for updates</label>
+              <span class="setting-info">
+                <button
+                  class="setting-info-button"
+                  type="button"
+                  aria-label="About update checks"
+                  aria-expanded="false"
+                  aria-controls="update-check-tip"
+                  aria-describedby="update-check-tip"
+                >?</button>
+                <span id="update-check-tip" class="setting-tip" role="tooltip" hidden>
+                  Asks GitHub once a day whether a newer release exists. emede never
+                  installs anything on its own; it only tells you the command.
+                </span>
+              </span>
+            </span>
             <input id="setting-update-check" type="checkbox" role="switch" />
-          </label>
+          </div>
 
-          <p class="setting-gpu-note">
-            Asks GitHub once a day whether a newer release exists. emede never
-            installs anything on its own &mdash; it only tells you the command.
-          </p>
-
-          <label class="setting-toggle">
-            <span class="setting-toggle-label">GPU acceleration</span>
+          <div class="setting-toggle">
+            <span class="setting-label-with-info">
+              <label class="setting-toggle-label" for="setting-gpu">GPU acceleration</label>
+              <span class="setting-info">
+                <button
+                  class="setting-info-button"
+                  type="button"
+                  aria-label="About GPU acceleration"
+                  aria-expanded="false"
+                  aria-controls="gpu-acceleration-tip"
+                  aria-describedby="gpu-acceleration-tip"
+                >?</button>
+                <span id="gpu-acceleration-tip" class="setting-tip" role="tooltip" hidden>
+                  Restart required &mdash; will restart automatically.
+                </span>
+              </span>
+            </span>
             <input id="setting-gpu" type="checkbox" role="switch" />
-          </label>
-
-          <p class="setting-gpu-note">Restart required &mdash; will restart automatically</p>
+          </div>
         </section>
 
         <button id="about-link" class="about-link" type="button">About emede</button>

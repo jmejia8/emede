@@ -2265,6 +2265,7 @@ function wireContextMenu() {
 function toggleSettings(open) {
   const show = open ?? settingsPanel.classList.contains("hidden");
   const hadFocus = settingsPanel.contains(document.activeElement);
+  if (!show) closeSettingTip();
   settingsPanel.classList.toggle("hidden", !show);
   settingsPanel.setAttribute("aria-hidden", String(!show));
   syncPanelBackdrop();
@@ -2556,6 +2557,7 @@ function wireTitlebar() {
 function wireSettings() {
   settingsToggle.addEventListener("click", () => toggleSettings(true));
   settingsClose.addEventListener("click", () => toggleSettings(false));
+  wireSettingTips();
   renderColorTemplates();
   importColorTemplateBtn.addEventListener("click", () => {
     void handleImportColorTemplate();
@@ -2646,6 +2648,49 @@ function wireSettings() {
   aboutOverlay.addEventListener("click", (e) => {
     if (e.target === aboutOverlay) toggleAbout(false);
   });
+}
+
+let openSettingTipButton = null;
+
+function closeSettingTip({ restoreFocus = false } = {}) {
+  if (!openSettingTipButton) return;
+  const button = openSettingTipButton;
+  const tip = document.getElementById(button.getAttribute("aria-controls"));
+  button.setAttribute("aria-expanded", "false");
+  tip?.setAttribute("hidden", "");
+  openSettingTipButton = null;
+  if (restoreFocus) button.focus();
+}
+
+function wireSettingTips() {
+  settingsPanel.querySelectorAll(".setting-info-button").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const wasOpen = button === openSettingTipButton;
+      closeSettingTip();
+      if (wasOpen) return;
+
+      const tip = document.getElementById(button.getAttribute("aria-controls"));
+      if (!tip) return;
+      tip.removeAttribute("hidden");
+      button.setAttribute("aria-expanded", "true");
+      openSettingTipButton = button;
+    });
+  });
+
+  document.addEventListener("click", (event) => {
+    if (openSettingTipButton && !event.target.closest(".setting-info")) {
+      closeSettingTip();
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && openSettingTipButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      closeSettingTip({ restoreFocus: true });
+    }
+  }, true);
 }
 
 function adjustFontSize(delta) {
