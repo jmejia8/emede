@@ -2,13 +2,13 @@
 :root {
   --color-fg: #ebdbb2;
   --color-bg: #282828;
-  --color-title: #ebdbb2;
-  --color-bold: #ebdbb2;
-  --color-italic: #ebdbb2;
-  --color-quote: #ebdbb2;
-  --color-link: #ebdbb2;
-  --color-code: #ebdbb2;
+  --color-title: #b8bb26;
+  --color-bold: #fabd2f;
+  --color-italic: #d3869b;
+  --color-quote: #928374;
+  --color-link: #83a598;
+  --color-code: #8ec07c;
   --color-code-bg: #3c3836;
   --color-border: #504945;
-  --color-muted: #ebdbb2;
+  --color-muted: #928374;
 }
