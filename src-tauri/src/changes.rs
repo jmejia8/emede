@@ -330,9 +330,9 @@ fn inline_text_into<'a>(node: &'a AstNode<'a>, out: &mut String) {
                 // `&` in `textContent`. Pushing the literal unescaped is what
                 // matches the DOM — do not call `html_escape` here.
                 if nm.display_math {
-                    out.push_str("$$\n");
+                    out.push_str("$$");
                     out.push_str(&nm.literal);
-                    out.push_str("\n$$");
+                    out.push_str("$$");
                 } else {
                     out.push('$');
                     out.push_str(&nm.literal);
@@ -862,8 +862,8 @@ mod tests {
 
     #[test]
     fn inline_math_keeps_its_delimiters() {
-        // `MathJaxFormatter` re-emits math as `$…$` for MathJax to find, so the
-        // delimiters really are in the DOM text.
+        // `MathJaxFormatter` re-emits math delimiters for MathJax to find, so
+        // the delimiters really are in the DOM text.
         assert_eq!(texts("Let $x_1 < y$ hold.\n"), vec!["Let $x_1 < y$ hold."]);
     }
 
@@ -1106,4 +1106,3 @@ fn main() {}
         assert!(changes(&big, "small\n").is_empty());
     }
 }
-

@@ -395,7 +395,10 @@ fn preprocess_math_fences(src: &str) -> String {
             out.push_str("$$\n");
             for inner in lines.by_ref() {
                 if inner.trim_start().starts_with("```") {
-                    out.push_str("\n$$");
+                    if !out.ends_with('\n') {
+                        out.push('\n');
+                    }
+                    out.push_str("$$");
                     if inner.ends_with('\n') {
                         out.push('\n');
                     }
@@ -632,7 +635,7 @@ create_formatter!(MathJaxFormatter, {
         }
         let escaped = html_escape(&nm.literal);
         if nm.display_math {
-            write!(context, "$$\n{escaped}\n$$").expect("write display math");
+            write!(context, "$${escaped}$$").expect("write display math");
         } else {
             write!(context, "${escaped}$").expect("write inline math");
         }
@@ -1623,7 +1626,26 @@ mod tests {
             html
         };
         assert!(html.contains("$E=mc^2$"));
-        assert!(html.contains("$$\nx^2\n$$"));
+        assert!(html.contains("$$x^2$$"));
+    }
+
+    #[test]
+    fn renders_math_fences_with_display_delimiters() {
+        let src = "```math\n\\begin{aligned}\nx &= y\n\\end{aligned}\n```\n";
+        let preprocessed = preprocess_tex_delimiters(&preprocess_math_fences(src));
+        let arena = Arena::new();
+        let options = comrak_options_ext(Path::new("test.md"), false);
+        let root = parse_document(&arena, &preprocessed, &options);
+        let mut html = String::new();
+        MathJaxFormatter::format_document(root, &options, &mut html).unwrap();
+        assert!(
+            preprocessed.contains("$$\n\\begin{aligned}\nx &= y\n\\end{aligned}\n$$"),
+            "{preprocessed}"
+        );
+        assert!(
+            html.contains("$$\n\\begin{aligned}\nx &amp;= y\n\\end{aligned}\n$$"),
+            "{html}"
+        );
     }
 
     #[test]
