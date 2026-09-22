@@ -3011,6 +3011,11 @@ body.frame-emede .search-bar {
   cursor: pointer;
 }
 
+.context-menu-item[hidden],
+.context-menu-sep[hidden] {
+  display: none;
+}
+
 .context-menu-item:hover,
 .context-menu-item.is-active {
   background: color-mix(in srgb, var(--color-fg) 7%, transparent);

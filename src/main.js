@@ -298,6 +298,14 @@ let currentShareInfo = null;
 // The last thing the user asked to open, so the error state can offer a retry.
 let lastOpenTarget = null;
 
+const MAX_NAVIGATION_HISTORY = 100;
+const navigationHistory = {
+  current: null,
+  back: [],
+  forward: [],
+  busy: false,
+};
+
 function populateFontSelect(select, { includeInherit = false, groups = FONT_GROUPS } = {}) {
   select.replaceChildren();
   if (includeInherit) {
@@ -1497,7 +1505,74 @@ async function revealWindow() {
   }
 }
 
-async function openFile(path, fragment = "") {
+function navigationEntryForFile(path, fragment = "") {
+  return { kind: "file", path, fragment: fragment || "" };
+}
+
+function navigationEntryForUrl(url) {
+  return { kind: "url", value: url };
+}
+
+function sameNavigationEntry(left, right) {
+  if (!left || !right || left.kind !== right.kind) return false;
+  if (left.kind === "url") return left.value === right.value;
+  return left.path === right.path && left.fragment === right.fragment;
+}
+
+function pushNavigationEntry(stack, entry) {
+  stack.push(entry);
+  if (stack.length > MAX_NAVIGATION_HISTORY) stack.shift();
+}
+
+function commitNavigation(entry, mode = "push") {
+  if (!entry) return;
+
+  if (mode === "push") {
+    if (navigationHistory.current && !sameNavigationEntry(navigationHistory.current, entry)) {
+      pushNavigationEntry(navigationHistory.back, navigationHistory.current);
+    }
+    navigationHistory.forward.length = 0;
+  }
+
+  navigationHistory.current = entry;
+  updateContextMenuState();
+}
+
+function canGoBack() {
+  return navigationHistory.back.length > 0;
+}
+
+function canGoForward() {
+  return navigationHistory.forward.length > 0;
+}
+
+async function navigateHistory(direction) {
+  if (navigationHistory.busy) return;
+
+  const source = navigationHistory.current;
+  const stack = direction === "back" ? navigationHistory.back : navigationHistory.forward;
+  const target = stack[stack.length - 1];
+  if (!source || !target) return;
+
+  navigationHistory.busy = true;
+  try {
+    const options = { history: "traverse" };
+    const opened = target.kind === "url"
+      ? await openFromUrl(target.value, options)
+      : await openFile(target.path, target.fragment, options);
+    if (!opened) return;
+
+    stack.pop();
+    const destination = direction === "back" ? navigationHistory.forward : navigationHistory.back;
+    pushNavigationEntry(destination, source);
+    navigationHistory.current = target;
+    updateContextMenuState();
+  } finally {
+    navigationHistory.busy = false;
+  }
+}
+
+async function openFile(path, fragment = "", { history = "push" } = {}) {
   toggleSearch(false);
   flushViewState(currentDocPath, contentEl);
   lastOpenTarget = { kind: "file", value: path };
@@ -1513,16 +1588,22 @@ async function openFile(path, fragment = "") {
     if (fragment && openToken === activeOpenToken) {
       scrollToDocumentFragment(fragment);
     }
+    if (openToken !== activeOpenToken) return false;
+    if (history !== "traverse") {
+      commitNavigation(navigationEntryForFile(result.path, fragment), history);
+    }
+    return true;
   } catch (err) {
     if (openToken !== activeOpenToken) return;
 
     setReaderState("missing", String(err));
 
     await setWindowTitle("emede");
+    return false;
   }
 }
 
-async function openLinkedFile(path, fragment = "") {
+async function openLinkedFile(path, fragment = "", { history = "push" } = {}) {
   const sourcePath = currentDocPath;
   if (!sourcePath) return;
 
@@ -1536,11 +1617,11 @@ async function openLinkedFile(path, fragment = "") {
     if (currentDocPath === sourcePath) {
       showLinkedFileError(path, err);
     }
-    return;
+    return false;
   }
 
   // A slower read must not replace a document the user opened in the meantime.
-  if (currentDocPath !== sourcePath) return;
+  if (currentDocPath !== sourcePath) return false;
 
   lastOpenTarget = { kind: "file", value: path };
   const openToken = ++activeOpenToken;
@@ -1551,6 +1632,11 @@ async function openLinkedFile(path, fragment = "") {
   if (fragment && openToken === activeOpenToken) {
     scrollToDocumentFragment(fragment);
   }
+  if (openToken !== activeOpenToken) return false;
+  if (history !== "traverse") {
+    commitNavigation(navigationEntryForFile(result.path, fragment), history);
+  }
+  return true;
 }
 
 async function openLinkedFileInNewWindow(path) {
@@ -1573,7 +1659,7 @@ function scrollToDocumentFragment(fragment) {
   target?.scrollIntoView({ block: "start" });
 }
 
-async function openFromUrl(url) {
+async function openFromUrl(url, { history = "push" } = {}) {
   toggleSearch(false);
   flushViewState(currentDocPath, contentEl);
   lastOpenTarget = { kind: "url", value: url };
@@ -1585,10 +1671,16 @@ async function openFromUrl(url) {
     await applyDocument(result, { openToken });
     // Remote documents are not watched on disk.
     void invoke("unwatch_document").catch(() => {});
+    if (openToken !== activeOpenToken) return false;
+    if (history !== "traverse") {
+      commitNavigation(navigationEntryForUrl(url), history);
+    }
+    return true;
   } catch (err) {
     if (openToken !== activeOpenToken) return;
     setReaderState("error", String(err));
     await setWindowTitle("emede");
+    return false;
   }
 }
 
@@ -1963,7 +2055,7 @@ function contextMenuItems() {
 }
 
 function contextMenuEnabledItems() {
-  return contextMenuItems().filter((el) => !el.disabled);
+  return contextMenuItems().filter((el) => !el.disabled && !el.hidden);
 }
 
 function isContextMenuOpen() {
@@ -1975,6 +2067,8 @@ function updateContextMenuState() {
   const hasLocalDoc = lastOpenTarget?.kind === "file" && !!currentDocPath;
   const hasDoc = !!currentDocPath;
   const enablement = {
+    back: canGoBack(),
+    forward: canGoForward(),
     "open-file": true,
     "open-new-window": true,
     reveal: hasLocalDoc,
@@ -1987,8 +2081,15 @@ function updateContextMenuState() {
   };
   for (const item of contextMenuItems()) {
     const on = enablement[item.dataset.action] ?? true;
+    if (item.dataset.action === "back" || item.dataset.action === "forward") {
+      item.hidden = !on;
+    }
     item.disabled = !on;
     item.setAttribute("aria-disabled", String(!on));
+  }
+  const historySeparator = contextMenu.querySelector("[data-history-separator]");
+  if (historySeparator) {
+    historySeparator.hidden = !(enablement.back || enablement.forward);
   }
 }
 
@@ -2109,14 +2210,24 @@ async function closeFile() {
   toggleSearch(false);
   flushViewState(currentDocPath, contentEl);
   lastOpenTarget = null;
+  navigationHistory.current = null;
+  navigationHistory.back.length = 0;
+  navigationHistory.forward.length = 0;
   activeOpenToken++;
   setReaderState("empty");
   getScrollRoot().scrollTop = 0;
   await setWindowTitle("emede");
+  updateContextMenuState();
 }
 
 async function runContextAction(action) {
   switch (action) {
+    case "back":
+      await navigateHistory("back");
+      break;
+    case "forward":
+      await navigateHistory("forward");
+      break;
     case "open-file":
       await handlePickAndOpenFile();
       break;
@@ -2140,9 +2251,9 @@ async function runContextAction(action) {
       break;
     case "reload":
       if (lastOpenTarget?.kind === "url") {
-        await openFromUrl(lastOpenTarget.value);
+        await openFromUrl(lastOpenTarget.value, { history: "replace" });
       } else if (currentDocPath) {
-        await openFile(currentDocPath);
+        await openFile(currentDocPath, "", { history: "replace" });
       }
       break;
     case "share":
@@ -2854,6 +2965,10 @@ function wireKeybindings() {
     adjustFontSize,
     resetFontSize,
     print: printDocument,
+    canGoBack,
+    canGoForward,
+    goBack: () => navigateHistory("back"),
+    goForward: () => navigateHistory("forward"),
     settingsPanel,
     tocPanel,
     aboutOverlay,

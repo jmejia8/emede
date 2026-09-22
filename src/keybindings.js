@@ -4,6 +4,7 @@ const KEYBINDING_MODES = new Set(["default", "vim", "emacs", "common"]);
 
 export const KEYBINDING_HELP = {
   default: [
+    ["Alt+Left / Alt+Right", "Back / forward in document history"],
     ["Ctrl+F", "Find in page"],
     ["Ctrl+P", "Print / Save as PDF"],
     ["Ctrl+,", "Open settings"],
@@ -12,6 +13,7 @@ export const KEYBINDING_HELP = {
     ["Escape", "Close panels"],
   ],
   vim: [
+    ["Alt+Left / Alt+Right", "Back / forward in document history"],
     ["Ctrl+F", "Find in page"],
     ["Ctrl+P", "Print / Save as PDF"],
     ["j / k", "Scroll down / up one line"],
@@ -27,6 +29,7 @@ export const KEYBINDING_HELP = {
     ["Escape", "Close panels"],
   ],
   emacs: [
+    ["Alt+Left / Alt+Right", "Back / forward in document history"],
     ["Ctrl+F", "Find in page"],
     ["Ctrl+P", "Print / Save as PDF"],
     ["Ctrl+n / Ctrl+p", "Scroll down / up one line"],
@@ -39,6 +42,7 @@ export const KEYBINDING_HELP = {
     ["Escape", "Close panels"],
   ],
   common: [
+    ["Alt+Left / Alt+Right", "Back / forward in document history"],
     ["Ctrl+F", "Find in page"],
     ["Ctrl+P", "Print / Save as PDF"],
     ["j / k", "Scroll down / up one line"],
@@ -354,6 +358,49 @@ function handleCommonKey(event) {
   return false;
 }
 
+function handleHistoryKey(event, actions) {
+  const altBack =
+    event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.shiftKey &&
+    event.key === "ArrowLeft";
+  const altForward =
+    event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.shiftKey &&
+    event.key === "ArrowRight";
+  const macBack =
+    event.metaKey &&
+    !event.ctrlKey &&
+    !event.altKey &&
+    !event.shiftKey &&
+    event.code === "BracketLeft";
+  const macForward =
+    event.metaKey &&
+    !event.ctrlKey &&
+    !event.altKey &&
+    !event.shiftKey &&
+    event.code === "BracketRight";
+
+  if (altBack || macBack) {
+    if (!actions.canGoBack?.()) return false;
+    event.preventDefault();
+    void actions.goBack?.();
+    return true;
+  }
+
+  if (altForward || macForward) {
+    if (!actions.canGoForward?.()) return false;
+    event.preventDefault();
+    void actions.goForward?.();
+    return true;
+  }
+
+  return false;
+}
+
 export function renderKeybindingHelp(container, mode) {
   const normalized = normalizeKeybindingMode(mode);
   const rows = KEYBINDING_HELP[normalized] ?? KEYBINDING_HELP.default;
@@ -393,6 +440,8 @@ export function createKeybindingController(actions) {
     }
 
     if (isTypingTarget(event.target)) return;
+
+    if (handleHistoryKey(event, actions)) return;
 
     if (handleAppShortcuts(event, actions)) return;
 
