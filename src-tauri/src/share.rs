@@ -1820,7 +1820,18 @@ const SHARED_PAGE_TEMPLATE: &str = r##"<!doctype html>
 <title>{{TITLE}} — emede</title>
 <script>
   window.MathJax = {
+    loader: {
+      load: ["[tex]/boldsymbol", "[tex]/noerrors"],
+    },
     tex: {
+      packages: {
+        "[+]": ["boldsymbol", "noerrors"],
+      },
+      noundefined: {
+        color: "",
+        background: "",
+        size: "",
+      },
       inlineMath: [["\\(", "\\)"], ["$", "$"]],
       displayMath: [["\\[", "\\]"], ["$$", "$$"]],
     },

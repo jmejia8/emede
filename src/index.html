@@ -23,8 +23,17 @@
       window.MathJax = {
         loader: {
           paths: { fonts: "/vendor/mathjax" },
+          load: ["[tex]/boldsymbol", "[tex]/noerrors"],
         },
         tex: {
+          packages: {
+            "[+]": ["boldsymbol", "noerrors"],
+          },
+          noundefined: {
+            color: "",
+            background: "",
+            size: "",
+          },
           inlineMath: [
             ["\\(", "\\)"],
             ["$", "$"],
