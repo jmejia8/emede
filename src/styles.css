@@ -144,6 +144,77 @@ body {
   text-align: justify;
 }
 
+/* Front matter is metadata, not prose. Keep it close to the document's top
+ * edge and let the content begin with its own typographic rhythm. This follows
+ * the compact property-row pattern used by modern Markdown readers. */
+.emede-properties {
+  margin: 0 0 2.2rem;
+  padding: 0.15rem 0 1rem;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-fg);
+}
+
+.emede-property-row {
+  display: grid;
+  grid-template-columns: 1.35rem minmax(5.5rem, 8rem) minmax(0, 1fr);
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 2.15rem;
+  padding: 0.2rem 0;
+}
+
+.emede-property-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-muted);
+}
+
+.emede-property-icon svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.emede-property-key {
+  color: var(--color-muted);
+  font-family: var(--font-code);
+  font-size: 0.72em;
+  letter-spacing: 0.02em;
+}
+
+.emede-property-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.86em;
+}
+
+.emede-property-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.emede-property-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 0.12rem 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--color-link) 22%, var(--color-border));
+  border-radius: 999px;
+  color: var(--color-link);
+  background: color-mix(in srgb, var(--color-link) 10%, var(--color-bg));
+  font-family: var(--font-code);
+  font-size: 0.82em;
+  line-height: 1.45;
+}
+
+@media (max-width: 34rem) {
+  .emede-property-row {
+    grid-template-columns: 1.2rem minmax(4.8rem, 6.5rem) minmax(0, 1fr);
+    gap: 0.4rem;
+  }
+}
+
 /* Off-screen blocks cost nothing to lay out or paint.
  *
  * Always worth having, decisive when accelerated compositing is off (the GPU

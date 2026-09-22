@@ -15,8 +15,9 @@ and a [link to the project README](README.md). It also has a remote link to
 [the CommonMark site](https://commonmark.org), an autolink
 <https://github.com>, and an email address: <hello@example.com>.
 
-The front matter above is rendered as a YAML code block. The title is also used
-for the document window and recent-file entry.
+The front matter above is rendered as a compact properties panel, while the
+source remains ordinary YAML. The title is also used for the document window
+and recent-file entry.
 
 ## Contents and headings
 

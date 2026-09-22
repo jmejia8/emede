@@ -378,6 +378,174 @@ fn preprocess_front_matter(src: &str) -> String {
     out
 }
 
+#[derive(Debug)]
+struct FrontMatterProperty {
+    key: String,
+    values: Vec<String>,
+    list: bool,
+}
+
+fn clean_front_matter_value(value: &str) -> String {
+    let value = value.trim();
+    if value.eq_ignore_ascii_case("null") || value == "~" {
+        return String::new();
+    }
+    if value.len() >= 2 {
+        let bytes = value.as_bytes();
+        if matches!((bytes[0], bytes[value.len() - 1]), (b'"', b'"') | (b'\'', b'\'')) {
+            return value[1..value.len() - 1].to_string();
+        }
+    }
+    value.to_string()
+}
+
+fn parse_front_matter_list(value: &str) -> Option<Vec<String>> {
+    let value = value.trim();
+    let inner = value.strip_prefix('[')?.strip_suffix(']')?;
+    Some(
+        inner
+            .split(',')
+            .map(clean_front_matter_value)
+            .filter(|item| !item.is_empty())
+            .collect(),
+    )
+}
+
+/// Parse the flat, human-facing portion of YAML front matter. Nested YAML is
+/// intentionally left as a scalar because properties are a compact summary,
+/// not a second YAML editor.
+fn parse_front_matter_properties(preamble: &str) -> Vec<FrontMatterProperty> {
+    let mut properties = Vec::new();
+    let mut current: Option<FrontMatterProperty> = None;
+
+    let finish = |properties: &mut Vec<FrontMatterProperty>, current: &mut Option<FrontMatterProperty>| {
+        if let Some(property) = current.take() {
+            properties.push(property);
+        }
+    };
+
+    for line in preamble.lines() {
+        let trimmed_end = line.trim_end();
+        let trimmed = trimmed_end.trim_start();
+        let indentation = trimmed_end.len() - trimmed.len();
+
+        if indentation > 0 && trimmed.starts_with("- ") {
+            if let Some(property) = current.as_mut() {
+                property.list = true;
+                if property.values.len() == 1 && property.values[0].is_empty() {
+                    property.values.clear();
+                }
+                let value = clean_front_matter_value(&trimmed[2..]);
+                if !value.is_empty() {
+                    property.values.push(value);
+                }
+            }
+            continue;
+        }
+
+        let Some((key, raw_value)) = trimmed_end.split_once(':') else {
+            continue;
+        };
+        if indentation != 0 || key.trim().is_empty() {
+            continue;
+        }
+
+        finish(&mut properties, &mut current);
+        let key = key.trim().to_string();
+        let raw_value = raw_value.trim();
+        if let Some(values) = parse_front_matter_list(raw_value) {
+            current = Some(FrontMatterProperty {
+                key,
+                values,
+                list: true,
+            });
+        } else {
+            current = Some(FrontMatterProperty {
+                key,
+                values: vec![clean_front_matter_value(raw_value)],
+                list: false,
+            });
+        }
+    }
+
+    finish(&mut properties, &mut current);
+    properties
+}
+
+fn property_label(key: &str) -> String {
+    let mut label = key.replace(['-', '_'], " ");
+    if let Some(first) = label.chars().next() {
+        let upper = first.to_uppercase().collect::<String>();
+        label.replace_range(..first.len_utf8(), &upper);
+    }
+    label
+}
+
+fn property_icon(list: bool) -> &'static str {
+    if list {
+        r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m20.6 13.4-7.2 7.2a2 2 0 0 1-2.8 0l-7.2-7.2a2 2 0 0 1 0-2.8l7.2-7.2a2 2 0 0 1 2.8 0l7.2 7.2a2 2 0 0 1 0 2.8Z"/><circle cx="8.8" cy="8.8" r="1.2"/></svg>"#
+    } else {
+        r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M5 7h14M5 12h14M5 17h9"/></svg>"#
+    }
+}
+
+fn front_matter_properties_html(content: &str) -> Option<String> {
+    let (preamble, _, _) = split_front_matter(content)?;
+    let properties = parse_front_matter_properties(preamble);
+    if properties.is_empty() {
+        return None;
+    }
+
+    let mut html = String::from(
+        r#"<section class="emede-properties" aria-label="Document properties">"#,
+    );
+    for property in properties {
+        let list_class = if property.list { " emede-property-row--list" } else { "" };
+        write!(
+            html,
+            r#"<div class="emede-property-row{list_class}"><span class="emede-property-icon" aria-hidden="true">{}</span><span class="emede-property-key">{}</span><span class="emede-property-value">"#,
+            property_icon(property.list),
+            html_escape(&property_label(&property.key)),
+        )
+        .expect("write properties HTML");
+
+        if property.list {
+            html.push_str(r#"<span class="emede-property-chips">"#);
+            for value in property.values {
+                write!(
+                    html,
+                    r#"<span class="emede-property-chip">{}</span>"#,
+                    html_escape(&value)
+                )
+                .expect("write property chip");
+            }
+            html.push_str("</span>");
+        } else if let Some(value) = property.values.first() {
+            html.push_str(&html_escape(value));
+        }
+        html.push_str("</span></div>");
+    }
+    html.push_str("</section>");
+    Some(html)
+}
+
+/// Replace the internal YAML code-block representation with the reader-facing
+/// properties summary. Keeping the source-level preprocessing unchanged means
+/// source positions and change highlighting still use the same Markdown AST.
+fn replace_front_matter_block(html: &str, content: &str) -> String {
+    let Some(properties) = front_matter_properties_html(content) else {
+        return html.to_string();
+    };
+    let Some(start) = html.find("<pre") else {
+        return html.to_string();
+    };
+    let Some(end_rel) = html[start..].find("</code></pre>") else {
+        return html.to_string();
+    };
+    let end = start + end_rel + "</code></pre>".len();
+    format!("{}{}{}", &html[..start], properties, &html[end..])
+}
+
 fn html_escape(s: &str) -> String {
     let mut out = String::new();
     comrak::html::escape(&mut out, s).expect("escape to string");
@@ -963,6 +1131,7 @@ fn render_markdown_core_opts(
         html
     };
     let html = sanitize_html(&html);
+    let html = replace_front_matter_block(&html, content);
 
     Ok(RenderResult {
         html,
@@ -1473,6 +1642,19 @@ mod tests {
             "preamble delimiters should not become horizontal rules, got: {html}"
         );
         assert!(html.contains("Hello</h1>"));
+    }
+
+    #[test]
+    fn renders_front_matter_as_properties() {
+        let src = "---\ntitle: emede\nauthor: Jesus\ntags:\n  - markdown\n  - reader\n---\n\n# Hello\n";
+        let result =
+            render_markdown_core(src, "emede".into(), Path::new("test.md"), "test.md", false)
+            .expect("render properties");
+        assert!(result.html.contains("class=\"emede-properties\""), "{}", result.html);
+        assert!(result.html.contains("emede-property-chip"), "{}", result.html);
+        assert!(!result.html.contains("emede-property-chip\"></span>"), "{}", result.html);
+        assert!(result.html.contains("<h1"), "{}", result.html);
+        assert!(!result.html.contains("language-yaml"), "{}", result.html);
     }
 
     #[test]
