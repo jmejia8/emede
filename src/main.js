@@ -672,6 +672,7 @@ function clearToc() {
 // is entered by applyDocument). Collapsing them into one function keeps the
 // element toggling in a single place.
 function setReaderState(state, message = "") {
+  readerEl.classList.toggle("reader-loading", state === "loading");
   contentEl.innerHTML = "";
   contentEl.classList.remove("visible");
   pageSheet.classList.remove("page-sheet--active");
@@ -1139,6 +1140,7 @@ async function applyDocument(result, { reload = false, openToken } = {}) {
     requestAnimationFrame(() => {
       if (openToken === undefined || openToken === activeOpenToken) {
         loadingStateEl.classList.add("hidden");
+        readerEl.classList.remove("reader-loading");
         contentEl.classList.add("visible");
       }
     });

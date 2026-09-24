@@ -60,6 +60,7 @@ body {
 }
 
 #reader {
+  position: relative;
   box-sizing: border-box;
   width: 100%;
   max-width: 100%;
@@ -138,6 +139,18 @@ body {
 
 .prose.visible {
   opacity: 1;
+}
+
+/* Keep a newly rendered document measurable without letting an interrupted
+ * opacity transition reveal it underneath the loading state. */
+#reader.reader-loading .page-sheet,
+#reader.reader-loading .blank-state {
+  visibility: hidden;
+}
+
+#reader.reader-loading .prose {
+  opacity: 0;
+  transition: none;
 }
 
 .prose-justify {
@@ -998,8 +1011,13 @@ body.frame-emede .blank-state {
 }
 
 .loading-state {
-  position: relative;
-  padding-top: 8vh;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 8vh var(--reader-gutter) 3rem;
+  background: var(--color-bg);
 }
 
 .dummy-document {
