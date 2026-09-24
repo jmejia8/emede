@@ -481,11 +481,131 @@ fn property_label(key: &str) -> String {
     label
 }
 
-fn property_icon(list: bool) -> &'static str {
-    if list {
-        r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m20.6 13.4-7.2 7.2a2 2 0 0 1-2.8 0l-7.2-7.2a2 2 0 0 1 0-2.8l7.2-7.2a2 2 0 0 1 2.8 0l7.2 7.2a2 2 0 0 1 0 2.8Z"/><circle cx="8.8" cy="8.8" r="1.2"/></svg>"#
+fn is_iso_date(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    if bytes.len() < 10
+        || bytes[4] != b'-'
+        || bytes[7] != b'-'
+        || !bytes[..4].iter().all(u8::is_ascii_digit)
+        || !bytes[5..7].iter().all(u8::is_ascii_digit)
+        || !bytes[8..10].iter().all(u8::is_ascii_digit)
+    {
+        return false;
+    }
+
+    let year = u16::from(bytes[0] - b'0') * 1000
+        + u16::from(bytes[1] - b'0') * 100
+        + u16::from(bytes[2] - b'0') * 10
+        + u16::from(bytes[3] - b'0');
+    let month = (bytes[5] - b'0') * 10 + bytes[6] - b'0';
+    let day = (bytes[8] - b'0') * 10 + bytes[9] - b'0';
+    let leap_year = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    let days_in_month = match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if leap_year => 29,
+        2 => 28,
+        _ => return false,
+    };
+    if day == 0 || day > days_in_month {
+        return false;
+    }
+    if bytes.len() == 10 {
+        return true;
+    }
+
+    let time = &bytes[11..];
+    matches!(bytes[10], b'T' | b' ')
+        && time.len() >= 5
+        && time[0..2].iter().all(u8::is_ascii_digit)
+        && time[2] == b':'
+        && time[3..5].iter().all(u8::is_ascii_digit)
+        && (time[0] - b'0') * 10 + time[1] - b'0' < 24
+        && (time[3] - b'0') * 10 + time[4] - b'0' < 60
+}
+
+fn property_icon(property: &FrontMatterProperty) -> (&'static str, &'static str) {
+    const CHECKED: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="m7.5 12 3 3 6-6"/></svg>"#;
+    const UNCHECKED: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="3.5" width="17" height="17" rx="3"/></svg>"#;
+    const CALENDAR: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>"#;
+    const LINK: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1.1 1.1M14 11a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7l1.1-1.1"/></svg>"#;
+    const MAIL: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg>"#;
+    const NUMBER: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M10 3 8 21M16 3l-2 18M4 9h16M3 15h16"/></svg>"#;
+    const TAG: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m20.6 13.4-7.2 7.2a2 2 0 0 1-2.8 0l-7.2-7.2a2 2 0 0 1 0-2.8l7.2-7.2a2 2 0 0 1 2.8 0l7.2 7.2a2 2 0 0 1 0 2.8Z"/><circle cx="8.8" cy="8.8" r="1.2"/></svg>"#;
+    const LIST: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r=".8" fill="currentColor" stroke="none"/><circle cx="4.5" cy="12" r=".8" fill="currentColor" stroke="none"/><circle cx="4.5" cy="18" r=".8" fill="currentColor" stroke="none"/></svg>"#;
+    const PERSON: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c.7-4 3-6 7-6s6.3 2 7 6"/></svg>"#;
+    const STATUS: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>"#;
+    const IMAGE: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.5"/><path d="m4 17 5-5 3.5 3 2.5-2 5 4.5"/></svg>"#;
+    const HEADING: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M5 5v14M19 5v14M5 12h14"/></svg>"#;
+    const VERSION: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="5" r="2"/><circle cx="18" cy="7" r="2"/><circle cx="6" cy="19" r="2"/><path d="M6 7v10M8 15c6 0 4-8 8-8"/></svg>"#;
+    const EMPTY: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="m6 18 12-12"/></svg>"#;
+    const TEXT: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M5 7h14M5 12h14M5 17h9"/></svg>"#;
+
+    if property.values.len() == 1 {
+        match property.values[0].to_ascii_lowercase().as_str() {
+            "true" => return ("boolean-true", CHECKED),
+            "false" => return ("boolean-false", UNCHECKED),
+            _ => {}
+        }
+    }
+    if !property.values.is_empty() && property.values.iter().all(|value| is_iso_date(value)) {
+        return ("date", CALENDAR);
+    }
+
+    let key = property
+        .key
+        .chars()
+        .filter(|character| character.is_ascii_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect::<String>();
+    match key.as_str() {
+        "date" | "datetime" | "created" | "createdat" | "updated" | "updatedat" | "modified"
+        | "lastmodified" | "published" | "publishedat" | "publishdate" | "due" | "duedate"
+        | "deadline" => return ("date", CALENDAR),
+        "tag" | "tags" | "category" | "categories" | "keyword" | "keywords" | "label"
+        | "labels" | "alias" | "aliases" => return ("tag", TAG),
+        "author" | "authors" | "creator" | "creators" | "owner" | "owners" | "contributor"
+        | "contributors" => return ("person", PERSON),
+        "url" | "uri" | "link" | "links" | "website" | "homepage" | "canonical" | "repository"
+        | "repo" => return ("link", LINK),
+        "email" | "mail" | "contactemail" => return ("email", MAIL),
+        "status" | "state" | "stage" => return ("status", STATUS),
+        "image" | "images" | "cover" | "banner" | "thumbnail" | "avatar" | "icon" => {
+            return ("image", IMAGE)
+        }
+        "title" | "name" | "heading" => return ("heading", HEADING),
+        "version" | "revision" | "release" => return ("version", VERSION),
+        "id" | "uid" | "uuid" | "identifier" | "slug" => return ("number", NUMBER),
+        _ => {}
+    }
+
+    if property.values.is_empty() || property.values.iter().all(String::is_empty) {
+        return ("empty", EMPTY);
+    }
+    if property.values.iter().all(|value| {
+        let value = value.to_ascii_lowercase();
+        value.starts_with("http://") || value.starts_with("https://")
+    }) {
+        return ("link", LINK);
+    }
+    if property.values.iter().all(|value| {
+        value
+            .split_once('@')
+            .is_some_and(|(name, domain)| !name.is_empty() && domain.contains('.'))
+    }) {
+        return ("email", MAIL);
+    }
+    if property
+        .values
+        .iter()
+        .all(|value| value.parse::<f64>().is_ok())
+    {
+        return ("number", NUMBER);
+    }
+    if property.list {
+        ("list", LIST)
     } else {
-        r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M5 7h14M5 12h14M5 17h9"/></svg>"#
+        ("text", TEXT)
     }
 }
 
@@ -496,15 +616,18 @@ fn front_matter_properties_html(content: &str) -> Option<String> {
         return None;
     }
 
-    let mut html = String::from(
-        r#"<section class="emede-properties" aria-label="Document properties">"#,
-    );
+    let mut html =
+        String::from(r#"<section class="emede-properties" aria-label="Document properties">"#);
     for property in properties {
-        let list_class = if property.list { " emede-property-row--list" } else { "" };
+        let list_class = if property.list {
+            " emede-property-row--list"
+        } else {
+            ""
+        };
+        let (icon_name, icon) = property_icon(&property);
         write!(
             html,
-            r#"<div class="emede-property-row{list_class}"><span class="emede-property-icon" aria-hidden="true">{}</span><span class="emede-property-key">{}</span><span class="emede-property-value">"#,
-            property_icon(property.list),
+            r#"<div class="emede-property-row{list_class}"><span class="emede-property-icon" data-icon="{icon_name}" aria-hidden="true">{icon}</span><span class="emede-property-key">{}</span><span class="emede-property-value">"#,
             html_escape(&property_label(&property.key)),
         )
         .expect("write properties HTML");
@@ -1655,6 +1778,71 @@ mod tests {
         assert!(!result.html.contains("emede-property-chip\"></span>"), "{}", result.html);
         assert!(result.html.contains("<h1"), "{}", result.html);
         assert!(!result.html.contains("language-yaml"), "{}", result.html);
+    }
+
+    #[test]
+    fn chooses_front_matter_icons_from_values_and_common_keys() {
+        let src = r#"---
+complete: true
+draft: false
+created: 2026-09-24
+website: https://example.com
+contact: hello@example.com
+rating: 4.5
+authors: [Alice, Bob]
+tags: [markdown, reader]
+cover: hero.png
+status: published
+version: 1.2.3
+related: [one, two]
+nothing: null
+summary: Notes
+---
+
+Body
+"#;
+        let properties = parse_front_matter_properties(split_front_matter(src).unwrap().0);
+        let icons = properties
+            .iter()
+            .map(|property| (property.key.as_str(), property_icon(property).0))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            icons,
+            vec![
+                ("complete", "boolean-true"),
+                ("draft", "boolean-false"),
+                ("created", "date"),
+                ("website", "link"),
+                ("contact", "email"),
+                ("rating", "number"),
+                ("authors", "person"),
+                ("tags", "tag"),
+                ("cover", "image"),
+                ("status", "status"),
+                ("version", "version"),
+                ("related", "list"),
+                ("nothing", "empty"),
+                ("summary", "text"),
+            ]
+        );
+
+        let html = front_matter_properties_html(src).unwrap();
+        assert!(html.contains(r#"data-icon="boolean-true""#), "{html}");
+        assert!(html.contains(r#"data-icon="date""#), "{html}");
+        assert!(html.contains(r#"data-icon="list""#), "{html}");
+    }
+
+    #[test]
+    fn recognizes_iso_dates_without_treating_date_like_text_as_dates() {
+        assert!(is_iso_date("2026-09-24"));
+        assert!(is_iso_date("2026-09-24T14:30:00Z"));
+        assert!(is_iso_date("2026-09-24 14:30"));
+        assert!(!is_iso_date("2026-13-24"));
+        assert!(!is_iso_date("2026-02-29"));
+        assert!(!is_iso_date("2026-09-24T24:00"));
+        assert!(!is_iso_date("2026-09-release"));
+        assert!(!is_iso_date("2026-09-24 draft"));
     }
 
     #[test]
