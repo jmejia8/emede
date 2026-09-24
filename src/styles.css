@@ -3047,18 +3047,21 @@ body.frame-emede .search-bar {
 
 /* ── Change highlighting ──────────────────────────────────────────────────────
  *
- * The hues are fixed rather than drawn from a theme variable: green/amber/red
- * carry the meaning here, and a theme that recolored them would be saying
- * something wrong. Mixing each with `transparent` lets the theme's own
- * background composite through, so they stay legible light and dark, and
- * `color: inherit` keeps the theme's text color throughout.
+ * The tinted fills give each kind a familiar diff color, but never carry the
+ * meaning alone: colorful themes use those same hues for ordinary Markdown.
+ * Each marker uses its change color tempered with the theme's border color, so
+ * it stays restrained while its shape distinguishes added, modified, and deleted
+ * content even when color is unavailable. The shapes are paint-only, so they
+ * cannot affect line wrapping or the restored scroll position.
  *
  * `padding: 0` is load-bearing, unlike the find highlight's `0 2px`: these
  * marks are inserted before `applyDocument` restores the scroll position, so
  * anything that reflows text would make a restored position drift.
  */
 .emede-change {
+  --change-marker: color-mix(in srgb, var(--color-border) 55%, #4caf50);
   background: color-mix(in srgb, #4caf50 22%, transparent);
+  box-shadow: inset 0 -0.13em 0 var(--change-marker);
   color: inherit;
   padding: 0;
   border-radius: 2px;
@@ -3066,7 +3069,14 @@ body.frame-emede .search-bar {
 }
 
 .emede-change--changed {
+  --change-marker: color-mix(in srgb, var(--color-border) 55%, #ffa726);
   background: color-mix(in srgb, #ffa726 24%, transparent);
+  box-shadow: none;
+  text-decoration-line: underline;
+  text-decoration-color: var(--change-marker);
+  text-decoration-style: solid;
+  text-decoration-thickness: 0.13em;
+  text-underline-offset: 0.12em;
 }
 
 /* A deletion is a point between words, not a range, so the element itself stays
@@ -3076,6 +3086,7 @@ body.frame-emede .search-bar {
  * no space on the line. It keeps its pointer events — the old 2px rule was too
  * thin to click, which left the popup effectively unreachable. */
 .emede-change-deleted {
+  --change-marker: color-mix(in srgb, var(--color-border) 55%, #e53935);
   position: relative;
   display: inline-block;
   width: 0;
@@ -3092,6 +3103,7 @@ body.frame-emede .search-bar {
   left: -0.3em;
   right: -0.3em;
   background: color-mix(in srgb, #e53935 30%, transparent);
+  border-left: 0.13em solid var(--change-marker);
   border-radius: 2px;
 }
 
@@ -3108,21 +3120,35 @@ body.frame-emede .search-bar {
  * padding, for the same reason the caret has no width — it must not move a
  * single glyph. */
 .prose .emede-change-block {
+  --change-marker: color-mix(in srgb, var(--color-border) 55%, #ffa726);
   background-image: linear-gradient(
     color-mix(in srgb, #ffa726 11%, transparent),
     color-mix(in srgb, #ffa726 11%, transparent)
   );
   box-shadow: 0 0 0 0.25em color-mix(in srgb, #ffa726 11%, transparent);
+  outline: 2px dashed var(--change-marker);
+  outline-offset: 0.15em;
   cursor: help;
 }
 
 .prose .emede-change-block--added {
+  --change-marker: color-mix(in srgb, var(--color-border) 55%, #4caf50);
   background-image: linear-gradient(
     color-mix(in srgb, #4caf50 11%, transparent),
     color-mix(in srgb, #4caf50 11%, transparent)
   );
   box-shadow: 0 0 0 0.25em color-mix(in srgb, #4caf50 11%, transparent);
+  outline: 2px solid var(--change-marker);
+  outline-offset: 0.15em;
   cursor: auto;
+}
+
+/* Table cells are adjacent, so an outside outline and spread shadow from one
+ * cell would paint over its neighbours. Keep their coarse marks inside their
+ * own boxes while preserving the normal whole-block treatment elsewhere. */
+.prose :is(th, td).emede-change-block {
+  box-shadow: inset 0 0 0 2px var(--change-marker);
+  outline: none;
 }
 
 /* Deliberately weak, so a block that already has a radius of its own — a code
