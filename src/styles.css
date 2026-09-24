@@ -124,9 +124,9 @@ body {
     clamp(3rem, 15vh, 10rem);
   background: var(--color-bg);
   border: 1px solid color-mix(in srgb, var(--color-border) 65%, var(--color-bg));
-  box-shadow:
-    0 1px 2px rgb(0 0 0 / 0.12),
-    0 10px 28px rgb(0 0 0 / 0.2);
+  /* This sheet grows with the document. A blurred shadow makes WebKit repaint
+   * its full height while scrolling, especially when GPU compositing is off. */
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.08);
 }
 
 .prose {
