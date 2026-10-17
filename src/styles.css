@@ -549,6 +549,160 @@ body.frame-emede .prose :is(h1, h2, h3, h4, h5, h6) {
   height: auto;
 }
 
+.prose .zoomable {
+  cursor: zoom-in;
+}
+
+.prose a .zoomable {
+  cursor: pointer;
+}
+
+/* One floating button, placed over whichever image is under the pointer.
+   The content DOM is never wrapped, so this lives on <body>. */
+.image-zoom-button {
+  position: fixed;
+  z-index: 15;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-bg) 88%, transparent);
+  color: var(--color-fg);
+  font: 1.05rem/1 system-ui, sans-serif;
+  cursor: pointer;
+  opacity: 0.75;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: opacity 0.15s ease;
+}
+
+.image-zoom-button:hover,
+.image-zoom-button:focus-visible {
+  opacity: 1;
+}
+
+.image-zoom-button.hidden {
+  display: none;
+}
+
+.image-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: color-mix(in srgb, var(--color-bg) 97%, var(--color-fg));
+  outline: none;
+  animation: aboutFadeIn 0.15s ease;
+}
+
+.image-viewer-stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  cursor: crosshair;
+  touch-action: none;
+  user-select: none;
+}
+
+.image-viewer-stage.can-pan {
+  cursor: grab;
+}
+
+.image-viewer-stage.is-panning {
+  cursor: grabbing;
+}
+
+.image-viewer-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.image-viewer-selection {
+  position: absolute;
+  pointer-events: none;
+  border: 1px dashed var(--color-link);
+  background: color-mix(in srgb, var(--color-link) 14%, transparent);
+}
+
+.image-viewer-toolbar {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.2rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-bg) 92%, transparent);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--color-fg) 10%, transparent);
+  font: 0.85rem/1 system-ui, sans-serif;
+  color: var(--color-fg);
+}
+
+.image-viewer-btn {
+  min-width: 2rem;
+  height: 2rem;
+  padding: 0 0.4rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.image-viewer-btn:hover:not(:disabled),
+.image-viewer-btn:focus-visible {
+  background: var(--color-code-bg);
+}
+
+.image-viewer-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.image-viewer-zoom {
+  min-width: 3.5rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-muted);
+}
+
+.image-viewer-hint {
+  position: absolute;
+  bottom: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 2rem);
+  padding: 0.3rem 0.7rem;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-bg) 90%, transparent);
+  color: var(--color-muted);
+  font: 0.78rem/1.3 system-ui, sans-serif;
+  text-align: center;
+  pointer-events: none;
+}
+
+.image-viewer.hidden {
+  display: none;
+}
+
+/* With the native frame the document element scrolls, and its scrollbar would
+   paint over the viewer. */
+html:has(body.has-image-viewer) {
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .image-viewer {
+    animation: none;
+  }
+}
+
 .prose table {
   width: auto;
   margin: 0 auto 1.25em;
@@ -3285,6 +3439,8 @@ body.frame-emede .search-bar {
   #linked-file-overlay,
   #context-menu,
   #change-popup,
+  #image-zoom-button,
+  #image-viewer,
   #drag-overlay,
   #loading-state,
   #empty-state,
