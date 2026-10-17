@@ -11,6 +11,7 @@ import {
   renderKeybindingHelp,
 } from "./keybindings.js";
 import { createImageZoom } from "./imagezoom.js";
+import { createTableView } from "./tableview.js";
 import { getScrollRoot } from "./scroll.js";
 import { DEFAULT_READING_WPM, computeDocStats, statsRows } from "./stats.js";
 import {
@@ -803,6 +804,7 @@ async function withRealBoxes(fn) {
 
 let mermaidScriptLoaded = false;
 let imageZoom = null;
+let tableView = null;
 
 async function ensureMermaidLoaded() {
   if (window.mermaid) return true;
@@ -1125,6 +1127,7 @@ async function applyDocument(result, { reload = false, openToken } = {}) {
   currentDocSource = result.source ?? "";
   currentDocChanges = result.changes ?? null;
   imageZoom?.hideHoverButton();
+  tableView?.hideHoverButton();
   rewriteLocalImageSrcs(contentEl);
   wrapTables(contentEl);
   // Before the contents panel is built and before math and mermaid replace
@@ -2859,6 +2862,10 @@ function wirePinchZoom() {
 
   void listen("pinch-zoom", ({ payload }) => {
     if (!payload || imageZoom?.isOpen()) return;
+    if (tableView?.isOpen()) {
+      tableView.pinch(payload);
+      return;
+    }
     if (payload.phase === "begin") {
       appliedSteps = 0;
       targetSteps = 0;
@@ -3039,6 +3046,7 @@ async function boot() {
   wireContextMenu();
   wireUpdateCheck();
   imageZoom = createImageZoom({ contentEl });
+  tableView = createTableView({ contentEl });
 
   openFileBtn.addEventListener("click", () => {
     void handlePickAndOpenFile();

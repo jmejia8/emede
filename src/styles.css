@@ -716,7 +716,8 @@ body.frame-emede .image-viewer {
 
 /* With the native frame the document element scrolls, and its scrollbar would
    paint over the viewer. */
-html:has(body.has-image-viewer) {
+html:has(body.has-image-viewer),
+html:has(body.has-table-viewer) {
   overflow: hidden;
 }
 
@@ -724,6 +725,115 @@ html:has(body.has-image-viewer) {
   .image-viewer {
     animation: none;
   }
+}
+
+/* The table viewer reuses the image viewer's shell (backdrop, titlebar inset,
+   toolbar buttons) but lays out as a bar over a natively scrolling stage. */
+.table-viewer {
+  display: flex;
+  flex-direction: column;
+}
+
+.table-viewer.hidden {
+  display: none;
+}
+
+.table-viewer-bar {
+  position: static;
+  align-self: flex-end;
+  flex-wrap: wrap;
+  margin: 0.75rem 0.75rem 0.5rem;
+}
+
+.table-viewer-filter {
+  width: 14rem;
+  max-width: 40vw;
+  height: 2rem;
+  padding: 0 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font: inherit;
+  outline: none;
+}
+
+.table-viewer-filter:focus-visible {
+  border-color: var(--color-link);
+}
+
+.table-viewer-count {
+  min-width: 5.5rem;
+}
+
+.table-viewer-stage {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  outline: none;
+  padding-bottom: 3rem; /* clear of the hint */
+}
+
+.prose.table-viewer-sheet {
+  max-width: none;
+  width: max-content;
+  min-width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0 1.5rem;
+  transition: none;
+}
+
+.table-viewer-sheet table {
+  margin: 0 auto;
+}
+
+/* A collapsed border does not travel with a sticky cell, so the header draws
+   its rule as a shadow instead. */
+.table-viewer-sheet thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: color-mix(in srgb, var(--color-bg) 97%, var(--color-fg));
+  box-shadow: inset 0 -2px 0 var(--color-border);
+}
+
+.table-viewer-sheet th.tv-sortable {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.table-viewer-sheet th.tv-sortable::after {
+  content: "↕";
+  display: inline-block;
+  margin-left: 0.4em;
+  font-family: system-ui, sans-serif;
+  font-size: 0.8em;
+  color: var(--color-muted);
+  opacity: 0;
+}
+
+.table-viewer-sheet th.tv-sortable:hover::after,
+.table-viewer-sheet th.tv-sortable:focus-visible::after {
+  opacity: 1;
+}
+
+.table-viewer-sheet th[aria-sort="ascending"]::after {
+  content: "▲";
+  color: var(--color-link);
+  opacity: 1;
+}
+
+.table-viewer-sheet th[aria-sort="descending"]::after {
+  content: "▼";
+  color: var(--color-link);
+  opacity: 1;
+}
+
+.table-viewer-sheet th.tv-sortable:focus-visible {
+  outline: 2px solid var(--color-link);
+  outline-offset: -2px;
 }
 
 .prose table {
@@ -3464,6 +3574,8 @@ body.frame-emede .search-bar {
   #change-popup,
   #image-zoom-button,
   #image-viewer,
+  #table-view-button,
+  #table-viewer,
   #drag-overlay,
   #loading-state,
   #empty-state,
