@@ -2,9 +2,10 @@
  * Image zoom overlay.
  *
  * Diagrams and images that the reading column cannot show at full detail get
- * an "expand" button on hover. It opens a full-window viewer where dragging
- * selects a rectangle to zoom into, Space+drag or middle-drag pans, the wheel
- * zooms around the cursor, and Back pops a zoom-history stack.
+ * an "expand" button on hover. It opens a full-window viewer with two tools:
+ * with the zoom tool dragging selects a rectangle to zoom into, with the hand
+ * tool dragging pans. Space+drag or middle-drag pans under either tool, the
+ * wheel zooms around the cursor, and Back pops a zoom-history stack.
  *
  * Which images qualify is decided at hover time, so a resize or a font/margin
  * change needs no bookkeeping:
@@ -46,6 +47,22 @@ function safeDecode(value) {
     return value;
   }
 }
+
+// Stroked with currentColor so the tool icons follow the theme, which a ✋
+// glyph would not (it renders as a colour emoji).
+const ICON_ZOOM_RECT =
+  '<svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">' +
+  '<rect x="2.5" y="2.5" width="10" height="10" stroke-dasharray="2.2 1.8"/>' +
+  '<circle cx="12.5" cy="12.5" r="3.2"/><path d="M14.8 14.8 18 18"/></svg>';
+const ICON_HAND =
+  '<svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<path d="M6.5 10V4.2a1.2 1.2 0 0 1 2.4 0V9.5M8.9 9V3a1.2 1.2 0 0 1 2.4 0v6M11.3 9V3.8a1.2 1.2 0 0 1 2.4 0V10"/>' +
+  '<path d="M13.7 10V6.2a1.2 1.2 0 0 1 2.4 0v5.3c0 3.3-2.3 6-5.4 6-2.2 0-3.3-.8-4.6-2.6L3.8 11.5a1.2 1.2 0 0 1 1.9-1.4l.8 1"/></svg>';
+
+const HINTS = {
+  zoom: "Drag to zoom · Space or middle-drag to pan · Wheel to zoom · M hand · Backspace back · 0 fit · Esc close",
+  pan: "Drag to pan · Wheel to zoom · Z rectangle zoom · Backspace back · 0 fit · Esc close",
+};
 
 function button(label, title, text) {
   const el = document.createElement("button");
@@ -205,17 +222,24 @@ export function createImageZoom({ contentEl }) {
   toolbar.className = "image-viewer-toolbar";
   const backBtn = button("Back", "Back to previous zoom (Backspace)", "↶");
   const fitBtn = button("Fit", "Fit to window (0)", "⊡");
+  const rectToolBtn = button("Rectangle zoom", "Rectangle zoom: drag to zoom (Z)", "");
+  rectToolBtn.innerHTML = ICON_ZOOM_RECT;
+  const handToolBtn = button("Hand", "Hand: drag to move (M)", "");
+  handToolBtn.innerHTML = ICON_HAND;
+  for (const el of [rectToolBtn, handToolBtn]) el.classList.add("image-viewer-tool");
+  const separator = document.createElement("span");
+  separator.className = "image-viewer-separator";
   const zoomOutBtn = button("Zoom out", "Zoom out (-)", "−");
   const zoomLabel = document.createElement("span");
   zoomLabel.className = "image-viewer-zoom";
   const zoomInBtn = button("Zoom in", "Zoom in (+)", "+");
   const closeBtn = button("Close", "Close (Esc)", "✕");
-  toolbar.append(backBtn, fitBtn, zoomOutBtn, zoomLabel, zoomInBtn, closeBtn);
+  toolbar.append(
+    rectToolBtn, handToolBtn, separator, backBtn, fitBtn, zoomOutBtn, zoomLabel, zoomInBtn, closeBtn,
+  );
 
   const hint = document.createElement("div");
   hint.className = "image-viewer-hint";
-  hint.textContent =
-    "Drag to zoom · Space or middle-drag to pan · Wheel to zoom · Backspace back · 0 fit · Esc close";
 
   overlay.append(stage, selectionEl, toolbar, hint);
   document.body.append(overlay);
@@ -227,6 +251,7 @@ export function createImageZoom({ contentEl }) {
   let history = [];
   let restoreFocus = null;
   let spaceDown = false;
+  let tool = "zoom"; // what a plain left drag does: "zoom" (rectangle) or "pan"; kept across opens
   let drag = null;
   let lastWheelAt = 0;
   let appliedStageW = 1;
@@ -404,12 +429,22 @@ export function createImageZoom({ contentEl }) {
   zoomInBtn.addEventListener("click", () => zoomCenter(KEY_ZOOM));
   zoomOutBtn.addEventListener("click", () => zoomCenter(1 / KEY_ZOOM));
   closeBtn.addEventListener("click", close);
+  rectToolBtn.addEventListener("click", () => setTool("zoom"));
+  handToolBtn.addEventListener("click", () => setTool("pan"));
+
+  function setTool(next) {
+    tool = next;
+    rectToolBtn.setAttribute("aria-pressed", String(tool === "zoom"));
+    handToolBtn.setAttribute("aria-pressed", String(tool === "pan"));
+    hint.textContent = HINTS[tool];
+    syncCursor();
+  }
 
   // ------------------------------------------------------------- pointer ---
 
   function syncCursor() {
     stage.classList.toggle("is-panning", !!drag && drag.mode === "pan");
-    stage.classList.toggle("can-pan", spaceDown && !drag);
+    stage.classList.toggle("can-pan", (spaceDown || tool === "pan") && !drag);
   }
 
   function endDrag() {
@@ -421,7 +456,7 @@ export function createImageZoom({ contentEl }) {
   stage.addEventListener("pointerdown", (event) => {
     if (event.button !== 0 && event.button !== 1) return;
     event.preventDefault();
-    const pan = event.button === 1 || spaceDown;
+    const pan = event.button === 1 || spaceDown || tool === "pan";
     drag = { mode: pan ? "pan" : "rect", x0: event.clientX, y0: event.clientY, x: event.clientX, y: event.clientY };
     stage.setPointerCapture(event.pointerId);
     syncCursor();
@@ -437,8 +472,10 @@ export function createImageZoom({ contentEl }) {
     }
     drag.x = event.clientX;
     drag.y = event.clientY;
-    const left = Math.min(drag.x0, drag.x);
-    const top = Math.min(drag.y0, drag.y);
+    // The overlay may start below the titlebar, so place the box in its coordinates.
+    const origin = overlay.getBoundingClientRect();
+    const left = Math.min(drag.x0, drag.x) - origin.left;
+    const top = Math.min(drag.y0, drag.y) - origin.top;
     selectionEl.style.left = `${left}px`;
     selectionEl.style.top = `${top}px`;
     selectionEl.style.width = `${Math.abs(drag.x - drag.x0)}px`;
@@ -515,6 +552,12 @@ export function createImageZoom({ contentEl }) {
         spaceDown = true;
         syncCursor();
         break;
+      case "z":
+        setTool("zoom");
+        break;
+      case "m":
+        setTool("pan");
+        break;
       case "Backspace":
       case "u":
         back();
@@ -570,6 +613,8 @@ export function createImageZoom({ contentEl }) {
     spaceDown = false;
     if (isOpen()) syncCursor();
   });
+
+  setTool(tool);
 
   return { open, close, isOpen, hideHoverButton };
 }

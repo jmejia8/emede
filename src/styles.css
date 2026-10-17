@@ -659,6 +659,24 @@ body.frame-emede .prose :is(h1, h2, h3, h4, h5, h6) {
   background: var(--color-code-bg);
 }
 
+.image-viewer-btn[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--color-link) 18%, transparent);
+  color: var(--color-link);
+}
+
+.image-viewer-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-viewer-separator {
+  width: 1px;
+  height: 1.2rem;
+  margin: 0 0.25rem;
+  background: var(--color-border);
+}
+
 .image-viewer-btn:disabled {
   opacity: 0.35;
   cursor: default;
@@ -689,6 +707,11 @@ body.frame-emede .prose :is(h1, h2, h3, h4, h5, h6) {
 
 .image-viewer.hidden {
   display: none;
+}
+
+/* Leave the custom titlebar (and its window buttons) usable, like the panels. */
+body.frame-emede .image-viewer {
+  top: var(--titlebar-height);
 }
 
 /* With the native frame the document element scrolls, and its scrollbar would
