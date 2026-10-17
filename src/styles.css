@@ -2085,6 +2085,55 @@ body:has(.settings-panel:not(.hidden)) .settings-toggle {
   gap: 0.5rem;
 }
 
+/* Full-width notice at the top of the settings panel while an update is
+   available. Opens About, which holds the install command and release notes. */
+.update-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--color-link) 35%, var(--color-border));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-link) 10%, var(--color-bg));
+  color: var(--color-link);
+  font: inherit;
+  font-size: 0.85em;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background 0.15s ease;
+}
+
+.update-banner.hidden {
+  display: none;
+}
+
+.update-banner:hover,
+.update-banner:focus-visible {
+  background: color-mix(in srgb, var(--color-link) 18%, var(--color-bg));
+}
+
+.update-banner:focus-visible {
+  outline: 2px solid var(--color-link);
+  outline-offset: 2px;
+}
+
+.update-banner-dot {
+  flex: none;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .update-banner {
+    transition: none;
+  }
+}
+
 .action-btn {
   display: flex;
   align-items: center;

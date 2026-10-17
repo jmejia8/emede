@@ -232,6 +232,8 @@ const settingsClose = document.getElementById("settings-close");
 const aboutOverlay = document.getElementById("about-overlay");
 const aboutModal = document.getElementById("about-modal");
 const aboutLink = document.getElementById("about-link");
+const updateBanner = document.getElementById("update-banner");
+const updateBannerText = document.getElementById("update-banner-text");
 const aboutClose = document.getElementById("about-close");
 const aboutUpdateStatus = document.getElementById("about-update-status");
 const aboutUpdateCommand = document.getElementById("about-update-command");
@@ -2492,9 +2494,16 @@ function renderUpdateStatus(status, { pending = false, error = null } = {}) {
 
 // Badge the settings gear so an available update is noticeable once, without
 // ever interrupting reading.
-function markUpdateBadge(available) {
+function markUpdateBadge(status) {
+  const available = Boolean(status?.update_available);
   settingsToggle.classList.toggle("has-update", available);
   aboutLink.classList.toggle("has-update", available);
+  // The About link sits at the foot of the panel; the banner puts the news
+  // where the panel opens.
+  updateBanner.classList.toggle("hidden", !available);
+  if (available) {
+    updateBannerText.textContent = `Version ${status.latest_version} is available`;
+  }
 }
 
 async function runUpdateCheck(force) {
@@ -2502,7 +2511,7 @@ async function runUpdateCheck(force) {
   try {
     const status = await invoke("check_for_update", { force });
     renderUpdateStatus(status);
-    markUpdateBadge(Boolean(status?.update_available));
+    markUpdateBadge(status);
     return status;
   } catch (e) {
     // Offline, rate-limited, DNS down: the reader carries on exactly as before.
@@ -2775,6 +2784,7 @@ function wireSettings() {
   });
 
   aboutLink.addEventListener("click", () => toggleAbout(true));
+  updateBanner.addEventListener("click", () => toggleAbout(true));
   aboutClose.addEventListener("click", () => toggleAbout(false));
   aboutOverlay.addEventListener("click", (e) => {
     if (e.target === aboutOverlay) toggleAbout(false);
