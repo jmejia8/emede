@@ -370,8 +370,37 @@ fn run_inner(files: Vec<String>, print_target: Option<String>) {
                 }
 
                 #[cfg(target_os = "linux")]
-                if let Err(e) = window.with_webview(|wv| {
+                let pinch_window = window.clone();
+                #[cfg(target_os = "linux")]
+                if let Err(e) = window.with_webview(move |wv| {
+                    use gtk::glib::translate::ToGlibPtr;
                     use webkit2gtk::{SettingsExt, WebViewExt};
+
+                    // A touchpad pinch would otherwise reach WebKitGTK's own
+                    // gesture controller, which magnifies the whole viewport
+                    // (chrome included) and lags behind the fingers. Swallow
+                    // it before the class handler runs and hand the gesture to
+                    // the frontend, which maps it onto the reader's font size
+                    // so only the rendered document zooms. `scale` is
+                    // cumulative from the gesture's begin phase.
+                    gtk::prelude::WidgetExt::connect_event(&wv.inner(), move |_, event| {
+                        let Some(pinch) = event.downcast_ref::<gtk::gdk::EventTouchpadPinch>() else {
+                            return gtk::glib::Propagation::Proceed;
+                        };
+                        // gdk-rs exposes `phase` only as a bool; read the raw field.
+                        let raw: *const gtk::gdk::ffi::GdkEventTouchpadPinch = pinch.to_glib_none().0;
+                        let phase = match i32::from(unsafe { (*raw).phase }) {
+                            gtk::gdk::ffi::GDK_TOUCHPAD_GESTURE_PHASE_BEGIN => "begin",
+                            gtk::gdk::ffi::GDK_TOUCHPAD_GESTURE_PHASE_UPDATE => "update",
+                            gtk::gdk::ffi::GDK_TOUCHPAD_GESTURE_PHASE_END => "end",
+                            _ => "cancel",
+                        };
+                        let _ = pinch_window.emit(
+                            "pinch-zoom",
+                            serde_json::json!({ "phase": phase, "scale": pinch.scale() }),
+                        );
+                        gtk::glib::Propagation::Stop
+                    });
 
                     // WebKitGTK already treats touchpad gestures as continuous
                     // input, but applies an additional animation to discrete

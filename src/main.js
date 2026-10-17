@@ -2838,6 +2838,40 @@ function resetFontSize() {
   scheduleSave();
 }
 
+// Touchpad pinch, forwarded by the backend in place of WebKitGTK's viewport
+// magnification. The cumulative scale is quantized to font-size steps (one
+// point per ~10% of finger spread), so a pinch behaves like repeated Ctrl+=/-
+// and only the document reflows. Updates are coalesced to one per frame.
+const PINCH_STEP_RATIO = Math.log(1.1);
+
+function wirePinchZoom() {
+  let appliedSteps = 0;
+  let targetSteps = 0;
+  let frame = 0;
+
+  const flush = () => {
+    frame = 0;
+    const delta = targetSteps - appliedSteps;
+    if (delta === 0) return;
+    appliedSteps = targetSteps;
+    adjustFontSize(delta);
+  };
+
+  void listen("pinch-zoom", ({ payload }) => {
+    if (!payload || imageZoom?.isOpen()) return;
+    if (payload.phase === "begin") {
+      appliedSteps = 0;
+      targetSteps = 0;
+      return;
+    }
+    if (payload.phase === "cancel") return;
+    if (payload.scale > 0) {
+      targetSteps = Math.round(Math.log(payload.scale) / PINCH_STEP_RATIO);
+    }
+    if (!frame) frame = requestAnimationFrame(flush);
+  });
+}
+
 function wireViewState() {
   let closingAfterFlush = false;
   void getCurrentWindow().onCloseRequested(async (event) => {
@@ -3028,6 +3062,8 @@ async function boot() {
       openFile(event.payload);
     }
   });
+
+  wirePinchZoom();
 
   // Live reload: the backend re-renders the open document when its file changes
   // on disk and emits it here. Only apply it if it's still the current document;
