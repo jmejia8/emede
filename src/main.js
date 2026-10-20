@@ -25,6 +25,7 @@ import {
 const { invoke, convertFileSrc } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 const { getCurrentWindow } = window.__TAURI__.window;
+const { getCurrentWebview } = window.__TAURI__.webview;
 const { openUrl, revealItemInDir } = window.__TAURI__.opener;
 
 const DEFAULT_FONT = '"Literata", "Source Serif 4", "Noto Serif", serif';
@@ -79,6 +80,13 @@ const MIN_READER_WIDTH_CM = 10;
 const MAX_READER_WIDTH_CM = 30;
 const DEFAULT_PAPER_SIZE = "none";
 const PAPER_SIZES = new Set(["none", "letter", "legal", "a3", "a4", "a5"]);
+const MIN_PAGE_ZOOM = 0.25;
+const MAX_PAGE_ZOOM = 4;
+// One Ctrl+=/− step, and one pinch "notch" when quantizing font-size steps.
+const ZOOM_STEP_RATIO = 1.1;
+const DEFAULT_UI_ZOOM = 100;
+const MIN_UI_ZOOM = 50;
+const MAX_UI_ZOOM = 200;
 
 const BUNDLED_COLOR_TEMPLATES = [
   {
@@ -255,6 +263,8 @@ const colorTemplateList = document.getElementById("color-template-list");
 const importColorTemplateBtn = document.getElementById("import-color-template");
 const colorTemplateStatus = document.getElementById("color-template-status");
 const settingWindowFrame = document.getElementById("setting-window-frame");
+const settingZoom = document.getElementById("setting-zoom");
+const settingZoomLabel = document.getElementById("setting-zoom-label");
 const settingKeybindings = document.getElementById("setting-keybindings");
 const settingGpu = document.getElementById("setting-gpu");
 const settingJustify = document.getElementById("setting-justify");
@@ -293,6 +303,7 @@ let currentSettings = null;
 let currentDocPath = null;
 let initialFontSize = 12;
 let initialGpuAccel = null;
+let appliedUiZoom = DEFAULT_UI_ZOOM;
 let saveTimer = null;
 let activeOpenToken = 0;
 let colorTemplates = [];
@@ -450,6 +461,35 @@ function normalizePaperSize(value) {
   return PAPER_SIZES.has(value) ? value : DEFAULT_PAPER_SIZE;
 }
 
+function normalizePageZoom(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return 1;
+  return Math.min(MAX_PAGE_ZOOM, Math.max(MIN_PAGE_ZOOM, n));
+}
+
+function normalizeUiZoom(value) {
+  const n = Math.round(Number(value) / 10) * 10;
+  if (!Number.isFinite(n) || n <= 0) return DEFAULT_UI_ZOOM;
+  return Math.min(MAX_UI_ZOOM, Math.max(MIN_UI_ZOOM, n));
+}
+
+/**
+ * Interface zoom is the webview's own page zoom, not CSS `zoom` on the body:
+ * it rescales viewport units and media queries consistently, so fixed panels
+ * sized in `vh`/`vw` keep fitting the window. The settings panel opts out by
+ * counter-zooming itself (its stylesheet sizes it with insets and percentages,
+ * which the counter-zoom leaves alone).
+ */
+function applyUiZoom(percent) {
+  if (percent === appliedUiZoom) return;
+  appliedUiZoom = percent;
+  const factor = percent / 100;
+  settingsPanel.style.zoom = factor === 1 ? "" : String(1 / factor);
+  getCurrentWebview()
+    .setZoom(factor)
+    .catch((err) => console.warn("Interface zoom failed", err));
+}
+
 function normalizeCssColor(value) {
   const color = value.trim();
   if (!color || !CSS.supports("color", color)) return null;
@@ -589,6 +629,10 @@ function applySettings(settings) {
   const paperSize = normalizePaperSize(settings.paper_size);
   readerEl.dataset.paperSize = paperSize;
   readerEl.classList.toggle("paper-preview", paperSize !== DEFAULT_PAPER_SIZE);
+  document.documentElement.style.setProperty(
+    "--page-zoom",
+    String(normalizePageZoom(settings.page_zoom)),
+  );
   for (const property of Object.values(COLOR_TEMPLATE_PROPERTIES)) {
     if (property.required) continue;
     if (settings[property.setting]) {
@@ -612,6 +656,9 @@ function applySettings(settings) {
   settingBg.value = settings.color_bg;
   settingPaperSize.value = paperSize;
   settingWindowFrame.value = normalizeWindowFrame(settings.window_frame);
+  const uiZoom = normalizeUiZoom(settings.zoom);
+  settingZoom.value = uiZoom;
+  settingZoomLabel.textContent = `${uiZoom}%`;
   settingKeybindings.value = normalizeKeybindingMode(settings.keybindings);
   renderKeybindingHelp(keybindingsHelp, settings.keybindings);
   settingGpu.checked = settings.gpu_acceleration;
@@ -627,6 +674,7 @@ function applySettings(settings) {
   // Read time is derived from the reading speed, so refresh it in place.
   if (!docStats.hidden) buildStats();
   void applyWindowFrame(settings.window_frame);
+  if (!printing) applyUiZoom(uiZoom);
   scheduleMermaid();
 }
 
@@ -640,6 +688,8 @@ function settingsFromForm() {
     color_fg: settingFg.value,
     color_bg: settingBg.value,
     paper_size: normalizePaperSize(settingPaperSize.value),
+    page_zoom: normalizePageZoom(currentSettings?.page_zoom),
+    zoom: normalizeUiZoom(settingZoom.value),
     margin: `${Number(settingMargin.value)}cm`,
     window_frame: settingWindowFrame.value,
     keybindings: settingKeybindings.value,
@@ -751,6 +801,8 @@ const SUPPORTS_OFFSCREEN_SKIP =
 // `--print` drives this same frontend and typesets before handing off to the
 // backend, so the whole document has to stay laid out for real there.
 let offscreenSkipAllowed = true;
+// Headless PDF export: never apply the interface zoom to the off-screen view.
+let printing = false;
 
 /**
  * Let the browser stop laying out and painting blocks that are off screen.
@@ -2301,12 +2353,16 @@ function capturePrintLayout() {
   const sheetStyle = framed ? getComputedStyle(pageSheet) : null;
   const paddingLeft = Number.parseFloat(readerStyle.paddingLeft) || 0;
   const paddingRight = Number.parseFloat(readerStyle.paddingRight) || 0;
+  // The sheet's view zoom is screen-only (print resets it), so measure in its
+  // unzoomed coordinates.
+  const zoom = framed ? currentPageZoom() : 1;
+  const contentWidth = contentRect.width / zoom;
   const layoutWidth = framed
-    ? pageSheet.getBoundingClientRect().width
-    : contentRect.width + paddingLeft + paddingRight;
+    ? pageSheet.getBoundingClientRect().width / zoom
+    : contentWidth + paddingLeft + paddingRight;
   const rootStyle = document.documentElement.style;
   rootStyle.setProperty("--print-layout-width", `${layoutWidth}px`);
-  rootStyle.setProperty("--print-content-width", `${contentRect.width}px`);
+  rootStyle.setProperty("--print-content-width", `${contentWidth}px`);
   rootStyle.setProperty("--print-padding-top", sheetStyle?.paddingTop ?? readerStyle.paddingTop);
   rootStyle.setProperty("--print-padding-bottom", sheetStyle?.paddingBottom ?? readerStyle.paddingBottom);
 }
@@ -2712,6 +2768,7 @@ function wireSettings() {
     settingBg,
     settingPaperSize,
     settingWindowFrame,
+    settingZoom,
     settingKeybindings,
   ].forEach((el) => {
     el.addEventListener("input", scheduleSave);
@@ -2767,6 +2824,10 @@ function wireSettings() {
 
   settingMargin.addEventListener("input", () => {
     settingMarginLabel.textContent = `${Number(settingMargin.value)} cm`;
+  });
+
+  settingZoom.addEventListener("input", () => {
+    settingZoomLabel.textContent = `${Number(settingZoom.value)}%`;
   });
 
   document.querySelectorAll("[data-font-preset]").forEach((btn) => {
@@ -2834,7 +2895,46 @@ function wireSettingTips() {
   }, true);
 }
 
+// With a page border shown, zoom is a view transform of the sheet (like a PDF
+// viewer): the page scales as a whole and its line breaks never change. The
+// font size stays the typographic size on the page.
+function pageZoomActive() {
+  return readerEl.classList.contains("paper-preview") &&
+    pageSheet.classList.contains("page-sheet--active");
+}
+
+function currentPageZoom() {
+  return normalizePageZoom(currentSettings?.page_zoom);
+}
+
+/**
+ * Set the sheet's zoom, keeping the point at the viewport's center fixed so
+ * the reader does not lose their place.
+ */
+function setPageZoom(value) {
+  const zoom = normalizePageZoom(value);
+  if (!currentSettings || zoom === currentPageZoom()) return;
+  const scroller = getScrollRoot();
+  const before = pageSheet.getBoundingClientRect();
+  const cx = window.innerWidth / 2;
+  const cy = window.innerHeight / 2;
+  const fx = before.width > 0 ? (cx - before.left) / before.width : 0;
+  const fy = before.height > 0 ? (cy - before.top) / before.height : 0;
+
+  currentSettings = { ...currentSettings, page_zoom: zoom };
+  document.documentElement.style.setProperty("--page-zoom", String(zoom));
+
+  const after = pageSheet.getBoundingClientRect();
+  scroller.scrollTop += after.top + fy * after.height - cy;
+  readerEl.scrollLeft += after.left + fx * after.width - cx;
+  scheduleSave();
+}
+
 function adjustFontSize(delta) {
+  if (pageZoomActive()) {
+    setPageZoom(currentPageZoom() * ZOOM_STEP_RATIO ** delta);
+    return;
+  }
   const currentPt = toPt(currentSettings?.font_size, 12);
   const newPt = Math.min(32, Math.max(8, currentPt + delta));
   settingSize.value = newPt;
@@ -2844,6 +2944,10 @@ function adjustFontSize(delta) {
 }
 
 function resetFontSize() {
+  if (pageZoomActive()) {
+    setPageZoom(1);
+    return;
+  }
   const pt = initialFontSize;
   settingSize.value = pt;
   settingSizeLabel.textContent = `${pt}pt`;
@@ -2851,19 +2955,43 @@ function resetFontSize() {
   scheduleSave();
 }
 
+// The sheet's zoom is a transform, which leaves its layout box unscaled; the
+// stylesheet sizes the frame around it from this unzoomed height so the scroll
+// extent follows the painted sheet. The frame clips with `overflow: hidden`,
+// which makes it a scroll container that `scrollIntoView` could nudge by a
+// rounding gap, so it is held at its origin.
+function wirePageSheetHeight() {
+  const frame = pageSheet.parentElement;
+  new ResizeObserver(([entry]) => {
+    const height = entry.borderBoxSize?.[0]?.blockSize ?? pageSheet.offsetHeight;
+    frame.style.setProperty("--page-sheet-height", `${height}px`);
+  }).observe(pageSheet);
+  frame.addEventListener("scroll", () => {
+    frame.scrollTop = 0;
+    frame.scrollLeft = 0;
+  });
+}
+
 // Touchpad pinch, forwarded by the backend in place of WebKitGTK's viewport
 // magnification. The cumulative scale is quantized to font-size steps (one
 // point per ~10% of finger spread), so a pinch behaves like repeated Ctrl+=/-
-// and only the document reflows. Updates are coalesced to one per frame.
-const PINCH_STEP_RATIO = Math.log(1.1);
+// and only the document reflows. With a page border the sheet zoom follows
+// the fingers continuously instead. Updates are coalesced to one per frame.
+const PINCH_STEP_RATIO = Math.log(ZOOM_STEP_RATIO);
 
 function wirePinchZoom() {
   let appliedSteps = 0;
   let targetSteps = 0;
+  let startPageZoom = 1;
+  let pinchScale = 1;
   let frame = 0;
 
   const flush = () => {
     frame = 0;
+    if (pageZoomActive()) {
+      setPageZoom(startPageZoom * pinchScale);
+      return;
+    }
     const delta = targetSteps - appliedSteps;
     if (delta === 0) return;
     appliedSteps = targetSteps;
@@ -2879,10 +3007,13 @@ function wirePinchZoom() {
     if (payload.phase === "begin") {
       appliedSteps = 0;
       targetSteps = 0;
+      startPageZoom = currentPageZoom();
+      pinchScale = 1;
       return;
     }
     if (payload.phase === "cancel") return;
     if (payload.scale > 0) {
+      pinchScale = payload.scale;
       targetSteps = Math.round(Math.log(payload.scale) / PINCH_STEP_RATIO);
     }
     if (!frame) frame = requestAnimationFrame(flush);
@@ -3081,6 +3212,7 @@ async function boot() {
     }
   });
 
+  wirePageSheetHeight();
   wirePinchZoom();
 
   // Live reload: the backend re-renders the open document when its file changes
@@ -3109,6 +3241,8 @@ async function boot() {
   const printTarget = await printTargetPromise;
   if (printTarget) {
     offscreenSkipAllowed = false;
+    printing = true;
+    applyUiZoom(DEFAULT_UI_ZOOM);
     if (startupFile) {
       setReaderState("loading");
       await openFile(startupFile);

@@ -34,6 +34,16 @@ pub struct Settings {
     /// preview only; print and LAN-share output do not render the frame.
     #[serde(default = "default_paper_size")]
     pub paper_size: String,
+    /// View zoom of the page-border sheet (1.0 = actual paper size). Ctrl+=/−
+    /// and pinch drive it while a border is shown, instead of the font size, so
+    /// the page scales as a whole without reflowing.
+    #[serde(default = "default_page_zoom")]
+    pub page_zoom: f64,
+    /// Interface zoom in percent, applied to the whole webview (reader,
+    /// contents panel, titlebar, overlays). The settings panel is
+    /// counter-zoomed so it stays usable at any level.
+    #[serde(default = "default_zoom")]
+    pub zoom: u32,
     #[serde(default = "default_margin")]
     pub margin: String,
     #[serde(default = "default_window_frame")]
@@ -120,6 +130,14 @@ fn default_paper_size() -> String {
     "none".into()
 }
 
+fn default_page_zoom() -> f64 {
+    1.0
+}
+
+fn default_zoom() -> u32 {
+    100
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
@@ -139,6 +157,8 @@ impl Default for Settings {
             color_border: None,
             color_muted: None,
             paper_size: default_paper_size(),
+            page_zoom: default_page_zoom(),
+            zoom: default_zoom(),
             margin: default_margin(),
             window_frame: default_window_frame(),
             keybindings: default_keybindings(),
@@ -202,5 +222,17 @@ mod tests {
 
         let settings: Settings = serde_json::from_value(legacy).unwrap();
         assert_eq!(settings.paper_size, "none");
+    }
+
+    #[test]
+    fn legacy_settings_default_to_unzoomed() {
+        let mut legacy = serde_json::to_value(Settings::default()).unwrap();
+        let obj = legacy.as_object_mut().unwrap();
+        obj.remove("page_zoom");
+        obj.remove("zoom");
+
+        let settings: Settings = serde_json::from_value(legacy).unwrap();
+        assert_eq!(settings.page_zoom, 1.0);
+        assert_eq!(settings.zoom, 100);
     }
 }

@@ -312,6 +312,14 @@
           </label>
 
           <label>
+            Zoom
+            <span class="range-row">
+              <input id="setting-zoom" type="range" min="50" max="200" step="10" />
+              <span id="setting-zoom-label" class="range-value"></span>
+            </span>
+          </label>
+
+          <label>
             Window frame
             <select id="setting-window-frame">
               <option value="emede">emede (custom)</option>
@@ -544,8 +552,10 @@
         </article>
         <p class="loading-label">Preparing document</p>
       </div>
-      <div id="page-sheet" class="page-sheet">
-        <article id="content" class="prose"></article>
+      <div id="page-frame" class="page-frame">
+        <div id="page-sheet" class="page-sheet">
+          <article id="content" class="prose"></article>
+        </div>
       </div>
       <div id="blank-state" class="blank-state hidden" role="status" aria-live="polite">
         <svg class="blank-icon" viewBox="0 0 64 64" width="96" height="96" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
