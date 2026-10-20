@@ -808,13 +808,40 @@ let offscreenSkipAllowed = true;
 // Headless PDF export: never apply the interface zoom to the off-screen view.
 let printing = false;
 
+// Must match the `.prose.skip-offscreen > :is(…)` rule in styles.css.
+const SKIPPABLE_BLOCKS =
+  ":scope > :is(p, ul, ol, dl, blockquote, pre, table, figure, details, .table-wrapper, .mermaid)";
+
+/**
+ * Give every skippable block a placeholder equal to its real content height.
+ *
+ * The engine only remembers a block's size (`contain-intrinsic-size: auto`)
+ * once it has been drawn while skippable, so without this every block above
+ * the viewport would sit at the 4em fallback and grow — pushing the reader down
+ * — the first time it is scrolled back into view. The size of containment is
+ * the content box, hence padding comes off; `clientHeight` ignores the page
+ * zoom transform. All reads happen before any write so layout runs once.
+ */
+function pinIntrinsicSizes() {
+  const blocks = [...contentEl.querySelectorAll(SKIPPABLE_BLOCKS)];
+  const heights = blocks.map((el) => {
+    const style = getComputedStyle(el);
+    const padding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+    return Math.max(0, el.clientHeight - padding);
+  });
+  blocks.forEach((el, i) => {
+    el.style.containIntrinsicSize = `auto ${heights[i]}px`;
+  });
+}
+
 /**
  * Let the browser stop laying out and painting blocks that are off screen.
  *
  * Skipping rewrites the document's coordinate system the moment it is turned
- * on: every block that has not been laid out yet collapses to its estimated
- * size, so a scroll offset taken before means something else after. The reader
- * is therefore held by heading anchor across the switch, not by pixel offset.
+ * on: every off-screen block is replaced by its placeholder size, so a scroll
+ * offset taken before can mean something else after. The placeholders are the
+ * measured heights (`pinIntrinsicSizes`), but the reader is still held by
+ * heading anchor across the switch, not by pixel offset.
  *
  * Callers must have let MathJax and Mermaid finish first — both measure the box
  * they render into, and a skipped box has no width to read.
@@ -825,6 +852,7 @@ async function enableOffscreenSkipping(openToken) {
 
   const scrollRoot = getScrollRoot();
   const here = captureViewState(scrollRoot, contentEl);
+  pinIntrinsicSizes();
   contentEl.classList.add("skip-offscreen");
   await nextFrame();
   if (openToken !== undefined && openToken !== activeOpenToken) return;

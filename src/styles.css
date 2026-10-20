@@ -264,10 +264,14 @@ body {
  * Headings and rules stay out of it: they are cheap, and keeping their boxes
  * real is what keeps the contents panel and the saved scroll anchor honest.
  *
- * `auto` in `contain-intrinsic-size` makes the engine remember each block's
- * last real size, so scrolling back over ground already covered never shifts.
- * `main.js` adds the class only once MathJax and Mermaid have measured — both
- * render into a box whose width they read, and a skipped box has none. */
+ * A skipped block is sized by its placeholder, and a placeholder that differs
+ * from the real height shifts everything below it when the block is drawn —
+ * felt as a jump when scrolling *up* into blocks above a restored position.
+ * So `main.js` measures every block just before adding the class and pins the
+ * real content height inline (`auto <h>px`); 4em is only the fallback. `auto`
+ * then keeps the size current once the block is drawn again. The class goes on
+ * only once MathJax and Mermaid have measured — both render into a box whose
+ * width they read, and a skipped box has none. */
 .prose.skip-offscreen
   > :is(p, ul, ol, dl, blockquote, pre, table, figure, details, .table-wrapper, .mermaid) {
   content-visibility: auto;
