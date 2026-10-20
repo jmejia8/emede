@@ -11,6 +11,7 @@ import {
   renderKeybindingHelp,
 } from "./keybindings.js";
 import { createImageZoom } from "./imagezoom.js";
+import { createLinkPreview } from "./linkpreview.js";
 import { createTableView } from "./tableview.js";
 import { getScrollRoot } from "./scroll.js";
 import { DEFAULT_READING_WPM, computeDocStats, statsRows } from "./stats.js";
@@ -859,6 +860,7 @@ async function withRealBoxes(fn) {
 let mermaidScriptLoaded = false;
 let imageZoom = null;
 let tableView = null;
+let linkPreview = null;
 
 async function ensureMermaidLoaded() {
   if (window.mermaid) return true;
@@ -1182,6 +1184,7 @@ async function applyDocument(result, { reload = false, openToken } = {}) {
   currentDocChanges = result.changes ?? null;
   imageZoom?.hideHoverButton();
   tableView?.hideHoverButton();
+  linkPreview?.hide();
   rewriteLocalImageSrcs(contentEl);
   wrapTables(contentEl);
   // Before the contents panel is built and before math and mermaid replace
@@ -3188,6 +3191,7 @@ async function boot() {
   wireUpdateCheck();
   imageZoom = createImageZoom({ contentEl });
   tableView = createTableView({ contentEl });
+  linkPreview = createLinkPreview({ contentEl });
 
   openFileBtn.addEventListener("click", () => {
     void handlePickAndOpenFile();

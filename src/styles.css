@@ -611,6 +611,39 @@ body.frame-emede .prose :is(h1, h2, h3, h4, h5, h6) {
   display: none;
 }
 
+/* Link target preview (linkpreview.js). Muted like the reader controls, and
+   never in the pointer's way. */
+.link-preview {
+  position: fixed;
+  z-index: 16;
+  max-width: min(36rem, calc(100vw - 16px));
+  padding: 0.3rem 0.55rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-bg) 92%, transparent);
+  color: var(--color-muted);
+  font: 0.78rem/1.35 system-ui, sans-serif;
+  pointer-events: none;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: aboutFadeIn 0.12s ease;
+}
+
+.link-preview.hidden {
+  display: none;
+}
+
+.link-preview-title {
+  color: var(--color-fg);
+  overflow-wrap: anywhere;
+}
+
+.link-preview-url {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .image-viewer {
   position: fixed;
   inset: 0;
