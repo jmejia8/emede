@@ -714,6 +714,7 @@ function scheduleSave() {
 }
 
 function clearToc() {
+  window.MathJax?.typesetClear?.([tocList]);
   tocList.replaceChildren();
   docStatsBody.replaceChildren();
   docStats.hidden = true;
@@ -786,7 +787,9 @@ async function typesetMath() {
 
   try {
     await Promise.race([
-      window.MathJax.typesetPromise([contentEl]),
+      // The contents panel copies heading text verbatim, `$…$` included, so it
+      // is typeset alongside the document it mirrors.
+      window.MathJax.typesetPromise([contentEl, tocList]),
       wait(12000),
     ]);
   } catch (err) {
@@ -1173,7 +1176,7 @@ async function applyDocument(result, { reload = false, openToken } = {}) {
   const savedViewState = reload ? null : await loadViewState(result.path);
 
   if (window.MathJax?.typesetClear) {
-    window.MathJax.typesetClear([contentEl]);
+    window.MathJax.typesetClear([contentEl, tocList]);
   }
 
   // Measurement first: MathJax, Mermaid, the contents panel and the stats all
@@ -1355,6 +1358,8 @@ function renderTocNode(node) {
   const link = document.createElement("a");
   link.href = `#${node.id}`;
   link.textContent = node.text;
+  // MathJax replaces the text later, so keep the source for aria labels.
+  link.dataset.label = node.text;
   link.className = "toc-link";
   row.appendChild(link);
 
@@ -1536,7 +1541,7 @@ function toggleTocSection(button) {
 
   const expanded = button.getAttribute("aria-expanded") === "true";
   const next = !expanded;
-  const label = item.querySelector(".toc-link")?.textContent?.trim() ?? "section";
+  const label = item.querySelector(".toc-link")?.dataset.label ?? "section";
 
   button.setAttribute("aria-expanded", String(next));
   button.setAttribute("aria-label", `${next ? "Collapse" : "Expand"} “${label}”`);
