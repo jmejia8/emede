@@ -3,6 +3,7 @@ node_modules/
 
 # Generated frontend assets (npm postinstall)
 src/vendor/mathjax/
+src/vendor/highlight/
 
 # Build output
 dist/

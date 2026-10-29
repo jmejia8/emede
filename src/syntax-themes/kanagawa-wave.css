@@ -1,0 +1,149 @@
+/*!
+  Theme: Kanagawa Wave (emede port)
+  Based on: kanagawa.nvim by Tommaso Laurenzi (MIT),
+  https://github.com/rebelot/kanagawa.nvim
+  Maintainer: emede
+
+  Maps the `wave` theme's syntax roles (`themes.lua`, `syn.*`, plus the
+  tree-sitter groups that refine them) onto highlight.js classes. The
+  background is sumiInk4 rather than the editor's sumiInk3, since emede's
+  Kanagawa color preset uses sumiInk3 for the page and sumiInk4 for code.
+
+  Comments keep upstream's fujiGray, about 2.9:1 on this background: the theme
+  means them to recede.
+*/
+.hljs {
+  color: #dcd7ba;
+  background: #2a2a37
+}
+.hljs::selection,
+.hljs ::selection {
+  background-color: #2d4f67
+}
+
+/* syn.comment: fujiGray */
+.hljs-comment,
+.hljs-quote {
+  color: #727169;
+  font-style: italic
+}
+
+/* syn.keyword: oniViolet */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-doctag {
+  color: #957fb8
+}
+
+/* syn.fun: crystalBlue */
+.hljs-title,
+.hljs-title.function_,
+.hljs-section {
+  color: #7e9cd8
+}
+
+/* syn.type: waveAqua2 */
+.hljs-type,
+.hljs-title.class_,
+.hljs-title.class_.inherited__ {
+  color: #7aa89f
+}
+
+/* syn.string: springGreen */
+.hljs-string,
+.hljs-char.escape_,
+.hljs-code {
+  color: #98bb6c
+}
+
+/* syn.number: sakuraPink */
+.hljs-number {
+  color: #d27e99
+}
+
+/* syn.constant: surimiOrange, bold for booleans as upstream does */
+.hljs-literal,
+.hljs-variable.constant_ {
+  color: #ffa066
+}
+.hljs-literal {
+  font-weight: bold
+}
+
+/* syn.identifier: carpYellow */
+.hljs-attr,
+.hljs-attribute,
+.hljs-property,
+.hljs-symbol,
+.hljs-selector-class,
+.hljs-selector-id,
+.hljs-template-variable {
+  color: #e6c384
+}
+
+/* syn.parameter: oniViolet2 */
+.hljs-params {
+  color: #b8b4d0
+}
+
+/* syn.special2: waveRed, italic, for `self`/`this` and builtins */
+.hljs-variable.language_,
+.hljs-built_in {
+  color: #e46876;
+  font-style: italic
+}
+
+/* syn.preproc: waveRed */
+.hljs-meta,
+.hljs-meta .hljs-keyword,
+.hljs-template-tag {
+  color: #e46876
+}
+.hljs-meta .hljs-string {
+  color: #98bb6c
+}
+
+/* syn.regex and syn.operator: boatYellow2 */
+.hljs-regexp,
+.hljs-operator,
+.hljs-selector-attr,
+.hljs-selector-pseudo {
+  color: #c0a36e
+}
+
+/* syn.punct: springViolet2 */
+.hljs-punctuation,
+.hljs-tag,
+.hljs-name {
+  color: #9cabca
+}
+.hljs-tag .hljs-name {
+  color: #957fb8
+}
+
+/* syn.special1: springBlue */
+.hljs-link,
+.hljs-bullet {
+  color: #7fb4ca
+}
+
+/* vcs.added / vcs.removed */
+.hljs-addition {
+  color: #76946a;
+  background-color: rgba(118, 148, 106, 0.15)
+}
+.hljs-deletion {
+  color: #c34043;
+  background-color: rgba(195, 64, 67, 0.15)
+}
+
+.hljs-variable,
+.hljs-subst {
+  color: #dcd7ba
+}
+.hljs-emphasis {
+  font-style: italic
+}
+.hljs-strong {
+  font-weight: bold
+}

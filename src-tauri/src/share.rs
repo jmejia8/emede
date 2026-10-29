@@ -11,6 +11,7 @@ use tiny_http::{Header, Method, Response, Server};
 
 use crate::markdown;
 use crate::settings;
+use crate::syntax_themes;
 
 // ── Public state ──────────────────────────────────────────────────────────────
 
@@ -715,6 +716,8 @@ pub fn build_shared_page(path: &str) -> Result<String, String> {
         settings.font_title.clone()
     };
     let font_faces = embedded_font_css(&[&body_font, &title_font, &code_font]);
+    let (syntax_attrs, syntax_css) =
+        syntax_page_parts(settings.syntax_theme.as_deref(), &settings.color_bg);
 
     let page = SHARED_PAGE_TEMPLATE
         .replace("{{TITLE}}", &escape_html(&result.title))
@@ -773,6 +776,8 @@ pub fn build_shared_page(path: &str) -> Result<String, String> {
                 "color-mix(in srgb, var(--color-fg) 52%, transparent)",
             ),
         )
+        .replace("{{SYNTAX_ATTRS}}", &syntax_attrs)
+        .replace("{{SYNTAX_CSS}}", &syntax_css)
         .replace("{{USER}}", &escape_html(&host_user_label()))
         .replace("{{REPO}}", EMEDE_REPO_URL)
         // Keep the multi-megabyte font payload last so the smaller replacements
@@ -1812,8 +1817,34 @@ fn host_header_ok(request: &tiny_http::Request) -> bool {
     }
 }
 
+/// The `<html>` attributes and inlined CSS that give a shared or exported page
+/// the reader's syntax theme: the layout rules, the theme's `bg` and `fg` as
+/// `--syntax-*` variables, and the theme itself (Auto when the setting is unset
+/// or names a theme that cannot be loaded). `data-syntax-flush` mirrors
+/// `main.js`, which outlines a block whose theme matches the page.
+fn syntax_page_parts(theme: Option<&str>, page_bg: &str) -> (String, String) {
+    let resolved = syntax_themes::resolve(theme);
+    let mut attrs = String::new();
+    let mut css = String::from(syntax_themes::LAYOUT_CSS);
+    if let (Some(id), Some(colors)) = (&resolved.id, &resolved.colors) {
+        attrs.push_str(&format!(" data-syntax-theme=\"{}\"", escape_html(id)));
+        if syntax_themes::is_flush(&colors.bg, page_bg) {
+            attrs.push_str(" data-syntax-flush");
+        }
+        css.push_str(&format!(
+            "\n:root {{ --syntax-bg: {}; --syntax-fg: {}; }}\n",
+            colors.bg, colors.fg
+        ));
+    }
+    css.push('\n');
+    // An imported theme is arbitrary text: it must not close the `<style>` or
+    // look like one of the template placeholders replaced after it.
+    css.push_str(&resolved.css.replace("</", "<\\/").replace("{{", "{ {"));
+    (attrs, css)
+}
+
 const SHARED_PAGE_TEMPLATE: &str = r##"<!doctype html>
-<html lang="en">
+<html lang="en"{{SYNTAX_ATTRS}}>
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1988,6 +2019,7 @@ const SHARED_PAGE_TEMPLATE: &str = r##"<!doctype html>
   .prose th { font-family: var(--font-title); color: var(--color-title); }
   .prose hr { border: none; border-top: 1px solid var(--color-border); }
   .prose .mermaid { text-align: center; }
+  {{SYNTAX_CSS}}
 
   .share-footer {
     max-width: var(--reader-width);
@@ -2233,6 +2265,59 @@ const SHARED_PAGE_TEMPLATE: &str = r##"<!doctype html>
     script.onload = function () { mermaidLib = window.mermaid; renderMermaid(); };
     script.onerror = function () { console.warn("Failed to load Mermaid"); };
     document.head.appendChild(script);
+
+    // Syntax highlighting, as in the app (`src/syntax.js`): only fences that
+    // name their language. The CDN bundle carries the common grammars; any
+    // other is fetched by name, so only an alias of an uncommon grammar (bar
+    // the Julia ones) stays plain here.
+    var HLJS = "https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11";
+    var SKIP_FENCES = ["mermaid", "math", "text", "txt", "plain", "plaintext"];
+    var FENCE_ALIASES = {
+      jl: "julia", "@example": "julia", "@repl": "julia", "@setup": "julia", "@eval": "julia",
+    };
+    function loadScript(src, done) {
+      var s = document.createElement("script");
+      s.src = src;
+      s.onload = function () { done(true); };
+      s.onerror = function () { done(false); };
+      document.head.appendChild(s);
+    }
+    var codeBlocks = [];
+    document.querySelectorAll("pre > code[class*='language-']").forEach(function (code) {
+      var match = /(?:^|\s)language-(\S+)/.exec(code.className);
+      var fence = match && match[1].toLowerCase();
+      if (fence && SKIP_FENCES.indexOf(fence) === -1) {
+        codeBlocks.push({ code: code, language: FENCE_ALIASES[fence] || fence });
+      }
+    });
+    if (codeBlocks.length) {
+      loadScript(HLJS + "/highlight.min.js", function (ok) {
+        if (!ok || !window.hljs) return console.warn("Failed to load highlight.js");
+        var missing = [];
+        codeBlocks.forEach(function (b) {
+          if (!hljs.getLanguage(b.language) && missing.indexOf(b.language) === -1) {
+            missing.push(b.language);
+          }
+        });
+        var pending = missing.length;
+        function paint() {
+          codeBlocks.forEach(function (b) {
+            if (!hljs.getLanguage(b.language)) return;
+            b.code.innerHTML = hljs.highlight(b.code.textContent, {
+              language: b.language,
+              ignoreIllegals: true,
+            }).value;
+            b.code.classList.add("hljs");
+          });
+        }
+        if (!pending) return paint();
+        missing.forEach(function (name) {
+          loadScript(HLJS + "/languages/" + encodeURIComponent(name) + ".min.js", function () {
+            if (--pending === 0) paint();
+          });
+        });
+      });
+    }
   })();
 </script>
 </body>
@@ -2676,6 +2761,30 @@ mod tests {
     }
 
     #[test]
+    fn shared_page_inlines_the_chosen_syntax_theme() {
+        let (attrs, css) = syntax_page_parts(Some("a11y-dark"), "#1a1a1a");
+        assert_eq!(attrs, r#" data-syntax-theme="a11y-dark""#);
+        assert!(css.contains("--syntax-bg: #2b2b2b; --syntax-fg: #f8f8f2;"));
+        assert!(css.contains("Theme: a11y-dark"), "theme CSS not inlined");
+        assert!(css.contains("data-syntax-flush"), "layout CSS not inlined");
+        assert!(!css.contains("--syntax-keyword"), "Auto inlined alongside a theme");
+
+        // Mocha's paired theme has exactly the page color.
+        let (attrs, _) = syntax_page_parts(Some("catppuccin-mocha"), "#1e1e2e");
+        assert!(attrs.ends_with(" data-syntax-flush"));
+    }
+
+    #[test]
+    fn shared_page_falls_back_to_auto_syntax() {
+        for theme in [None, Some("no-such-theme"), Some("user:../../x")] {
+            let (attrs, css) = syntax_page_parts(theme, "#ffffff");
+            assert_eq!(attrs, "", "{theme:?}");
+            assert!(css.contains("--syntax-keyword"), "{theme:?}: Auto not inlined");
+            assert!(!css.contains("--syntax-bg:"), "{theme:?}");
+        }
+    }
+
+    #[test]
     fn build_shared_page_includes_content_and_cdn() {
         let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../README.md");
         let page = build_shared_page(path).expect("build page");
@@ -2692,6 +2801,11 @@ mod tests {
             !page.contains("<script>alert"),
             "sanitization should strip inline scripts from content"
         );
+        assert!(
+            page.contains("@highlightjs/cdn-assets@11") && page.contains(".hljs-keyword"),
+            "shared page must load highlight.js and carry the syntax colors"
+        );
+        assert!(!page.contains("{{SYNTAX_"), "syntax placeholder not replaced");
         assert!(!page.contains("{{CONTENT}}"), "template token not replaced");
     }
 }

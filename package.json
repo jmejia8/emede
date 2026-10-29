@@ -5,12 +5,14 @@
   "type": "module",
   "scripts": {
     "tauri": "tauri",
-    "postinstall": "mkdir -p src/vendor/mathjax/mathjax-newcm-font src/vendor/mathjax/input/tex/extensions src/vendor/mermaid && cp node_modules/mathjax/tex-chtml.js src/vendor/mathjax/ && cp node_modules/mathjax/input/tex/extensions/boldsymbol.js src/vendor/mathjax/input/tex/extensions/ && cp node_modules/mathjax/input/tex/extensions/noerrors.js src/vendor/mathjax/input/tex/extensions/ && cp node_modules/@mathjax/mathjax-newcm-font/chtml.js src/vendor/mathjax/mathjax-newcm-font/ && cp -r node_modules/@mathjax/mathjax-newcm-font/chtml src/vendor/mathjax/mathjax-newcm-font/ && cp node_modules/mermaid/dist/mermaid.min.js src/vendor/mermaid/"
+    "postinstall": "mkdir -p src/vendor/mathjax/mathjax-newcm-font src/vendor/mathjax/input/tex/extensions src/vendor/mermaid && cp node_modules/mathjax/tex-chtml.js src/vendor/mathjax/ && cp node_modules/mathjax/input/tex/extensions/boldsymbol.js src/vendor/mathjax/input/tex/extensions/ && cp node_modules/mathjax/input/tex/extensions/noerrors.js src/vendor/mathjax/input/tex/extensions/ && cp node_modules/@mathjax/mathjax-newcm-font/chtml.js src/vendor/mathjax/mathjax-newcm-font/ && cp -r node_modules/@mathjax/mathjax-newcm-font/chtml src/vendor/mathjax/mathjax-newcm-font/ && cp node_modules/mermaid/dist/mermaid.min.js src/vendor/mermaid/ && node scripts/vendor-highlight.mjs"
   },
   "devDependencies": {
+    "@catppuccin/highlightjs": "^1.0.1",
     "@tauri-apps/cli": "^2"
   },
   "dependencies": {
+    "@highlightjs/cdn-assets": "^11.12.0",
     "@tauri-apps/plugin-cli": "^2",
     "@tauri-apps/plugin-dialog": "^2.7.1",
     "@tauri-apps/plugin-opener": "^2.5.4",

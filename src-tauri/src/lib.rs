@@ -7,6 +7,7 @@ mod persist;
 mod recents;
 mod settings;
 mod share;
+mod syntax_themes;
 mod update;
 mod view_state;
 mod watcher;
@@ -332,6 +333,9 @@ fn run_inner(files: Vec<String>, print_target: Option<String>) {
             settings::get_settings,
             settings::set_settings,
             settings::read_color_template,
+            syntax_themes::import_syntax_theme,
+            syntax_themes::list_user_syntax_themes,
+            syntax_themes::read_user_syntax_theme,
             fonts::search_system_fonts,
             fonts::check_fonts_available,
             view_state::get_view_state,

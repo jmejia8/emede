@@ -19,6 +19,8 @@
       }
     </style>
     <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="syntax.css" />
+    <link id="syntax-theme" rel="stylesheet" href="syntax-auto.css" />
     <script>
       window.MathJax = {
         loader: {
@@ -163,6 +165,16 @@
                 <code>--color-code-bg</code>, <code>--color-border</code>, <code>--color-muted</code>.
               </p>
             </details>
+          </div>
+
+          <div class="setting-field syntax-theme-field">
+            <label for="setting-syntax-theme">Code theme</label>
+            <div class="syntax-theme-row">
+              <span id="syntax-theme-swatch" class="syntax-theme-swatch" aria-hidden="true">{}</span>
+              <select id="setting-syntax-theme"></select>
+            </div>
+            <button id="import-syntax-theme" class="template-import-btn" type="button">Import highlight.js theme&hellip;</button>
+            <p id="syntax-theme-status" class="setting-note"></p>
           </div>
 
           <div class="setting-field">

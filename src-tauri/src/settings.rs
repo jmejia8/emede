@@ -30,6 +30,13 @@ pub struct Settings {
     pub color_border: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color_muted: Option<String>,
+    /// Syntax theme for fenced code blocks: a curated id from
+    /// `src/syntax-themes/index.json` (`base16/dracula`), `user:<name>` for one
+    /// imported into `~/.config/emede/syntax-themes/`, or `None` for Auto,
+    /// whose token colors derive from the color theme. Choosing a color preset
+    /// sets it to that preset's paired theme.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub syntax_theme: Option<String>,
     /// Optional paper-sized frame around the desktop reader. This is a visual
     /// preview only; print and LAN-share output do not render the frame.
     #[serde(default = "default_paper_size")]
@@ -156,6 +163,7 @@ impl Default for Settings {
             color_code_bg: None,
             color_border: None,
             color_muted: None,
+            syntax_theme: None,
             paper_size: default_paper_size(),
             page_zoom: default_page_zoom(),
             zoom: default_zoom(),
@@ -222,6 +230,22 @@ mod tests {
 
         let settings: Settings = serde_json::from_value(legacy).unwrap();
         assert_eq!(settings.paper_size, "none");
+    }
+
+    #[test]
+    fn syntax_theme_round_trips_and_defaults_to_auto() {
+        let legacy = serde_json::to_value(Settings::default()).unwrap();
+        assert!(legacy.get("syntax_theme").is_none());
+        let settings: Settings = serde_json::from_value(legacy).unwrap();
+        assert_eq!(settings.syntax_theme, None);
+
+        let chosen = Settings {
+            syntax_theme: Some("base16/dracula".into()),
+            ..Settings::default()
+        };
+        let json = serde_json::to_string(&chosen).unwrap();
+        let settings: Settings = serde_json::from_str(&json).unwrap();
+        assert_eq!(settings.syntax_theme.as_deref(), Some("base16/dracula"));
     }
 
     #[test]

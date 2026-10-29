@@ -2415,6 +2415,34 @@ body:has(#reader.paper-preview .page-sheet--active) .toc-panel {
   color: var(--color-fg);
 }
 
+/* The code theme picker: a swatch in the selected theme's own background and
+   text color beside the select, since option styling depends on the platform. */
+.syntax-theme-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.syntax-theme-row select {
+  flex: 1;
+  min-width: 0;
+}
+
+.syntax-theme-swatch {
+  display: grid;
+  place-items: center;
+  flex: 0 0 2.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-family: var(--font-code);
+  font-size: 0.85rem;
+}
+
+/* Auto has no colors of its own: it is the color theme's code block. */
+.syntax-theme-swatch--auto {
+  background: var(--color-code-bg);
+  color: var(--color-code);
+}
+
 .setting-note {
   margin: 0;
   color: var(--color-muted);

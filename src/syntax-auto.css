@@ -1,0 +1,118 @@
+/* The "Auto" syntax theme: token colors derived from the active color theme.
+ *
+ * It is the syntax theme for imported color templates and hand-picked colors,
+ * and the fallback when a curated or imported theme fails to load. Any colors
+ * must get a readable palette, so the token colors are derived from the theme
+ * instead of listed: each is a fixed hue at a mid lightness pulled 45% toward
+ * `--color-fg`. That lands darker than mid on a light page and lighter than mid
+ * on a dark one, so contrast follows the theme's own text contrast, and the
+ * tint takes on some of the theme's warmth or coolness. Code blocks keep
+ * `--color-code-bg`, and identifiers and punctuation read in the body color
+ * (`syntax.css` lets highlighted code inherit it).
+ *
+ * Loaded through `<link id="syntax-theme">` in place of a curated theme, and
+ * inlined into the LAN-shared and exported page (`share.rs`), which defines
+ * the same `--color-*` variables. */
+:root {
+  --syntax-keyword: color-mix(in oklab, oklch(0.6 0.17 305) 55%, var(--color-fg));
+  --syntax-function: color-mix(in oklab, oklch(0.6 0.15 255) 55%, var(--color-fg));
+  --syntax-type: color-mix(in oklab, oklch(0.6 0.12 200) 55%, var(--color-fg));
+  --syntax-string: color-mix(in oklab, oklch(0.6 0.15 145) 55%, var(--color-fg));
+  --syntax-number: color-mix(in oklab, oklch(0.6 0.15 55) 55%, var(--color-fg));
+  --syntax-variable: color-mix(in oklab, oklch(0.6 0.17 20) 55%, var(--color-fg));
+  --syntax-meta: color-mix(in oklab, oklch(0.6 0.12 95) 55%, var(--color-fg));
+  --syntax-comment: color-mix(in srgb, var(--color-fg) 70%, var(--color-code-bg));
+}
+
+.hljs-comment,
+.hljs-quote {
+  color: var(--syntax-comment);
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-doctag,
+.hljs-variable.language_ {
+  color: var(--syntax-keyword);
+}
+
+.hljs-title,
+.hljs-title.function_,
+.hljs-section {
+  color: var(--syntax-function);
+}
+
+.hljs-type,
+.hljs-built_in,
+.hljs-title.class_,
+.hljs-title.class_.inherited__,
+.hljs-attr,
+.hljs-attribute,
+.hljs-property,
+.hljs-selector-class {
+  color: var(--syntax-type);
+}
+
+.hljs-string,
+.hljs-regexp,
+.hljs-char.escape_,
+.hljs-code,
+.hljs-formula,
+.hljs-selector-attr,
+.hljs-selector-pseudo {
+  color: var(--syntax-string);
+}
+
+.hljs-number,
+.hljs-literal,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link,
+.hljs-variable.constant_ {
+  color: var(--syntax-number);
+}
+
+.hljs-variable,
+.hljs-template-variable,
+.hljs-name,
+.hljs-selector-id {
+  color: var(--syntax-variable);
+}
+
+.hljs-meta,
+.hljs-meta .hljs-keyword,
+.hljs-template-tag {
+  color: var(--syntax-meta);
+}
+
+.hljs-meta .hljs-string {
+  color: var(--syntax-string);
+}
+
+.hljs-subst,
+.hljs-tag,
+.hljs-operator,
+.hljs-punctuation,
+.hljs-params {
+  color: inherit;
+}
+
+.hljs-section,
+.hljs-strong {
+  font-weight: 600;
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-addition {
+  color: var(--syntax-string);
+  background: color-mix(in srgb, var(--syntax-string) 14%, transparent);
+}
+
+.hljs-deletion {
+  color: var(--syntax-variable);
+  background: color-mix(in srgb, var(--syntax-variable) 14%, transparent);
+}

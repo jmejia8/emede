@@ -1,0 +1,43 @@
+/* Layout that seats any highlight.js theme inside emede's code blocks.
+ *
+ * Token colors come from the syntax theme loaded through
+ * `<link id="syntax-theme">`: one of the curated files in `syntax-themes/`, an
+ * imported one, or `syntax-auto.css`. highlight.js themes paint their box on
+ * `code.hljs` (background, `padding: 1em`, block display), while emede pads and
+ * scrolls the `pre`. So the theme's own box is neutralized here, and its
+ * background and text color are moved onto the `pre` as `--syntax-bg` and
+ * `--syntax-fg`, which `main.js` reads from `syntax-themes/index.json`.
+ *
+ * With a theme set (`data-syntax-theme` on `:root`), this covers every fenced
+ * block, including the ones that name no language and are never highlighted,
+ * so a page does not mix theme-colored and preset-colored blocks. Inline code
+ * keeps `--color-code` and `--color-code-bg`.
+ *
+ * Also inlined into the LAN-shared and exported page (`share.rs`). */
+
+/* `background-color`, not the shorthand: this outranks
+ * `.prose .emede-change-block`, whose tint is a `background-image`. */
+:root[data-syntax-theme] .prose pre:not(.plain-text) {
+  background-color: var(--syntax-bg);
+  color: var(--syntax-fg);
+}
+
+:root[data-syntax-theme] .prose pre:not(.plain-text) code {
+  color: inherit;
+}
+
+.prose pre code.hljs {
+  display: inline;
+  overflow: visible;
+  padding: 0;
+  background: none;
+  color: inherit;
+}
+
+/* A theme whose background matches the page would leave the block without an
+ * edge (`data-syntax-flush` is set when their contrast is below 1.1:1). A
+ * change-highlighted block already has its own outline. */
+:root[data-syntax-flush] .prose pre:not(.plain-text):not(.emede-change-block) {
+  outline: 1px solid var(--color-border);
+  outline-offset: -1px;
+}

@@ -71,6 +71,8 @@ emede notes/lecture.md
 - GFM-style extensions: tables, task lists, strikethrough, autolinks.
 - Local `.md` and `.markdown` links open directly in emede; Ctrl+click (Command+click on macOS) opens a new window.
 - Bundled MathJax for offline math rendering.
+- Syntax highlighting (bundled highlight.js, offline) for fenced code blocks that name their language, e.g. ` ```julia `; unlabeled blocks stay plain.
+- Code themes: each color preset comes with a matching syntax theme, and Settings → Code theme offers 30 popular highlight.js themes (GitHub, Atom One, Tokyo Night, Solarized, Dracula, Catppuccin, Rosé Pine, …), an Auto palette derived from your colors, or any highlight.js theme `.css` you import.
 - Table of contents for documents. 
 - Typography and side margins customization.
 - Color presets: Light, Sepia, Dark, Gruvbox; font presets for common type stacks.

@@ -14,6 +14,16 @@ import { createImageZoom } from "./imagezoom.js";
 import { createLinkPreview } from "./linkpreview.js";
 import { createTableView } from "./tableview.js";
 import { getScrollRoot } from "./scroll.js";
+import { highlightCode } from "./syntax.js";
+import {
+  applySyntaxTheme,
+  importSyntaxTheme,
+  listUserSyntaxThemes,
+  loadSyntaxThemeIndex,
+  populateSyntaxThemeSelect,
+  syncSyntaxThemeSelect,
+  syntaxThemeSettled,
+} from "./syntaxtheme.js";
 import { DEFAULT_READING_WPM, computeDocStats, statsRows } from "./stats.js";
 import {
   applyViewState,
@@ -89,51 +99,63 @@ const DEFAULT_UI_ZOOM = 100;
 const MIN_UI_ZOOM = 50;
 const MAX_UI_ZOOM = 200;
 
+// `syntax` is the preset's paired syntax theme (`syntax-themes/index.json`),
+// which choosing the preset selects. Light and Things avoid the plain-white
+// themes, which would leave no visible block on a white page.
 const BUNDLED_COLOR_TEMPLATES = [
   {
     id: "light",
     label: "Light",
     path: "themes/light.css",
+    syntax: "stackoverflow-light",
   },
   {
     id: "sepia",
     label: "Sepia",
     path: "themes/sepia.css",
+    syntax: "base16/gruvbox-light-soft",
   },
   {
     id: "dark",
     label: "Dark",
     path: "themes/dark.css",
+    syntax: "a11y-dark",
   },
   {
     id: "gruvbox",
     label: "Gruvbox",
     path: "themes/gruvbox.css",
+    syntax: "base16/gruvbox-dark-soft",
   },
   {
     id: "things-light",
     label: "Things",
     path: "themes/things-light.css",
+    syntax: "atom-one-light",
   },
   {
     id: "nord-light",
     label: "Nord",
     path: "themes/nord-light.css",
+    syntax: "nord-light",
   },
   {
     id: "dracula-dark",
     label: "Dracula",
     path: "themes/dracula-dark.css",
+    syntax: "base16/dracula",
   },
   {
     id: "catppuccin-mocha",
     label: "Mocha",
     path: "themes/catppuccin-mocha.css",
+    syntax: "catppuccin-mocha",
   },
   {
     id: "kanagawa-wave",
     label: "Kanagawa",
     path: "themes/kanagawa-wave.css",
+    syntax: "kanagawa-wave",
   },
 ];
 
@@ -263,6 +285,10 @@ const settingPaperSize = document.getElementById("setting-paper-size");
 const colorTemplateList = document.getElementById("color-template-list");
 const importColorTemplateBtn = document.getElementById("import-color-template");
 const colorTemplateStatus = document.getElementById("color-template-status");
+const settingSyntaxTheme = document.getElementById("setting-syntax-theme");
+const syntaxThemeSwatch = document.getElementById("syntax-theme-swatch");
+const importSyntaxThemeBtn = document.getElementById("import-syntax-theme");
+const syntaxThemeStatus = document.getElementById("syntax-theme-status");
 const settingWindowFrame = document.getElementById("setting-window-frame");
 const settingZoom = document.getElementById("setting-zoom");
 const settingZoomLabel = document.getElementById("setting-zoom-label");
@@ -551,6 +577,7 @@ async function loadBundledColorTemplates() {
       templates.push({
         ...extractColorTemplate(cssText, bundledTemplate.label),
         id: bundledTemplate.id,
+        syntax: bundledTemplate.syntax,
         imported: true,
       });
     } catch (err) {
@@ -599,6 +626,8 @@ async function applyColorTemplate(template) {
   const settings = {
     ...baseSettings,
     ...template.colors,
+    // A preset brings its paired syntax theme; an imported template, Auto.
+    syntax_theme: template.syntax ?? null,
   };
 
   if (!template.imported) {
@@ -645,6 +674,9 @@ function applySettings(settings) {
   document.documentElement.style.colorScheme = isDarkColor(settings.color_bg)
     ? "dark"
     : "light";
+  void applySyntaxTheme(settings.syntax_theme ?? null, settings.color_bg);
+  syncSyntaxThemeSelect(settingSyntaxTheme, syntaxThemeSwatch, settings.syntax_theme);
+  updateSyntaxThemeNote(settings);
 
   syncFontSelect(settingFont, settings.font_family, DEFAULT_FONT);
   syncFontSelect(settingFontTitle, settings.font_title, "");
@@ -688,6 +720,7 @@ function settingsFromForm() {
     font_size: `${Number(settingSize.value)}pt`,
     color_fg: settingFg.value,
     color_bg: settingBg.value,
+    syntax_theme: settingSyntaxTheme.value || null,
     paper_size: normalizePaperSize(settingPaperSize.value),
     page_zoom: normalizePageZoom(currentSettings?.page_zoom),
     zoom: normalizeUiZoom(settingZoom.value),
@@ -1221,6 +1254,8 @@ async function applyDocument(result, { reload = false, openToken } = {}) {
   // Before the contents panel is built and before math and mermaid replace
   // their regions, while the DOM still matches what the backend diffed.
   applyChanges(contentEl, currentDocChanges);
+  // Colors only, never geometry, so nothing that measures has to wait for it.
+  void highlightCode(contentEl);
   updateBlankState(result);
   emptyStateEl.classList.add("hidden");
   missingStateEl.classList.add("hidden");
@@ -1879,6 +1914,59 @@ async function refreshRecentFiles() {
     recentFilesList.appendChild(li);
   }
   recentFiles.classList.remove("hidden");
+}
+
+/** The bundled preset `settings` is showing, by its two required colors. */
+function activePreset(settings) {
+  return colorTemplates.find(
+    (template) =>
+      template.syntax &&
+      template.colors.color_fg === settings.color_fg &&
+      template.colors.color_bg === settings.color_bg,
+  );
+}
+
+function updateSyntaxThemeNote(settings) {
+  const preset = activePreset(settings);
+  syntaxThemeStatus.textContent =
+    preset && preset.syntax === settings.syntax_theme ? `Paired with ${preset.label}.` : "";
+}
+
+async function initSyntaxThemes() {
+  const [curated, imported] = await Promise.all([
+    loadSyntaxThemeIndex(),
+    listUserSyntaxThemes(),
+  ]);
+  populateSyntaxThemeSelect(settingSyntaxTheme, curated, imported);
+  if (currentSettings) {
+    syncSyntaxThemeSelect(settingSyntaxTheme, syntaxThemeSwatch, currentSettings.syntax_theme);
+  }
+}
+
+async function handleImportSyntaxTheme() {
+  syntaxThemeStatus.textContent = "Reading the theme.";
+  try {
+    const selected = await invoke("plugin:dialog|open", {
+      options: {
+        multiple: false,
+        filters: [{ name: "CSS", extensions: ["css"] }],
+      },
+    });
+    if (!selected) {
+      updateSyntaxThemeNote(currentSettings || settingsFromForm());
+      return;
+    }
+
+    const theme = await importSyntaxTheme(selected);
+    await initSyntaxThemes();
+    const settings = { ...(currentSettings || settingsFromForm()), syntax_theme: theme.id };
+    applySettings(settings);
+    await invoke("set_settings", { settings });
+    syntaxThemeStatus.textContent = `Imported ${theme.label}.`;
+  } catch (err) {
+    console.warn("Failed to import syntax theme", err);
+    syntaxThemeStatus.textContent = String(err);
+  }
 }
 
 async function handleImportColorTemplate() {
@@ -2793,6 +2881,18 @@ function wireSettings() {
   importColorTemplateBtn.addEventListener("click", () => {
     void handleImportColorTemplate();
   });
+  void initSyntaxThemes();
+  importSyntaxThemeBtn.addEventListener("click", () => {
+    void handleImportSyntaxTheme();
+  });
+  settingSyntaxTheme.addEventListener("input", scheduleSave);
+  // Hand-picked colors leave the preset behind, and its paired syntax theme
+  // with it: Auto derives its colors from whatever is picked.
+  for (const el of [settingFg, settingBg]) {
+    el.addEventListener("input", () => {
+      settingSyntaxTheme.value = "";
+    });
+  }
 
   [
     settingFont,
@@ -3284,11 +3384,13 @@ async function boot() {
       setReaderState("loading");
       await openFile(startupFile);
       // The render pipeline schedules these asynchronously; await them explicitly
-      // so the PDF isn't captured mid-typeset. Both are idempotent. Mermaid can
+      // so the PDF isn't captured mid-typeset. All are idempotent. Mermaid can
       // inject content, so re-typeset math afterward.
       await typesetMath();
       await renderMermaid();
       await typesetMath();
+      await highlightCode(contentEl);
+      await syntaxThemeSettled();
       await nextFrame();
       capturePrintLayout();
     }
