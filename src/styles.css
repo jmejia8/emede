@@ -615,6 +615,31 @@ body.frame-emede .prose :is(h1, h2, h3, h4, h5, h6) {
   display: none;
 }
 
+/* Code block copy button (codecopy.js). Just the 16px SVG, no box: it sits on
+   the block itself, so it takes the block's text color (the code theme's, which
+   `syntaxtheme.js` sets on `:root`, may differ from the page's). Green or red
+   for a moment after a click, like the share dialog's copy button. */
+.code-copy-button {
+  display: grid;
+  place-items: center;
+  border: none;
+  background: none;
+  color: var(--syntax-fg, var(--color-fg));
+  opacity: 0.6;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.code-copy-button.copied {
+  opacity: 1;
+  color: #2e9e5b;
+}
+
+.code-copy-button.failed {
+  opacity: 1;
+  color: #e53935;
+}
+
 /* Link target preview (linkpreview.js). Muted like the reader controls, and
    never in the pointer's way. */
 .link-preview {
@@ -3729,6 +3754,7 @@ body.frame-emede .search-bar {
   #linked-file-overlay,
   #context-menu,
   #change-popup,
+  #code-copy-button,
   #image-zoom-button,
   #image-viewer,
   #table-view-button,

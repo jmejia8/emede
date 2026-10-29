@@ -132,9 +132,9 @@ export function createTableView({ contentEl }) {
       hoverBtn.classList.add("hidden");
       return;
     }
+    hoverBtn.classList.remove("hidden"); // before measuring: hidden has no width
     hoverBtn.style.top = `${top}px`;
     hoverBtn.style.left = `${right - hoverBtn.offsetWidth}px`;
-    hoverBtn.classList.remove("hidden");
   }
 
   function setHoverTarget(wrapper) {

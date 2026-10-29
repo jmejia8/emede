@@ -10,6 +10,7 @@ import {
   normalizeKeybindingMode,
   renderKeybindingHelp,
 } from "./keybindings.js";
+import { createCodeCopy } from "./codecopy.js";
 import { createImageZoom } from "./imagezoom.js";
 import { createLinkPreview } from "./linkpreview.js";
 import { createTableView } from "./tableview.js";
@@ -922,6 +923,7 @@ async function withRealBoxes(fn) {
 }
 
 let mermaidScriptLoaded = false;
+let codeCopy = null;
 let imageZoom = null;
 let tableView = null;
 let linkPreview = null;
@@ -1246,6 +1248,7 @@ async function applyDocument(result, { reload = false, openToken } = {}) {
   contentEl.innerHTML = result.html;
   currentDocSource = result.source ?? "";
   currentDocChanges = result.changes ?? null;
+  codeCopy?.hideHoverButton();
   imageZoom?.hideHoverButton();
   tableView?.hideHoverButton();
   linkPreview?.hide();
@@ -3322,6 +3325,7 @@ async function boot() {
   wireShare();
   wireContextMenu();
   wireUpdateCheck();
+  codeCopy = createCodeCopy({ contentEl });
   imageZoom = createImageZoom({ contentEl });
   tableView = createTableView({ contentEl });
   linkPreview = createLinkPreview({ contentEl });
