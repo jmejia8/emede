@@ -1,6 +1,6 @@
 [package]
 name = "emede"
-version = "0.2.15"
+version = "0.2.16"
 description = "Immersive markdown reader"
 authors = ["Jesus Mejia"]
 repository = "https://github.com/jmejia8/emede"
