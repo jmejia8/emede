@@ -257,6 +257,7 @@ const linkedFileOverlay = document.getElementById("linked-file-overlay");
 const linkedFileModal = document.getElementById("linked-file-modal");
 const linkedFileClose = document.getElementById("linked-file-close");
 const linkedFileDismiss = document.getElementById("linked-file-dismiss");
+const linkedFileEyebrow = document.getElementById("linked-file-eyebrow");
 const linkedFileTitle = document.getElementById("linked-file-title");
 const linkedFileDescription = document.getElementById("linked-file-description");
 const linkedFilePath = document.getElementById("linked-file-path");
@@ -2080,10 +2081,18 @@ function closeModalFocus() {
 function showLinkedFileError(path, error) {
   const message = String(error);
   const missing = message.startsWith("File not found:");
-  linkedFileTitle.textContent = missing ? "File not found" : "Unable to open file";
-  linkedFileDescription.textContent = missing
-    ? "The linked Markdown file does not exist at this path:"
-    : message;
+  showFileNotice({
+    eyebrow: "Linked document",
+    title: missing ? "File not found" : "Unable to open file",
+    description: missing ? "The linked Markdown file does not exist at this path:" : message,
+    path,
+  });
+}
+
+function showFileNotice({ eyebrow, title, description, path }) {
+  linkedFileEyebrow.textContent = eyebrow;
+  linkedFileTitle.textContent = title;
+  linkedFileDescription.textContent = description;
   linkedFilePath.textContent = path;
   linkedFileOverlay.classList.remove("hidden");
   linkedFileOverlay.setAttribute("aria-hidden", "false");
@@ -2409,6 +2418,23 @@ async function closeFile() {
   updateContextMenuState();
 }
 
+// Checked before `openFile`, which clears the reader up front: a reload of a
+// deleted file keeps the last version readable, and the watcher is still armed,
+// so restoring the file brings the document back on its own.
+async function reloadFromDisk(path) {
+  if (await invoke("document_exists", { path })) {
+    await openFile(path, "", { history: "replace" });
+    return;
+  }
+  showFileNotice({
+    eyebrow: "Open document",
+    title: "File not found",
+    description:
+      "This document was moved or deleted, so it cannot be reloaded. You are still viewing the last version read from:",
+    path,
+  });
+}
+
 async function runContextAction(action) {
   switch (action) {
     case "back":
@@ -2442,7 +2468,7 @@ async function runContextAction(action) {
       if (lastOpenTarget?.kind === "url") {
         await openFromUrl(lastOpenTarget.value, { history: "replace" });
       } else if (currentDocPath) {
-        await openFile(currentDocPath, "", { history: "replace" });
+        await reloadFromDisk(currentDocPath);
       }
       break;
     case "share":

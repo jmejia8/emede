@@ -1176,6 +1176,14 @@ pub fn render_markdown(
     Ok(result)
 }
 
+/// Whether a local document is still on disk. Lets a reload find out before it
+/// clears the reader, so a deleted file leaves the document on screen. A broken
+/// symlink counts as gone, matching `read_local_document`.
+#[tauri::command]
+pub fn document_exists(path: String) -> bool {
+    resolve_path(&path).exists()
+}
+
 /// Normalize a raw resource of the given [`ContentKind`] into a rendered
 /// [`RenderResult`]. `local` is true for on-disk files (enables resolving
 /// relative `<img>` paths and using the filename for titles).
@@ -1582,6 +1590,22 @@ pub fn render_markdown_url(url: String) -> Result<RenderResult, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn document_exists_tracks_the_file_on_disk() {
+        let dir = std::env::temp_dir().join(format!("emede-exists-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("doc.md");
+        let path = file.to_string_lossy().into_owned();
+
+        std::fs::write(&file, "# Doc\n").unwrap();
+        assert!(document_exists(path.clone()));
+
+        std::fs::remove_file(&file).unwrap();
+        assert!(!document_exists(path));
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     #[test]
     fn blocks_private_and_local_ips() {
