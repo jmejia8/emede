@@ -769,6 +769,27 @@ body.frame-emede .prose :is(h1, h2, h3, h4, h5, h6) {
   color: #e53935;
 }
 
+/* The fence's language, beside the copy button and shown with it. Painted in the
+   block's own background, so it has no visible box unless a long line runs under
+   it, and then the name stays readable. The dimming is mixed rather than done
+   with `opacity`, which would let that line show through. */
+.code-language-label {
+  position: fixed;
+  z-index: 15;
+  max-width: 12rem;
+  overflow: hidden;
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+  background: var(--syntax-bg, var(--color-code-bg));
+  color: color-mix(in srgb, var(--syntax-fg, var(--color-fg)) 60%, var(--syntax-bg, var(--color-code-bg)));
+  font: 0.72rem/1.4 var(--font-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 /* Link target preview (linkpreview.js). Muted like the reader controls, and
    never in the pointer's way. */
 .link-preview {
@@ -4001,6 +4022,7 @@ body.frame-emede .search-bar {
   #context-menu,
   #change-popup,
   #code-copy-button,
+  #code-language-label,
   #image-zoom-button,
   #image-viewer,
   #table-view-button,

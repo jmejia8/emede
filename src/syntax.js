@@ -67,10 +67,16 @@ function loadGrammar(hljs, name) {
   return grammarPromises.get(name);
 }
 
-/** The fence name comrak put on a `<code>`, as `language-<name>`. */
-function fenceName(code) {
+/**
+ * The language a `<code>` was fenced with (comrak writes it as a
+ * `language-<name>` class), or null for an unnamed fence or one in `SKIP`.
+ */
+export function fenceLanguage(code) {
   for (const cls of code.classList) {
-    if (cls.startsWith("language-")) return cls.slice("language-".length).toLowerCase();
+    if (cls.startsWith("language-")) {
+      const name = cls.slice("language-".length).toLowerCase();
+      return SKIP.has(name) ? null : name;
+    }
   }
   return null;
 }
@@ -97,8 +103,8 @@ function withEmbedded(names, requires) {
 export async function highlightCode(container) {
   const blocks = [];
   for (const code of container.querySelectorAll("pre > code[class*='language-']")) {
-    const fence = fenceName(code);
-    if (fence && !SKIP.has(fence) && !code.classList.contains("hljs")) {
+    const fence = fenceLanguage(code);
+    if (fence && !code.classList.contains("hljs")) {
       blocks.push({ code, fence });
     }
   }

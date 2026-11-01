@@ -10,7 +10,14 @@
  * What is copied is the block's `textContent`: highlighting only adds spans and
  * change carets are empty, so that is exactly the fenced source, minus the
  * trailing newline comrak keeps.
+ *
+ * The fence's language is shown beside the button, on hover only: reading a
+ * block never needs it, so at rest the block carries no extra chrome. The label
+ * is as inert as the button is not (`pointer-events: none`), so it can be
+ * selected through and never counts as being under the pointer.
  */
+
+import { fenceLanguage } from "./syntax.js";
 
 // Stroked with currentColor so the icons follow the theme.
 const ICON_COPY =
@@ -35,7 +42,11 @@ export function createCodeCopy({ contentEl }) {
   btn.title = LABEL;
   btn.setAttribute("aria-label", LABEL);
   btn.innerHTML = ICON_COPY;
-  document.body.append(btn);
+  const languageLabel = document.createElement("span");
+  languageLabel.id = "code-language-label";
+  languageLabel.className = "code-language-label hidden";
+  languageLabel.setAttribute("aria-hidden", "true");
+  document.body.append(btn, languageLabel);
 
   let target = null; // the <pre> under the pointer
   let frame = 0;
@@ -60,6 +71,7 @@ export function createCodeCopy({ contentEl }) {
     const top = Math.max(rect.top, 0) + 4;
     if (rect.bottom < top + 32 || right - 32 < rect.left) {
       btn.classList.add("hidden");
+      languageLabel.classList.add("hidden");
       return;
     }
     // Unhidden before measuring: a `display: none` button has no width, and the
@@ -67,6 +79,24 @@ export function createCodeCopy({ contentEl }) {
     btn.classList.remove("hidden");
     btn.style.top = `${top}px`;
     btn.style.left = `${right - btn.offsetWidth}px`;
+    placeLanguageLabel(rect, top, right - btn.offsetWidth);
+  }
+
+  /** Left of the button and centered on it; dropped if the block is too narrow. */
+  function placeLanguageLabel(rect, buttonTop, buttonLeft) {
+    const language = target.querySelector(":scope > code");
+    const name = language && fenceLanguage(language);
+    languageLabel.classList.toggle("hidden", !name);
+    if (!name) return;
+    languageLabel.textContent = name;
+    const left = buttonLeft - languageLabel.offsetWidth;
+    if (left < rect.left + 4) {
+      languageLabel.classList.add("hidden");
+      return;
+    }
+    const centered = buttonTop + (btn.offsetHeight - languageLabel.offsetHeight) / 2;
+    languageLabel.style.top = `${centered}px`;
+    languageLabel.style.left = `${left}px`;
   }
 
   function resetIcon() {
@@ -82,6 +112,7 @@ export function createCodeCopy({ contentEl }) {
     target = pre;
     if (!pre) {
       btn.classList.add("hidden");
+      languageLabel.classList.add("hidden");
       return;
     }
     place();
