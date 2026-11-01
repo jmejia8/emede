@@ -4,8 +4,8 @@
  * `settings.syntax_theme` is a curated id from `syntax-themes/index.json`
  * (`base16/dracula`), `user:<name>` for a theme imported into the config dir,
  * or null for Auto (`syntax-auto.css`, token colors derived from the color
- * theme). Each bundled color preset names a paired theme, which choosing the
- * preset selects.
+ * theme). It is independent of the color theme: changing colors never changes
+ * it, so only Auto's tokens follow the page.
  *
  * A curated or Auto theme is the `href` of `<link id="syntax-theme">`. An
  * imported one goes into a `<style>` instead, since the CSP allows inline
@@ -58,6 +58,11 @@ export async function listUserSyntaxThemes() {
 /** Copy a theme file into the config dir; resolves to its list entry. */
 export function importSyntaxTheme(path) {
   return invoke("import_syntax_theme", { path });
+}
+
+/** Delete an imported theme from the config dir. */
+export function deleteUserSyntaxTheme(id) {
+  return invoke("delete_user_syntax_theme", { id });
 }
 
 /** Resolves once the most recent `applySyntaxTheme` has painted. */

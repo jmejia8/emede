@@ -16,9 +16,11 @@ import { createLinkPreview } from "./linkpreview.js";
 import { createTableView } from "./tableview.js";
 import { getScrollRoot } from "./scroll.js";
 import { highlightCode } from "./syntax.js";
+import { createImportedList } from "./importedlist.js";
 import {
   applySyntaxTheme,
   importSyntaxTheme,
+  deleteUserSyntaxTheme,
   listUserSyntaxThemes,
   loadSyntaxThemeIndex,
   populateSyntaxThemeSelect,
@@ -100,63 +102,51 @@ const DEFAULT_UI_ZOOM = 100;
 const MIN_UI_ZOOM = 50;
 const MAX_UI_ZOOM = 200;
 
-// `syntax` is the preset's paired syntax theme (`syntax-themes/index.json`),
-// which choosing the preset selects. Light and Things avoid the plain-white
-// themes, which would leave no visible block on a white page.
 const BUNDLED_COLOR_TEMPLATES = [
   {
     id: "light",
     label: "Light",
     path: "themes/light.css",
-    syntax: "stackoverflow-light",
   },
   {
     id: "sepia",
     label: "Sepia",
     path: "themes/sepia.css",
-    syntax: "base16/gruvbox-light-soft",
   },
   {
     id: "dark",
     label: "Dark",
     path: "themes/dark.css",
-    syntax: "a11y-dark",
   },
   {
     id: "gruvbox",
     label: "Gruvbox",
     path: "themes/gruvbox.css",
-    syntax: "base16/gruvbox-dark-soft",
   },
   {
     id: "things-light",
     label: "Things",
     path: "themes/things-light.css",
-    syntax: "atom-one-light",
   },
   {
     id: "nord-light",
     label: "Nord",
     path: "themes/nord-light.css",
-    syntax: "nord-light",
   },
   {
     id: "dracula-dark",
     label: "Dracula",
     path: "themes/dracula-dark.css",
-    syntax: "base16/dracula",
   },
   {
     id: "catppuccin-mocha",
     label: "Mocha",
     path: "themes/catppuccin-mocha.css",
-    syntax: "catppuccin-mocha",
   },
   {
     id: "kanagawa-wave",
     label: "Kanagawa",
     path: "themes/kanagawa-wave.css",
-    syntax: "kanagawa-wave",
   },
 ];
 
@@ -291,6 +281,56 @@ const settingSyntaxTheme = document.getElementById("setting-syntax-theme");
 const syntaxThemeSwatch = document.getElementById("syntax-theme-swatch");
 const importSyntaxThemeBtn = document.getElementById("import-syntax-theme");
 const syntaxThemeStatus = document.getElementById("syntax-theme-status");
+let curatedSyntaxThemes = [];
+
+const importedColorList = createImportedList({
+  element: document.getElementById("imported-color-templates"),
+  glyph: "Aa",
+  fallbackFocus: importColorTemplateBtn,
+  isActive: (template) =>
+    Boolean(currentSettings) &&
+    Object.entries(template.colors).every(([key, color]) => currentSettings[key] === color),
+  onApply: (template) => void applyColorTemplate(template),
+  // The colors live in the settings, so removing a template leaves the page alone.
+  onRemove: () => {
+    colorTemplateStatus.textContent = "";
+  },
+  onRestore: () => {},
+  commit: (template) => invoke("delete_user_color_template", { id: template.id }),
+  onCommitError: (template, err) => {
+    console.warn(`Failed to remove color template ${template.label}`, err);
+    colorTemplateStatus.textContent = `Could not remove ${template.label}: ${err}`;
+  },
+});
+
+const importedSyntaxList = createImportedList({
+  element: document.getElementById("imported-syntax-themes"),
+  glyph: "{}",
+  fallbackFocus: importSyntaxThemeBtn,
+  isActive: (theme) => currentSettings?.syntax_theme === theme.id,
+  onApply: (theme) =>
+    void saveSettings({ ...(currentSettings || settingsFromForm()), syntax_theme: theme.id }),
+  // The theme's CSS is going away, so one in use hands over to Auto right now.
+  onRemove: (theme) => {
+    const wasActive = currentSettings?.syntax_theme === theme.id;
+    if (wasActive) void saveSettings({ ...currentSettings, syntax_theme: null });
+    syntaxThemeStatus.textContent = "";
+    renderSyntaxThemeOptions();
+    return { wasActive };
+  },
+  // Back to the theme, unless another was picked during the undo window.
+  onRestore: (theme, { wasActive }) => {
+    renderSyntaxThemeOptions();
+    if (wasActive && !currentSettings?.syntax_theme) {
+      void saveSettings({ ...currentSettings, syntax_theme: theme.id });
+    }
+  },
+  commit: (theme) => deleteUserSyntaxTheme(theme.id),
+  onCommitError: (theme, err) => {
+    console.warn(`Failed to remove syntax theme ${theme.label}`, err);
+    syntaxThemeStatus.textContent = `Could not remove ${theme.label}: ${err}`;
+  },
+});
 const settingWindowFrame = document.getElementById("setting-window-frame");
 const settingZoom = document.getElementById("setting-zoom");
 const settingZoomLabel = document.getElementById("setting-zoom-label");
@@ -579,7 +619,6 @@ async function loadBundledColorTemplates() {
       templates.push({
         ...extractColorTemplate(cssText, bundledTemplate.label),
         id: bundledTemplate.id,
-        syntax: bundledTemplate.syntax,
         imported: true,
       });
     } catch (err) {
@@ -628,8 +667,6 @@ async function applyColorTemplate(template) {
   const settings = {
     ...baseSettings,
     ...template.colors,
-    // A preset brings its paired syntax theme; an imported template, Auto.
-    syntax_theme: template.syntax ?? null,
   };
 
   if (!template.imported) {
@@ -678,7 +715,10 @@ function applySettings(settings) {
     : "light";
   void applySyntaxTheme(settings.syntax_theme ?? null, settings.color_bg);
   syncSyntaxThemeSelect(settingSyntaxTheme, syntaxThemeSwatch, settings.syntax_theme);
-  updateSyntaxThemeNote(settings);
+  syntaxThemeStatus.textContent = "";
+  colorTemplateStatus.textContent = "";
+  importedColorList.syncActive();
+  importedSyntaxList.syncActive();
 
   syncFontSelect(settingFont, settings.font_family, DEFAULT_FONT);
   syncFontSelect(settingFontTitle, settings.font_title, "");
@@ -1920,31 +1960,56 @@ async function refreshRecentFiles() {
   recentFiles.classList.remove("hidden");
 }
 
-/** The bundled preset `settings` is showing, by its two required colors. */
-function activePreset(settings) {
-  return colorTemplates.find(
-    (template) =>
-      template.syntax &&
-      template.colors.color_fg === settings.color_fg &&
-      template.colors.color_bg === settings.color_bg,
-  );
+async function saveSettings(settings) {
+  applySettings(settings);
+  await invoke("set_settings", { settings });
 }
 
-function updateSyntaxThemeNote(settings) {
-  const preset = activePreset(settings);
-  syntaxThemeStatus.textContent =
-    preset && preset.syntax === settings.syntax_theme ? `Paired with ${preset.label}.` : "";
+/** Offer the curated themes and every import not being removed. */
+function renderSyntaxThemeOptions() {
+  populateSyntaxThemeSelect(
+    settingSyntaxTheme,
+    curatedSyntaxThemes,
+    importedSyntaxList.available(),
+  );
+  if (currentSettings) {
+    syncSyntaxThemeSelect(settingSyntaxTheme, syntaxThemeSwatch, currentSettings.syntax_theme);
+  }
 }
 
 async function initSyntaxThemes() {
+  await importedSyntaxList.flush();
   const [curated, imported] = await Promise.all([
     loadSyntaxThemeIndex(),
     listUserSyntaxThemes(),
   ]);
-  populateSyntaxThemeSelect(settingSyntaxTheme, curated, imported);
-  if (currentSettings) {
-    syncSyntaxThemeSelect(settingSyntaxTheme, syntaxThemeSwatch, currentSettings.syntax_theme);
+  curatedSyntaxThemes = curated;
+  importedSyntaxList.setItems(imported);
+  renderSyntaxThemeOptions();
+}
+
+/** Imported templates as the list and `applyColorTemplate` want them. */
+function importedColorTemplate({ id, label, css }) {
+  const template = extractColorTemplate(css, label);
+  return { ...template, id, bg: template.colors.color_bg, fg: template.colors.color_fg };
+}
+
+async function initImportedColorTemplates() {
+  await importedColorList.flush();
+  const stored = await invoke("list_user_color_templates");
+  const templates = [];
+  for (const entry of stored) {
+    try {
+      templates.push(importedColorTemplate(entry));
+    } catch (err) {
+      console.warn(`Skipping imported color template ${entry.label}`, err);
+    }
   }
+  importedColorList.setItems(templates);
+}
+
+function flushImportedRemovals() {
+  return Promise.all([importedColorList.flush(), importedSyntaxList.flush()]);
 }
 
 async function handleImportSyntaxTheme() {
@@ -1957,15 +2022,15 @@ async function handleImportSyntaxTheme() {
       },
     });
     if (!selected) {
-      updateSyntaxThemeNote(currentSettings || settingsFromForm());
+      syntaxThemeStatus.textContent = "";
       return;
     }
 
+    // A pending removal of this same name must not delete the new copy.
+    await importedSyntaxList.flush();
     const theme = await importSyntaxTheme(selected);
     await initSyntaxThemes();
-    const settings = { ...(currentSettings || settingsFromForm()), syntax_theme: theme.id };
-    applySettings(settings);
-    await invoke("set_settings", { settings });
+    await saveSettings({ ...(currentSettings || settingsFromForm()), syntax_theme: theme.id });
     syntaxThemeStatus.textContent = `Imported ${theme.label}.`;
   } catch (err) {
     console.warn("Failed to import syntax theme", err);
@@ -1984,15 +2049,19 @@ async function handleImportColorTemplate() {
         filters: [{ name: "CSS", extensions: ["css"] }],
       },
     });
-    if (!selected) return;
+    if (!selected) {
+      colorTemplateStatus.textContent = "";
+      return;
+    }
 
+    // Validate before keeping a copy: only the frontend parses templates.
     const cssText = await invoke("read_color_template", { path: selected });
-    const template = extractColorTemplate(cssText, colorTemplateLabelFromPath(selected));
-    colorTemplates = [
-      ...colorTemplates.filter((candidate) => candidate.id !== template.id),
-      template,
-    ];
-    renderColorTemplates();
+    extractColorTemplate(cssText, colorTemplateLabelFromPath(selected));
+
+    // A pending removal of this same name must not delete the new copy.
+    await importedColorList.flush();
+    const template = importedColorTemplate(await invoke("import_color_template", { path: selected }));
+    await initImportedColorTemplates();
     await applyColorTemplate(template);
     colorTemplateStatus.textContent = `Imported ${template.label}.`;
   } catch (err) {
@@ -2612,8 +2681,12 @@ function toggleSettings(open) {
   syncPanelBackdrop();
   if (show) {
     settingsClose?.focus();
-  } else if (hadFocus) {
-    settingsToggle?.focus();
+    // Another window may have imported or removed something since.
+    void initImportedColorTemplates();
+    void initSyntaxThemes();
+  } else {
+    if (hadFocus) settingsToggle?.focus();
+    void flushImportedRemovals();
   }
 }
 
@@ -2910,18 +2983,12 @@ function wireSettings() {
   importColorTemplateBtn.addEventListener("click", () => {
     void handleImportColorTemplate();
   });
+  void initImportedColorTemplates();
   void initSyntaxThemes();
   importSyntaxThemeBtn.addEventListener("click", () => {
     void handleImportSyntaxTheme();
   });
   settingSyntaxTheme.addEventListener("input", scheduleSave);
-  // Hand-picked colors leave the preset behind, and its paired syntax theme
-  // with it: Auto derives its colors from whatever is picked.
-  for (const el of [settingFg, settingBg]) {
-    el.addEventListener("input", () => {
-      settingSyntaxTheme.value = "";
-    });
-  }
 
   [
     settingFont,
@@ -3198,6 +3265,7 @@ function wireViewState() {
     } catch (err) {
       console.warn("Failed to flush view state on close", err);
     }
+    await flushImportedRemovals();
     try {
       await getCurrentWindow().close();
     } catch (err) {

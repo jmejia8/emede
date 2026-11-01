@@ -33,8 +33,8 @@ pub struct Settings {
     /// Syntax theme for fenced code blocks: a curated id from
     /// `src/syntax-themes/index.json` (`base16/dracula`), `user:<name>` for one
     /// imported into `~/.config/emede/syntax-themes/`, or `None` for Auto,
-    /// whose token colors derive from the color theme. Choosing a color preset
-    /// sets it to that preset's paired theme.
+    /// whose token colors derive from the color theme. It is independent of the
+    /// color theme: changing colors never changes this setting.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub syntax_theme: Option<String>,
     /// Optional paper-sized frame around the desktop reader. This is a visual

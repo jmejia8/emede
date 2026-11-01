@@ -2468,6 +2468,123 @@ body:has(#reader.paper-preview .page-sheet--active) .toc-panel {
   color: var(--color-code);
 }
 
+/* Imported themes (`importedlist.js`). About five rows, then it scrolls. */
+.imported-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  max-height: 10.25rem;
+  margin: 0.35rem 0 0.15rem;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.imported-list[hidden] {
+  display: none;
+}
+
+.imported-row {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.15rem;
+  min-height: 1.9rem;
+  border-radius: 6px;
+}
+
+.imported-row:hover {
+  background: color-mix(in srgb, var(--color-fg) 6%, transparent);
+}
+
+.imported-apply,
+.imported-remove,
+.imported-undo {
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-fg);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85em;
+}
+
+.imported-apply {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0.2rem 0.3rem;
+  text-align: left;
+}
+
+.imported-swatch {
+  display: grid;
+  flex: 0 0 1.6rem;
+  place-items: center;
+  height: 1.3rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-family: var(--font-code);
+  font-size: 0.72rem;
+}
+
+.imported-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.imported-check {
+  visibility: hidden;
+  color: var(--color-link);
+}
+
+.imported-row--active .imported-check {
+  visibility: visible;
+}
+
+/* Always shown, not on hover only: the list exists only after an import, so it
+   costs no one else anything, and the control stays visible to keyboard users. */
+.imported-remove {
+  flex: 0 0 1.6rem;
+  height: 1.6rem;
+  color: var(--color-muted);
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.imported-remove:hover {
+  background: color-mix(in srgb, var(--color-fg) 10%, transparent);
+  color: var(--color-fg);
+}
+
+/* Inside the button: the list scrolls, so it would clip a ring drawn outside. */
+.imported-list button:focus-visible {
+  outline: 2px solid var(--color-link);
+  outline-offset: -2px;
+}
+
+.imported-row--removed {
+  padding-left: 0.3rem;
+  color: var(--color-muted);
+  font-size: 0.85em;
+}
+
+.imported-undo {
+  padding: 0.2rem 0.5rem;
+  color: var(--color-link);
+  font-size: inherit;
+  font-weight: 600;
+}
+
+.imported-undo:hover {
+  background: color-mix(in srgb, var(--color-fg) 10%, transparent);
+}
+
 .setting-note {
   margin: 0;
   color: var(--color-muted);

@@ -1,6 +1,7 @@
 mod baseline;
 mod changes;
 pub mod cli;
+mod color_templates;
 mod fonts;
 mod markdown;
 mod persist;
@@ -334,9 +335,13 @@ fn run_inner(files: Vec<String>, print_target: Option<String>) {
             settings::get_settings,
             settings::set_settings,
             settings::read_color_template,
+            color_templates::import_color_template,
+            color_templates::list_user_color_templates,
+            color_templates::delete_user_color_template,
             syntax_themes::import_syntax_theme,
             syntax_themes::list_user_syntax_themes,
             syntax_themes::read_user_syntax_theme,
+            syntax_themes::delete_user_syntax_theme,
             fonts::search_system_fonts,
             fonts::check_fonts_available,
             view_state::get_view_state,

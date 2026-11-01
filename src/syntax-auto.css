@@ -1,6 +1,6 @@
 /* The "Auto" syntax theme: token colors derived from the active color theme.
  *
- * It is the syntax theme for imported color templates and hand-picked colors,
+ * It is the default, the choice for code that should follow the page's colors,
  * and the fallback when a curated or imported theme fails to load. Any colors
  * must get a readable palette, so the token colors are derived from the theme
  * instead of listed: each is a fixed hue at a mid lightness pulled 45% toward

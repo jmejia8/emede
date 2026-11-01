@@ -23,7 +23,7 @@ pub const LAYOUT_CSS: &str = include_str!("../../src/syntax.css");
 pub const AUTO_CSS: &str = include_str!("../../src/syntax-auto.css");
 
 /// Prefix of a `syntax_theme` value naming an imported theme.
-const USER_PREFIX: &str = "user:";
+pub(crate) const USER_PREFIX: &str = "user:";
 /// Same cap as an imported color template (`read_color_template`).
 const MAX_THEME_BYTES: u64 = 256 * 1024;
 /// Below this contrast against the page, a block's edge is invisible.
@@ -256,7 +256,7 @@ fn user_themes_dir() -> PathBuf {
 
 /// A file name for an imported theme: its stem, with anything outside a
 /// conservative set replaced, so a name can never leave the themes dir.
-fn sanitize_name(stem: &str) -> String {
+pub(crate) fn sanitize_name(stem: &str) -> String {
     let cleaned: String = stem
         .chars()
         .map(|c| {
@@ -275,11 +275,25 @@ fn sanitize_name(stem: &str) -> String {
     }
 }
 
-fn user_theme_path(name: &str) -> Result<PathBuf, String> {
+/// `<dir>/<name>.css`, for a name that cannot leave `dir`.
+pub(crate) fn user_css_path(dir: &Path, name: &str) -> Result<PathBuf, String> {
     if name.is_empty() || sanitize_name(name) != name {
-        return Err(format!("invalid syntax theme name {name:?}"));
+        return Err(format!("invalid theme name {name:?}"));
     }
-    Ok(user_themes_dir().join(format!("{name}.css")))
+    Ok(dir.join(format!("{name}.css")))
+}
+
+fn user_theme_path(name: &str) -> Result<PathBuf, String> {
+    user_css_path(&user_themes_dir(), name)
+}
+
+/// Delete an imported file. One already gone is fine: another window may have
+/// removed it first.
+pub(crate) fn remove_user_css(path: &Path) -> Result<(), String> {
+    match fs::remove_file(path) {
+        Err(err) if err.kind() != std::io::ErrorKind::NotFound => Err(err.to_string()),
+        _ => Ok(()),
+    }
 }
 
 fn read_capped(path: &Path) -> Result<String, String> {
@@ -360,6 +374,15 @@ pub fn read_user_syntax_theme(id: String) -> Result<UserThemeCss, String> {
         bg: colors.bg,
         fg: colors.fg,
     })
+}
+
+/// Delete an imported theme by its `user:<name>` id.
+#[tauri::command]
+pub fn delete_user_syntax_theme(id: String) -> Result<(), String> {
+    let name = id
+        .strip_prefix(USER_PREFIX)
+        .ok_or_else(|| format!("not an imported syntax theme: {id}"))?;
+    remove_user_css(&user_theme_path(name)?)
 }
 
 #[cfg(test)]
@@ -447,5 +470,21 @@ mod tests {
         assert!(user_theme_path("a/b").is_err());
         assert!(user_theme_path("").is_err());
         assert!(user_theme_path("Solarized").is_ok());
+    }
+
+    #[test]
+    fn delete_refuses_anything_but_an_imported_theme() {
+        assert!(delete_user_syntax_theme("base16/dracula".into()).is_err());
+        assert!(delete_user_syntax_theme("user:../settings".into()).is_err());
+        assert!(delete_user_syntax_theme("user:".into()).is_err());
+    }
+
+    #[test]
+    fn removing_a_file_tolerates_one_already_gone() {
+        let path = std::env::temp_dir().join(format!("emede-remove-{}.css", std::process::id()));
+        fs::write(&path, "x").unwrap();
+        remove_user_css(&path).unwrap();
+        assert!(!path.exists());
+        remove_user_css(&path).unwrap();
     }
 }
