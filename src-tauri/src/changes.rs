@@ -216,16 +216,20 @@ fn paragraph_is_tight(node: &AstNode<'_>) -> bool {
             .is_some_and(|n| matches!(n.data.borrow().value, NodeValue::DescriptionTerm))
 }
 
-/// Nearest enclosing list item, whose `<li>` a tight paragraph is keyed on.
-/// Task items replace `Item` in the AST but still render as `<li>`.
-fn item_ancestor<'a>(node: &'a AstNode<'a>) -> Option<&'a AstNode<'a>> {
+/// The key of the element a tight paragraph renders directly into: the nearest
+/// `<li>`, `<dt>` or `<dd>`. Task items replace `Item` in the AST but still
+/// render as `<li>`.
+fn tight_paragraph_key(node: &AstNode<'_>) -> Option<BlockKey> {
     let mut current = node.parent();
     while let Some(n) = current {
-        if matches!(
-            n.data.borrow().value,
-            NodeValue::Item(_) | NodeValue::TaskItem(_)
-        ) {
-            return Some(n);
+        let tag = match n.data.borrow().value {
+            NodeValue::Item(_) | NodeValue::TaskItem(_) => Some("li"),
+            NodeValue::DescriptionTerm => Some("dt"),
+            NodeValue::DescriptionDetails => Some("dd"),
+            _ => None,
+        };
+        if let Some(tag) = tag {
+            return key_for(n, tag);
         }
         current = n.parent();
     }
@@ -255,8 +259,15 @@ fn collect_blocks<'a>(node: &'a AstNode<'a>, out: &mut Vec<Block>) {
     // frontend mirrors it by rejecting text nodes it does not own.
     let visit = match &node.data.borrow().value {
         NodeValue::Paragraph => {
+            // A figure's only text is its caption, which the image's title
+            // attribute would otherwise hide from the diff.
+            if let Some(caption) = crate::markdown::figure_caption(node) {
+                let key = key_for(node, "figcaption");
+                out.push(Block::new(key, caption, true));
+                return;
+            }
             let key = if paragraph_is_tight(node) {
-                item_ancestor(node).and_then(|item| key_for(item, "li"))
+                tight_paragraph_key(node)
             } else {
                 key_for(node, "p")
             };
@@ -340,6 +351,9 @@ fn inline_text_into<'a>(node: &'a AstNode<'a>, out: &mut String) {
                 }
             }
             NodeValue::SoftBreak | NodeValue::LineBreak => out.push('\n'),
+            // Rendered as `<sup><a>N</a></sup>`, so the number is in `textContent`.
+            NodeValue::FootnoteReference(reference) => out.push_str(&reference.ix.to_string()),
+            NodeValue::ShortCode(_) => out.push_str(&crate::markdown::shortcode_text(child)),
             // `alt` is an attribute, so an image contributes no text at all —
             // and its children hold exactly that alt text. Do not recurse.
             NodeValue::Image(_) => {}
@@ -351,7 +365,15 @@ fn inline_text_into<'a>(node: &'a AstNode<'a>, out: &mut String) {
             _ => recurse = true,
         }
         if recurse {
+            let carets = matches!(child.data.borrow().value, NodeValue::Superscript)
+                && crate::markdown::superscript_is_literal(child);
+            if carets {
+                out.push('^');
+            }
             inline_text_into(child, out);
+            if carets {
+                out.push('^');
+            }
         }
     }
 }
@@ -785,7 +807,8 @@ mod tests {
         let arena = Arena::new();
         let root = parse_document(&arena, &preprocessed, &options);
         let mut html = String::new();
-        comrak::format_html(root, &options, &mut html).expect("render html");
+        crate::markdown::MathJaxFormatter::format_document(root, &options, &mut html)
+            .expect("render html");
         html
     }
 
@@ -939,6 +962,28 @@ Some **prose** with a [link](http://example.com).
 ```rust
 fn main() {}
 ```
+
+> [!NOTE]
+> An alert body
+
+>>>
+A multiline quote
+>>>
+
+Term
+: A tight definition
+
+Loose term
+
+: A loose definition
+
+![alt](a.png \"A caption\")
+
+- ![alt](a.png \"Caption in a list\")
+
+A note[^1] and an inline^[Inline text] one.
+
+[^1]: The footnote text
 ";
         let html = render(src);
         for block in blocks(src) {
@@ -947,6 +992,37 @@ fn main() {}
             let hits = html.matches(&needle).count();
             assert_eq!(hits, 1, "key {key:?} matched {hits} elements in:\n{html}");
         }
+    }
+
+    #[test]
+    fn extension_text_matches_what_the_browser_shows() {
+        // Each string is the element's `textContent` once the frontend has set
+        // aside what it does not own (footnote back-links, alert titles).
+        assert_eq!(
+            texts("==a== ++b++ ^c^ ||d|| :rocket: x^2 and y^2 [[wiki|label]] 1:100:5\n"),
+            vec!["a b c d 🚀 x^2 and y^2 label 1:100:5"]
+        );
+        assert_eq!(
+            texts("Note[^x] end.\n\n[^x]: Body\n"),
+            vec!["Note1 end.", "Body"]
+        );
+        assert_eq!(texts("![alt](a.png \"The caption\")\n"), vec!["The caption"]);
+    }
+
+    #[test]
+    fn definition_lists_are_keyed_on_their_own_elements() {
+        let tags: Vec<String> = keys("Term\n: Definition\n").into_iter().map(|k| k.0).collect();
+        assert_eq!(tags, vec!["dt", "dd"]);
+        // Nested in a list item, a tight definition must not claim the `<li>`.
+        let tags: Vec<String> = keys("- Term\n  : Definition\n").into_iter().map(|k| k.0).collect();
+        assert_eq!(tags, vec!["dt", "dd"]);
+    }
+
+    #[test]
+    fn changed_figure_caption_is_a_change() {
+        let c = changes("![a](a.png \"Old words here\")\n", "![a](a.png \"New words here\")\n");
+        assert_eq!(c.len(), 1);
+        assert_eq!(c[0].tag, "figcaption");
     }
 
     // ── Diff ───────────────────────────────────────────────────────────────────

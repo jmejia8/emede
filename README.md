@@ -68,7 +68,11 @@ emede notes/lecture.md
 
 - Read-only rendering — no editor, distraction-free reader layout.
 - In-process Comrak markdown-to-HTML conversion (no external dependencies).
-- GFM-style extensions: tables, task lists, strikethrough, autolinks.
+- GFM-style extensions: tables, task lists, strikethrough, autolinks, alerts
+  (`> [!NOTE]`), footnotes.
+- Extra syntax: `==mark==`, `++insert++`, `^sup^`, `||spoiler||`, `:emoji:`,
+  `[[wikilinks]]`, inline footnotes (`^[note]`), definition lists, `>>>` block
+  quotes, and captioned figures (`![alt](a.png "caption")`).
 - Local `.md` and `.markdown` links open directly in emede; Ctrl+click (Command+click on macOS) opens a new window.
 - Bundled MathJax for offline math rendering.
 - Syntax highlighting (bundled highlight.js, offline) for fenced code blocks that name their language, e.g. ` ```julia `; unlabeled blocks stay plain.

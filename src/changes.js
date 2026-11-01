@@ -26,7 +26,9 @@ import {
 
 /// Elements whose text is not ours to mark: `pre` because code blocks are
 /// block-level only, the rest because their content is generated or replaced.
-const OPAQUE = "pre, script, style, .mermaid, mjx-container, .katex";
+/// A footnote's back-links are added by the renderer inside its last paragraph
+/// and have no counterpart in the source the backend diffed.
+const OPAQUE = "pre, script, style, .mermaid, mjx-container, .katex, .footnote-backref";
 
 /// Math regions must never be split by a mark. MathJax scans text nodes for
 /// these delimiters, and a `<mark>` in the middle both breaks detection and,

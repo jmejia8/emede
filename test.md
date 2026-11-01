@@ -11,7 +11,10 @@ tags:
 
 This document is a feature tour for **emede**, a read-only Markdown reader. It
 contains ordinary *emphasis*, **strong text**, ~~strikethrough~~, `inline code`,
-and a [link to the project README](README.md). It also has a remote link to
+==highlighted text==, ++inserted text++, a superscript in E=mc^2^, a
+||hidden spoiler||, an emoji :rocket:, a footnote[^tour], an inline
+footnote^[Written right where it is used.], and a
+[link to the project README](README.md). It also has a remote link to
 [the CommonMark site](https://commonmark.org), an autolink
 <https://github.com>, and an email address: <hello@example.com>.
 
@@ -47,7 +50,48 @@ This is the next line in the same paragraph.
 >
 > > Read-only documents are intentionally calm.
 
+>>>
+A multiline blockquote is fenced by three angle brackets.
+
+No line in it needs its own prefix.
+>>>
+
+Carets, colons and pairs that are not markup stay as written: x^2 and y^2, the
+range 1:100:5, a == b == c, and C++ and C++.
+
 ---
+
+## Alerts
+
+> [!NOTE]
+> Useful information that readers should know, even when skimming.
+
+> [!TIP]
+> Advice for doing things better or more easily.
+
+> [!IMPORTANT]
+> Key information readers need to achieve their goal.
+
+> [!WARNING]
+> Urgent information that needs immediate attention.
+
+> [!CAUTION]
+> Risks or negative outcomes of certain actions.
+
+> [!NOTE] A custom title
+> An alert can replace its title, and it can hold **formatting**, `code` and
+> $x^2$ math.
+
+## Definition lists
+
+Pareto front
+: The image of the Pareto set in objective space.
+
+Metaheuristic
+: A high-level strategy that guides a search.
+
+: A term can have more than one definition.
+
 
 ## Lists and task lists
 
@@ -153,6 +197,17 @@ missing file so the linked-file error dialog can be tested:
 
 [Open the missing companion](ThisNotExsists.md)
 
+A wikilink reaches the same path. These point to [[README]], to a
+[[README#install-linux|section of it by another name]], and to the
+[[ThisNotExsists|same missing file]].
+
+An image alone on a line with a title becomes a captioned figure:
+
+![An intentionally missing image](images/does-not-exist.png "This title is the caption")
+
+Beside other text, the same image stays inline, like this
+![Inline image](images/does-not-exist.png "This title is only a tooltip") one.
+
 ## Mermaid diagrams
 
 Mermaid fenced blocks are replaced with diagrams when Mermaid is enabled in
@@ -202,3 +257,6 @@ sanitizer's allow-list.
 The horizontal rule above, the headings, table, diagrams, equations, code,
 links, image states, and statistics panel all make this file useful as a
 manual smoke test for emede.
+
+[^tour]: Footnotes collect at the end of the document, and the arrow returns to
+    where you were reading.

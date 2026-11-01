@@ -92,16 +92,17 @@ Author:  {authors}
 Repo:    {repository}
 
 USAGE:
-    {name} [FILE]...                 Open one or more markdown files, each in its own window
-    {name} --share [FILE]...         Share notes on the local network (headless, no window)
+    {name} [FILE]...                 Open each file in its own window
+    {name} --share <FILE>...         Share notes on the local network (headless)
     {name} --export <FILE> [-o OUT]  Write a self-contained HTML file (OUT '-' = stdout)
     {name} --print <FILE> [-o OUT]   Render a PDF (Linux only)
     {name} --list [--json]           List notes shared by any running emede instance
     {name} --check-update            Report whether a newer release is available
 
 ARGS:
-    <FILE>    Path to a markdown file (or an http(s) URL). Use '--' before a
-              path that begins with '-'.
+    <FILE>    Local path or http(s) URL. Markdown is rendered; HTML, JSON, plain
+              text and common code/config files are shown too. Use '--' before
+              a path that begins with '-'.
 
 OPTIONS:
     -o, --output <PATH>  Output path for --export / --print
@@ -109,13 +110,53 @@ OPTIONS:
     -h, --help           Print this help message and exit
     -v, --version        Print version information and exit
 
+FEATURES:
+    Live reload  The reader re-renders whenever the file is saved.
+    Changes      Tints text changed since the last git commit (or, if untracked,
+                 since emede first opened it) and marks deletions. Off by
+                 default: Settings > Change highlighting. Reader only, never in
+                 --share, --export or --print.
+    Math         MathJax 4: TeX with AMS environments and \\newcommand.
+    Diagrams     Mermaid 11, themed to match the page, with a zoom viewer.
+    Code         highlight.js with 30 themes and a copy button.
+    Reading      Contents panel, search, statistics, sortable table viewer,
+                 image zoom, and Vim, Emacs or Common keybindings.
+
+MARKDOWN SYNTAX (CommonMark via comrak):
+    Extensions   Tables, task lists, ~~strikethrough~~, autolinks, ==mark==,
+                 ++insert++, ^sup^, ||spoiler||, :emoji: and definition lists.
+                 Leading YAML front matter becomes a properties panel.
+    Alerts       > [!NOTE], [!TIP], [!IMPORTANT], [!WARNING], [!CAUTION].
+    Quotes       >>> fences a multiline blockquote.
+    Footnotes    [^1] with a [^1]: definition, or inline ^[note].
+    Images       ![alt](a.png \"caption\") alone on a line becomes a captioned
+                 figure.
+    Math         Inline $x$ \\(x\\) $`x`$; display $$x$$ \\[x\\] and ```math fences.
+    Diagrams     ```mermaid fences.
+    Code         ```lang fences are highlighted; unlabeled fences stay plain.
+    Links        Relative .md links open in emede; headings get #slug anchors.
+                 [[page]] and [[page|title]] link to page.md.
+    Raw HTML     Sanitized: <details>, <kbd>, <sub> and <sup> work; <script>,
+                 <style>, <iframe>, style= and on*= handlers are removed.
+    Unsupported  {{#id}} heading attributes render as literal text.
+    Caveats      ~x~ is strikethrough, so write subscripts as <sub>x</sub>.
+                 ^x y^ with a space stays literal, and :code: touching a letter
+                 or digit is not an emoji, so x^2 and y^2 or 1:100:5 stay as
+                 written.
+
 NOTES:
-    Exported HTML inlines images but loads MathJax/Mermaid from a CDN, so math
-    and diagrams require internet access to render in a browser.
+    The reader and --share stay in the foreground until the window closes or
+    Ctrl+C; run them in the background from a script.
+
+    The reader works offline. --share and --export pages inline images but load
+    MathJax, Mermaid and highlight.js from a CDN, so math, diagrams and code
+    colors need internet access to render in a browser.
 
     --check-update queries the GitHub releases API and never installs anything.
-    It exits 0 when up to date, 10 when an update is available, and 1 when the
-    check itself failed — so a script can branch on the result.",
+
+EXIT STATUS:
+    0 success, 1 failure, 2 usage error.
+    --check-update: 0 up to date, 10 update available, 1 check failed.",
         name = name,
         version = env!("CARGO_PKG_VERSION"),
         description = env!("CARGO_PKG_DESCRIPTION"),

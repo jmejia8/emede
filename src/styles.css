@@ -464,6 +464,135 @@ body.frame-emede .prose :is(h1, h2, h3, h4, h5, h6) {
   color: var(--color-quote);
 }
 
+/* The tint hangs into the gutter (the negative margin cancels the padding), so
+ * alert text stays on the reading column. The ink's 55% hue share and the amber
+ * hue keep every title at 4.5:1 or better on all bundled themes, tint included. */
+.prose .markdown-alert {
+  --alert-hue: #0969da;
+  --alert-ink: color-mix(in srgb, var(--alert-hue) 55%, var(--color-fg));
+  --alert-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='8' cy='8' r='6.25'/%3E%3Cpath d='M8 7.25v4M8 4.75v.01'/%3E%3C/svg%3E");
+  margin: 0 -0.85em 1.25em;
+  padding: 0.6em 0.85em 0.65em;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--alert-hue) 5%, transparent);
+}
+
+.prose .markdown-alert-tip {
+  --alert-hue: #1a7f37;
+  --alert-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 12.25h4M6.75 14.5h2.5M8 1.5a4.5 4.5 0 0 0-2.6 8.17c.3.22.6.6.6 1.08v1.5h4v-1.5c0-.48.3-.86.6-1.08A4.5 4.5 0 0 0 8 1.5Z'/%3E%3C/svg%3E");
+}
+
+.prose .markdown-alert-important {
+  --alert-hue: #8250df;
+  --alert-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m8 1.75 1.9 3.95 4.35.6-3.17 3.03.78 4.32L8 11.6l-3.86 2.05.78-4.32L1.75 6.3l4.35-.6Z'/%3E%3C/svg%3E");
+}
+
+.prose .markdown-alert-warning {
+  --alert-hue: #b7791f;
+  --alert-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 2.25 14.5 13.5h-13ZM8 6.5v3.25M8 11.6v.01'/%3E%3C/svg%3E");
+}
+
+.prose .markdown-alert-caution {
+  --alert-hue: #cf222e;
+  --alert-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5.4 1.75h5.2l3.65 3.65v5.2l-3.65 3.65H5.4L1.75 10.6V5.4ZM6 6l4 4M10 6l-4 4'/%3E%3C/svg%3E");
+}
+
+.prose .markdown-alert-title {
+  margin: 0 0 0.1em;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+  color: var(--alert-ink);
+}
+
+.prose .markdown-alert-title::before {
+  content: "";
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  margin-right: 0.4em;
+  vertical-align: -0.14em;
+  background: currentColor;
+  -webkit-mask: var(--alert-icon) center / contain no-repeat;
+  mask: var(--alert-icon) center / contain no-repeat;
+}
+
+.prose .markdown-alert > :last-child,
+.prose dd > :last-child {
+  margin-bottom: 0;
+}
+
+/* Not `.prose mark`: change highlighting wraps text in `mark.emede-change`, and
+ * this selector must not outrank its background. */
+.prose mark:not([class]) {
+  padding: 0 0.1em;
+  border-radius: 2px;
+  background: color-mix(in srgb, #f2c744 40%, transparent);
+  color: inherit;
+}
+
+.prose ins {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+/* Keeps a superscript from opening up the line it sits on. */
+.prose sup {
+  line-height: 0;
+}
+
+/* Screen only: nothing can be hovered on paper, so `--print` shows the text. */
+@media screen {
+  /* The filter covers the whole subtree: links, code, marks and math included. */
+  .prose .spoiler {
+    filter: blur(0.4em);
+    transition: filter 0.15s;
+  }
+
+  .prose .spoiler:is(:hover, :active) {
+    filter: none;
+  }
+}
+
+.prose dt {
+  margin-top: 0.6em;
+  font-weight: 600;
+}
+
+.prose dt:first-child {
+  margin-top: 0;
+}
+
+.prose dd {
+  margin: 0.15em 0 0 1.5em;
+}
+
+.prose figure {
+  text-align: center;
+}
+
+.prose figcaption {
+  margin-top: 0.5em;
+  font-size: 0.9em;
+  color: var(--color-muted);
+}
+
+.prose .footnotes {
+  margin-top: 2.5em;
+  padding-top: 1em;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.9em;
+}
+
+.prose .footnotes p {
+  margin-bottom: 0.5em;
+}
+
+.prose .footnote-ref a,
+.prose .footnote-backref {
+  text-decoration: none;
+}
+
 .prose code {
   font-family: var(--font-code);
   font-size: 0.88em;
@@ -3912,7 +4041,7 @@ body.frame-emede .search-bar {
     break-after: avoid;
   }
 
-  pre, table, figure, img, blockquote, .image-fallback, .mermaid, mjx-container {
+  pre, table, figure, img, blockquote, .markdown-alert, .image-fallback, .mermaid, mjx-container {
     break-inside: avoid;
   }
 }

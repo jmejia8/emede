@@ -1,6 +1,6 @@
 use comrak::create_formatter;
-use comrak::html::ChildRendering;
-use comrak::nodes::NodeValue;
+use comrak::html::{format_node_default, render_sourcepos, ChildRendering};
+use comrak::nodes::{AstNode, NodeValue};
 use comrak::{parse_document, Arena, Options};
 use serde::Serialize;
 use serde_json::Value;
@@ -168,13 +168,16 @@ fn rewrite_html_image_srcs(html: &str, markdown_path: &Path) -> String {
 /// `language-*` code classes, task-list checkboxes, image alignment).
 fn sanitize_html(html: &str) -> String {
     ammonia::Builder::default()
-        .add_tags(["input"])
+        // comrak wraps the footnote list in `<section class="footnotes">`.
+        .add_tags(["input", "section"])
         // `data-sourcepos` is the key change highlighting uses to find a
         // diffed block's element; without it here ammonia strips every key and
         // the feature silently produces nothing. Listed individually rather
         // than opening the whole `data-` namespace via a prefix rule.
         .add_generic_attributes(["class", "id", "align", "data-sourcepos"])
         .add_tag_attributes("input", ["type", "checked", "disabled"])
+        // Footnote back-links are a bare arrow; this is their accessible name.
+        .add_tag_attributes("a", ["aria-label"])
         // Drop `<script>`/`<style>` *contents* too — otherwise Ammonia keeps the
         // inner text of a disallowed tag, leaking script/CSS source as visible
         // text when we render a full HTML document.
@@ -910,6 +913,17 @@ pub(crate) fn comrak_options_ext(markdown_path: &Path, sourcepos: bool) -> Optio
     options.extension.strikethrough = true;
     options.extension.autolink = true;
     options.extension.tasklist = true;
+    options.extension.alerts = true;
+    options.extension.footnotes = true;
+    options.extension.inline_footnotes = true;
+    options.extension.description_lists = true;
+    options.extension.multiline_block_quotes = true;
+    options.extension.highlight = true;
+    options.extension.insert = true;
+    options.extension.superscript = true;
+    options.extension.spoiler = true;
+    options.extension.shortcodes = true;
+    options.extension.wikilinks_title_after_pipe = true;
     options.render.tasklist_classes = true;
     options.render.r#unsafe = true;
     options.extension.header_id_prefix = Some(String::new());
@@ -917,6 +931,83 @@ pub(crate) fn comrak_options_ext(markdown_path: &Path, sourcepos: bool) -> Optio
         resolve_asset_path(&doc_path, url)
     }));
     options
+}
+
+/// The caption of a paragraph that is nothing but a titled image, which renders
+/// as a `<figure>`. comrak's own `figure_with_caption` is not used because it
+/// writes the figure *inside* the paragraph: an HTML parser closes the `<p>` at
+/// `<figure>`, which leaves empty paragraphs around every figure and detaches
+/// the block from its `data-sourcepos`. An image among other inline content
+/// cannot be a figure, so it stays a plain `<img>`.
+pub(crate) fn figure_caption<'a>(paragraph: &'a AstNode<'a>) -> Option<String> {
+    let image = paragraph.first_child()?;
+    if image.next_sibling().is_some() {
+        return None;
+    }
+    let value = &image.data.borrow().value;
+    match value {
+        NodeValue::Image(link) if !link.title.is_empty() => Some(link.title.clone()),
+        _ => None,
+    }
+}
+
+/// Whether a `^...^` span holds whitespace, and so is not a superscript. comrak
+/// would turn `x^2 and y^2` into `x<sup>2 and y</sup>2`, which is a real hazard
+/// in prose about mathematics, so emede applies Pandoc's rule and writes the
+/// carets back out.
+pub(crate) fn superscript_is_literal<'a>(node: &'a AstNode<'a>) -> bool {
+    node.descendants().skip(1).any(|n| match &n.data.borrow().value {
+        NodeValue::Text(text) => text.chars().any(char::is_whitespace),
+        NodeValue::SoftBreak | NodeValue::LineBreak => true,
+        _ => false,
+    })
+}
+
+/// What a `:shortcode:` node shows: its emoji, or the source text when it touches
+/// a letter or digit. comrak resolves codes anywhere, so a Julia range written
+/// in prose, `1:100:5`, would otherwise read `1💯5`.
+pub(crate) fn shortcode_text<'a>(node: &'a AstNode<'a>) -> String {
+    let touches_word = |sibling: Option<&'a AstNode<'a>>, last: bool| {
+        sibling.is_some_and(|n| match &n.data.borrow().value {
+            NodeValue::Text(text) => {
+                let edge = if last { text.chars().next_back() } else { text.chars().next() };
+                edge.is_some_and(char::is_alphanumeric)
+            }
+            _ => false,
+        })
+    };
+    match &node.data.borrow().value {
+        NodeValue::ShortCode(code) => {
+            if touches_word(node.previous_sibling(), true) || touches_word(node.next_sibling(), false) {
+                format!(":{}:", code.code)
+            } else {
+                code.emoji.clone()
+            }
+        }
+        _ => String::new(),
+    }
+}
+
+/// Where a `[[wikilink]]` points. A bare page name means the Markdown file of
+/// that name, so `[[notes#intro]]` becomes `notes.md#intro`. A target that is
+/// remote, only a fragment, or already has a file extension is left as written;
+/// an all-digit "extension" does not count, so `[[v1.2]]` is still a page.
+fn wikilink_href(target: &str) -> String {
+    let (path, fragment) = match target.find('#') {
+        Some(at) => target.split_at(at),
+        None => (target, ""),
+    };
+    let has_extension = Path::new(path)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| {
+            ext.starts_with(|c: char| c.is_ascii_alphabetic())
+                && ext.chars().all(|c| c.is_ascii_alphanumeric())
+        });
+    if path.is_empty() || path.ends_with('/') || is_remote_url(path) || has_extension {
+        return target.to_string();
+    }
+    format!("{path}.md{fragment}")
 }
 
 create_formatter!(MathJaxFormatter, {
@@ -931,6 +1022,46 @@ create_formatter!(MathJaxFormatter, {
             write!(context, "${escaped}$").expect("write inline math");
         }
         return Ok(ChildRendering::Skip);
+    },
+    NodeValue::Paragraph => |context, node, entering| {
+        let Some(caption) = figure_caption(node) else {
+            return format_node_default(context, node, entering);
+        };
+        if entering {
+            context.cr()?;
+            context.write_str("<figure")?;
+            render_sourcepos(context, node)?;
+            context.write_str(">")?;
+        } else {
+            // The figure and its caption share a sourcepos; change highlighting
+            // keys on `(tag, sourcepos)`, so the caption is still addressable.
+            context.write_str("<figcaption")?;
+            render_sourcepos(context, node)?;
+            context.write_str(">")?;
+            context.escape(&caption)?;
+            context.write_str("</figcaption></figure>")?;
+            context.lf()?;
+        }
+    },
+    NodeValue::Superscript => |context, node, entering| {
+        if !superscript_is_literal(node) {
+            return format_node_default(context, node, entering);
+        }
+        context.write_str("^")?;
+    },
+    NodeValue::ShortCode(_) => |context, node, entering| {
+        if entering {
+            context.escape(&shortcode_text(node))?;
+        }
+    },
+    NodeValue::WikiLink(ref link) => |context, entering| {
+        if entering {
+            context.write_str("<a href=\"")?;
+            context.escape_href(&wikilink_href(&link.url))?;
+            context.write_str("\">")?;
+        } else {
+            context.write_str("</a>")?;
+        }
     },
 });
 
@@ -1690,6 +1821,133 @@ mod tests {
             err.contains("Not a valid text file"),
             "unexpected error message: {err}"
         );
+    }
+
+    /// `emede --help` tells authors (and LLMs) what this syntax does, so a change
+    /// here means its MARKDOWN SYNTAX section in `print_help` is now wrong.
+    #[test]
+    fn help_markdown_syntax_section_matches_the_renderer() {
+        let src = "Note[^1] and^[inline] H~2~O ==mark== ++ins++ ^sup^ ||hide|| :rocket: [[wiki]]\n\n\
+                   [^1]: The note.\n\n\
+                   > [!NOTE]\n> Alert\n\n\
+                   >>>\nQuote\n>>>\n\n\
+                   Term\n: Definition\n\n\
+                   ![alt](a.png \"Caption\")\n\n\
+                   ## Heading {#id}\n\n\
+                   <details><summary>S</summary><kbd>k</kbd><sub>s</sub><sup>p</sup></details>\n\n\
+                   <div onclick=\"x()\" style=\"color:red\">styled</div>\n\n\
+                   <iframe src=\"https://example.org\"></iframe>\n\n\
+                   <style>p {}</style>\n\n<script>x()</script>\n";
+        let html = render_content(src, ContentKind::Markdown, Path::new("t.md"), "t", false)
+            .expect("render")
+            .html;
+
+        assert!(html.contains("{#id}"), "{{#id}} is no longer literal: {html}");
+        assert!(html.contains("H<del>2</del>O"), "~x~ is no longer strikethrough: {html}");
+        for kept in [
+            "<details>",
+            "<kbd>",
+            "<sub>",
+            "<sup>sup</sup>",
+            "<mark>mark</mark>",
+            "<ins>ins</ins>",
+            "<span class=\"spoiler\">hide</span>",
+            "🚀",
+            "href=\"wiki.md\"",
+            "class=\"footnotes\"",
+            "class=\"footnote-ref\"",
+            "class=\"markdown-alert markdown-alert-note\"",
+            "<dl>",
+            "<blockquote>",
+            "<figcaption>Caption</figcaption>",
+        ] {
+            assert!(html.contains(kept), "{kept} was removed: {html}");
+        }
+        for removed in ["onclick", "style=", "<iframe", "<style", "<script"] {
+            assert!(!html.contains(removed), "{removed} survived: {html}");
+        }
+    }
+
+    fn render_markdown_body(src: &str) -> String {
+        render_content(src, ContentKind::Markdown, Path::new("t.md"), "t", false)
+            .expect("render")
+            .html
+    }
+
+    #[test]
+    fn titled_image_alone_is_a_figure_without_a_wrapping_paragraph() {
+        let html = render_markdown_body("![alt](a.png \"Cap <b>\")\n");
+        assert!(html.contains("<figure>"), "{html}");
+        assert!(html.contains("<figcaption>Cap &lt;b&gt;</figcaption></figure>"), "{html}");
+        assert!(!html.contains("<p>"), "{html}");
+    }
+
+    #[test]
+    fn image_stays_inline_without_a_title_or_beside_other_content() {
+        for src in [
+            "![alt](a.png)\n",
+            "Text ![alt](a.png \"Tip\") text.\n",
+            "[![alt](a.png \"Tip\")](x.md)\n",
+        ] {
+            let html = render_markdown_body(src);
+            assert!(!html.contains("<figure"), "{src}: {html}");
+            assert!(html.contains("<p>"), "{src}: {html}");
+        }
+    }
+
+    #[test]
+    fn caret_span_with_whitespace_is_not_a_superscript() {
+        assert!(render_markdown_body("x^2 and y^2\n").contains("<p>x^2 and y^2</p>"));
+        assert!(render_markdown_body("E=mc^2^\n").contains("mc<sup>2</sup>"));
+    }
+
+    #[test]
+    fn shortcode_touching_a_word_stays_literal() {
+        assert!(render_markdown_body("range 1:100:5\n").contains("1:100:5"));
+        assert!(render_markdown_body("ok:rocket:ok\n").contains("ok:rocket:ok"));
+        assert!(render_markdown_body("go :rocket: now\n").contains("go 🚀 now"));
+        assert!(render_markdown_body(":nonsense_code:\n").contains(":nonsense_code:"));
+    }
+
+    #[test]
+    fn wikilink_targets_resolve_to_markdown_files() {
+        for (target, href) in [
+            ("page", "page.md"),
+            ("my page", "my page.md"),
+            ("page#sec", "page.md#sec"),
+            ("v1.2", "v1.2.md"),
+            ("a.pdf", "a.pdf"),
+            ("page.md", "page.md"),
+            ("#here", "#here"),
+            ("https://example.org", "https://example.org"),
+        ] {
+            assert_eq!(wikilink_href(target), href);
+        }
+        let html = render_markdown_body("[[my page|The title]]\n");
+        assert!(html.contains("href=\"my%20page.md\""), "{html}");
+        assert!(html.contains(">The title</a>"), "{html}");
+    }
+
+    #[test]
+    fn wikilink_cannot_smuggle_a_javascript_url() {
+        let html = render_markdown_body("[[javascript:alert(1)|x]]\n");
+        assert!(!html.contains("javascript:"), "{html}");
+    }
+
+    #[test]
+    fn math_is_untouched_by_the_inline_extensions() {
+        let html = render_markdown_body("$x^2 + y^2$ and $a==b==c$ and $p||q||r$\n");
+        assert!(html.contains("$x^2 + y^2$ and $a==b==c$ and $p||q||r$"), "{html}");
+    }
+
+    #[test]
+    fn footnotes_keep_their_section_and_links() {
+        let html = render_markdown_body("See[^a].\n\n[^a]: Note.\n");
+        assert!(html.contains("<section class=\"footnotes\">"), "{html}");
+        assert!(html.contains("href=\"#fn-a\""), "{html}");
+        assert!(html.contains("id=\"fn-a\""), "{html}");
+        assert!(html.contains("href=\"#fnref-a\""), "{html}");
+        assert!(html.contains("aria-label=\"Back to reference 1\""), "{html}");
     }
 
     #[test]
