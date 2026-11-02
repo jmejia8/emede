@@ -1123,19 +1123,52 @@ async function renderMermaid() {
     pre.replaceWith(div);
     nodes.push(div);
   }
-  for (const div of rendered) {
-    const source = div.dataset.mermaidSource;
-    div.removeAttribute("data-processed");
-    div.textContent = source;
-    div.dataset.mermaidSource = source;
-    nodes.push(div);
-  }
+  nodes.push(...rendered);
+
+  await runMermaidOutsideSheet(nodes);
+}
+
+/**
+ * Mermaid sizes every shape from `getBoundingClientRect` of its label, which
+ * includes ancestor transforms. Inside the zoomed page sheet that returns
+ * zoomed pixels while the label itself is laid out unzoomed, so the boxes come
+ * out too big by the zoom factor with the text stuck in their corner.
+ *
+ * So it renders copies in a hidden host outside the sheet, with the content's
+ * classes (`.prose` rules reach the labels) and its layout width (gantt fills
+ * the box it renders in), and the finished nodes move into the document. A
+ * re-render keeps showing the old diagram until the new one is ready.
+ */
+async function runMermaidOutsideSheet(nodes) {
+  const host = document.createElement("div");
+  host.className = contentEl.className;
+  host.classList.remove("skip-offscreen");
+  host.classList.add("mermaid-render-host");
+  // The computed width is layout pixels, which the transform leaves alone.
+  host.style.width = getComputedStyle(contentEl).width;
+
+  const copies = nodes.map((div) => {
+    const copy = document.createElement("div");
+    copy.className = "mermaid";
+    copy.textContent = div.dataset.mermaidSource;
+    return copy;
+  });
+  host.append(...copies);
+  readerEl.append(host);
 
   try {
-    await window.mermaid.run({ nodes });
+    await window.mermaid.run({ nodes: copies });
   } catch (err) {
     console.warn("Mermaid rendering failed", err);
   }
+
+  // Moved rather than serialized: a failed diagram leaves its error graphic
+  // here too, and the click handlers Mermaid bound stay attached.
+  nodes.forEach((div, i) => {
+    div.replaceChildren(...copies[i].childNodes);
+    div.dataset.processed = "true";
+  });
+  host.remove();
 }
 
 function scheduleMermaid() {

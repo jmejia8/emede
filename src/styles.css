@@ -707,6 +707,17 @@ body.frame-emede .prose :is(h1, h2, h3, h4, h5, h6) {
   height: auto;
 }
 
+/* Where Mermaid measures: outside the page sheet, whose zoom transform would
+ * inflate every box (`runMermaidOutsideSheet` in main.js). Hidden, not
+ * `display: none`, because the labels still need real layout. */
+.mermaid-render-host {
+  position: fixed;
+  top: 0;
+  left: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .prose .zoomable {
   cursor: zoom-in;
 }
