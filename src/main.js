@@ -2723,33 +2723,67 @@ function toggleSettings(open) {
   }
 }
 
+// Mirrors the docking media query in styles.css: at this width the open
+// contents panel pushes the reader aside rather than covering it.
+const DOCKED_TOC_QUERY = window.matchMedia("(min-width: 900px)");
+
+// The first content block whose bottom edge is below the top of the viewport,
+// with its distance from that edge, so the same line can be put back after
+// the column changes width.
+function captureReadingAnchor() {
+  const viewportTop = getScrollRoot() === document.documentElement
+    ? 0
+    : getScrollRoot().getBoundingClientRect().top;
+  for (const block of contentEl.querySelectorAll(":scope > *")) {
+    const rect = block.getBoundingClientRect();
+    if (rect.bottom > viewportTop) {
+      // Track the fraction through the block, not the pixel offset, since the
+      // block itself changes height when its lines rewrap.
+      const fraction = rect.height > 0 ? (viewportTop - rect.top) / rect.height : 0;
+      return { block, fraction, viewportTop };
+    }
+  }
+  return null;
+}
+
+function restoreReadingAnchor(anchor) {
+  if (!anchor?.block.isConnected) return;
+  const rect = anchor.block.getBoundingClientRect();
+  getScrollRoot().scrollTop += rect.top + anchor.fraction * rect.height - anchor.viewportTop;
+}
+
 function toggleToc(open) {
   const show = open ?? tocPanel.classList.contains("hidden");
+  if (show === !tocPanel.classList.contains("hidden")) return;
   const hadFocus = tocPanel.contains(document.activeElement);
+  const docked = DOCKED_TOC_QUERY.matches;
+  // Docking or undocking changes the column's width, which can rewrap every
+  // line; WebKitGTK has no scroll anchoring, so hold the place by hand.
+  const anchor = docked && contentEl.firstElementChild ? captureReadingAnchor() : null;
   tocPanel.classList.toggle("hidden", !show);
   tocPanel.setAttribute("aria-hidden", String(!show));
-  syncPanelBackdrop();
+  if (anchor) restoreReadingAnchor(anchor);
   if (show) {
-    tocClose?.focus();
+    // Docked, the panel sits beside the text and focus stays with the
+    // document. Floating over it, the panel is the thing in front, so it
+    // takes focus as before.
+    if (!docked) tocClose?.focus();
     requestAnimationFrame(() => syncActiveTocLink({ reveal: true }));
   } else if (hadFocus) {
     tocToggle?.focus();
   }
 }
 
+// Only the settings panel is modal. The contents panel never takes the
+// backdrop, so the document behind it keeps scrolling and taking clicks.
 function syncPanelBackdrop() {
-  const show =
-    !settingsPanel.classList.contains("hidden") ||
-    !tocPanel.classList.contains("hidden");
+  const show = !settingsPanel.classList.contains("hidden");
   panelBackdrop.classList.toggle("hidden", !show);
   panelBackdrop.setAttribute("aria-hidden", String(!show));
 }
 
 function wirePanelBackdrop() {
-  panelBackdrop.addEventListener("click", () => {
-    toggleSettings(false);
-    toggleToc(false);
-  });
+  panelBackdrop.addEventListener("click", () => toggleSettings(false));
 }
 
 // ── Update checking ──────────────────────────────────────────────────────────
@@ -2925,7 +2959,9 @@ function wireToc() {
       const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       heading.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
     }
-    toggleToc(false);
+    // Docked, the panel stays open for the next jump. Floating, it would
+    // cover the heading it just scrolled to, so it gets out of the way.
+    if (!DOCKED_TOC_QUERY.matches) toggleToc(false);
   });
 }
 

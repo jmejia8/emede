@@ -1948,6 +1948,20 @@ body:has(#reader.paper-preview .page-sheet--active) .toc-panel {
   font-size: calc(0.88 * clamp(8pt, var(--font-size) * var(--page-zoom, 1), 32pt));
 }
 
+/* Docked contents: where the window has room for the panel beside a readable
+ * column, the reader makes way for it instead of being covered, so the panel
+ * can stay open while you read. The column recenters in what is left, which
+ * on a wide window is a sideways shift and only rewraps when it must (main.js
+ * keeps the reading position across that). Below the breakpoint the panel
+ * floats over the text as before. `DOCKED_TOC_QUERY` in main.js mirrors this
+ * media query. No transition on the padding: animating it would reflow the
+ * whole document every frame. */
+@media (min-width: 900px) {
+  body:has(.toc-panel:not(.hidden)) #reader {
+    padding-left: calc(min(360px, 92vw) + var(--reader-gutter));
+  }
+}
+
 .toc-panel:not(.hidden) {
   animation: toc-panel-in 180ms cubic-bezier(0.2, 0.75, 0.25, 1);
 }
