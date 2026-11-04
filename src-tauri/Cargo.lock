@@ -964,7 +964,7 @@ checksum = "4ef6b89e5b37196644d8796de5268852ff179b44e96276cf4290264843743bb7"
 
 [[package]]
 name = "emede"
-version = "0.2.17"
+version = "0.3.0"
 dependencies = [
  "ammonia",
  "base64 0.23.1",
