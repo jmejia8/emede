@@ -1,0 +1,27 @@
+stateDiagram-v2
+    [*] --> Hidden
+    Hidden --> Loading : open file
+    state Loading {
+        [*] --> Rendering
+        Rendering --> Typesetting : HTML ready
+        state fork_state <<fork>>
+        Typesetting --> fork_state
+        fork_state --> MathJax
+        fork_state --> Mermaid
+        state join_state <<join>>
+        MathJax --> join_state
+        Mermaid --> join_state
+        join_state --> [*]
+    }
+    Loading --> Visible : first frame painted
+    Visible --> Watching
+    state changed <<choice>>
+    Watching --> changed : file event
+    changed --> Loading : content differs
+    changed --> Watching : mtime only
+    Visible --> Printing : --print
+    Printing --> [*] : PDF written
+    note right of Visible
+        revealWindow() calls show()
+        only after the theme is applied
+    end note

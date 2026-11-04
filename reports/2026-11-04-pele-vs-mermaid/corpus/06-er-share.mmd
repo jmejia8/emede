@@ -1,0 +1,36 @@
+erDiagram
+    INSTANCE ||--o{ SHARED_NOTE : serves
+    INSTANCE {
+        int pid PK
+        int port
+        string auth_key
+        datetime started
+    }
+    SHARED_NOTE ||--|| ROUTE : "keyed by"
+    SHARED_NOTE {
+        string hash PK
+        string path
+        int instance_pid FK
+    }
+    ROUTE {
+        string hash PK
+        string canonical_path UK
+        datetime created
+    }
+    SHARED_NOTE }o--o{ IMAGE : inlines
+    IMAGE {
+        string abs_path PK
+        string mime
+        int bytes
+    }
+    DOCUMENT ||--o| VIEW_STATE : remembers
+    DOCUMENT ||--o{ SHARED_NOTE : "published as"
+    DOCUMENT {
+        string path PK
+        string baseline_oid
+    }
+    VIEW_STATE {
+        string path PK, FK
+        float scroll
+        string open_sections
+    }

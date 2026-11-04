@@ -210,8 +210,8 @@ Beside other text, the same image stays inline, like this
 
 ## Mermaid diagrams
 
-Mermaid fenced blocks are replaced with diagrams when Mermaid is enabled in
-Settings.
+Mermaid fenced blocks are drawn as diagrams (by Pele, in the page's colors)
+when Diagrams is enabled in Settings.
 
 ```mermaid
 flowchart LR

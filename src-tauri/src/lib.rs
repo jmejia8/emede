@@ -117,7 +117,8 @@ FEATURES:
                  default: Settings > Change highlighting. Reader only, never in
                  --share, --export or --print.
     Math         MathJax 4: TeX with AMS environments and \\newcommand.
-    Diagrams     Mermaid 11, themed to match the page, with a zoom viewer.
+    Diagrams     Mermaid syntax drawn by Pele, in the page's colors, with a
+                 zoom viewer.
     Code         highlight.js with 30 themes and a copy button.
     Reading      Contents panel, search, statistics, sortable table viewer,
                  image zoom, and Vim, Emacs or Common keybindings.
@@ -132,7 +133,8 @@ MARKDOWN SYNTAX (CommonMark via comrak):
     Images       ![alt](a.png \"caption\") alone on a line becomes a captioned
                  figure.
     Math         Inline $x$ \\(x\\) $`x`$; display $$x$$ \\[x\\] and ```math fences.
-    Diagrams     ```mermaid fences.
+    Diagrams     ```mermaid fences (every Mermaid 12.1 type but ZenUML; a
+                 diagram's own theme is ignored, the page's colors win).
     Code         ```lang fences are highlighted; unlabeled fences stay plain.
     Links        Relative .md links open in emede; headings get #slug anchors.
                  [[page]] and [[page|title]] link to page.md.
@@ -149,7 +151,7 @@ NOTES:
     Ctrl+C; run them in the background from a script.
 
     The reader works offline. --share and --export pages inline images but load
-    MathJax, Mermaid and highlight.js from a CDN, so math, diagrams and code
+    MathJax, Pele and highlight.js from a CDN, so math, diagrams and code
     colors need internet access to render in a browser.
 
     --check-update queries the GitHub releases API and never installs anything.

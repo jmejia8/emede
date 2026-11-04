@@ -9,7 +9,7 @@
  *
  * Which images qualify is decided at hover time, so a resize or a font/margin
  * change needs no bookkeeping:
- *   - every Mermaid diagram and every SVG image, since vectors always reward zoom
+ *   - every diagram and every SVG image, since vectors always reward zoom
  *   - a bitmap only when it is shown below its natural size, or does not fit
  *     in the window. One at 100% or more that fits gets nothing.
  *
@@ -93,10 +93,10 @@ export function createImageZoom({ contentEl }) {
   /** The element a pointer event is over, if it is a zoom candidate at all. */
   function candidateFrom(node) {
     if (!(node instanceof Element) || !contentEl.contains(node)) return null;
-    const mermaid = node.closest(".mermaid");
-    if (mermaid) {
-      const svg = mermaid.querySelector(":scope > svg");
-      return svg ? { kind: "mermaid", el: svg, box: mermaid } : null;
+    const diagram = node.closest(".diagram");
+    if (diagram) {
+      const svg = diagram.querySelector(":scope > svg");
+      return svg ? { kind: "diagram", el: svg, box: diagram } : null;
     }
     const img = node.closest("img");
     if (img && img.closest(".prose") && !img.closest(".image-fallback")) {
@@ -106,7 +106,7 @@ export function createImageZoom({ contentEl }) {
   }
 
   function isEligible(candidate) {
-    if (candidate.kind === "mermaid") return true;
+    if (candidate.kind === "diagram") return true;
     const img = candidate.el;
     if (!img.complete || img.naturalWidth === 0) return false;
     if (isSvgImageSrc(img.getAttribute("src"))) return true;
@@ -344,7 +344,7 @@ export function createImageZoom({ contentEl }) {
     setView(fitView());
   }
 
-  function buildMermaid(source) {
+  function buildDiagram(source) {
     const clone = source.cloneNode(true);
     const vb = source.viewBox?.baseVal;
     let w = vb?.width;
@@ -358,8 +358,10 @@ export function createImageZoom({ contentEl }) {
     // Normalise to a 0,0 origin so the content box is simply (0, 0, w, h).
     const ox = vb?.width ? vb.x : 0;
     const oy = vb?.height ? vb.y : 0;
-    // The clone keeps its id: mermaid scopes its embedded <style> by it.
-    clone.removeAttribute("style");
+    // The inline style stays: Pele declares the diagram's color variables
+    // there. Only its responsive sizing goes, which would fight the viewBox.
+    clone.style.removeProperty("max-width");
+    clone.style.removeProperty("height");
     clone.setAttribute("x", "0");
     clone.setAttribute("y", "0");
     clone.setAttribute("width", String(w));
@@ -389,7 +391,7 @@ export function createImageZoom({ contentEl }) {
   }
 
   function open(candidate) {
-    const built = candidate.kind === "mermaid" ? buildMermaid(candidate.el) : buildImage(candidate.el);
+    const built = candidate.kind === "diagram" ? buildDiagram(candidate.el) : buildImage(candidate.el);
     hideHoverButton();
     stage.replaceChildren(built.root);
     svg = built.root;

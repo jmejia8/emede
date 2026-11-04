@@ -71,10 +71,12 @@ pub struct Settings {
     /// Brysbaert's 2019 meta-analysis.
     #[serde(default = "default_reading_wpm")]
     pub reading_wpm: u32,
+    /// Draw ```mermaid fences as diagrams (with Pele); off shows their source.
+    /// The key keeps its old name so existing settings files carry over.
     #[serde(default = "default_mermaid_diagrams")]
     pub mermaid_diagrams: bool,
     /// Ask GitHub once a day whether a newer release exists. emede is otherwise
-    /// fully offline (MathJax and Mermaid are vendored), so this is the only
+    /// fully offline (MathJax and Pele are vendored), so this is the only
     /// request the app makes on its own — hence a setting, disclosed in About,
     /// rather than a silent behavior. It only ever reports; it never installs.
     #[serde(default = "default_update_check")]

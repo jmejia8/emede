@@ -1,0 +1,6 @@
+artifact,raw_bytes,gzip_bytes
+mermaid/dist/mermaid.min.js,5537838,1581915
+pele/dist/pele.global.js,733670,274703
+pele/dist/esm/core.js,289,212
+pele/dist/esm (all chunks),750850,284573
+emede src/vendor/mermaid (shipped),5537838,

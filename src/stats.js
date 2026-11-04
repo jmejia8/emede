@@ -16,7 +16,7 @@ const PROSE_BLOCKS = "p, li, dt, dd, figcaption, blockquote, h1, h2, h3, h4, h5,
 /// Removed before prose is measured. `pre.plain-text` is deliberately spared:
 /// emede wraps whole .txt documents in it, and that text really is the prose.
 const NON_PROSE =
-  "pre:not(.plain-text), .emede-properties, table, .mermaid, mjx-container, .katex, .image-fallback, " +
+  "pre:not(.plain-text), .emede-properties, table, .diagram, mjx-container, .katex, .image-fallback, " +
   ".markdown-alert-title, .footnote-ref, .footnote-backref";
 
 /// Words per minute used when no reading speed is configured. From Brysbaert
@@ -91,7 +91,7 @@ function ownText(el) {
   return copy.textContent;
 }
 
-/// Measure the rendered document. Call this before MathJax and Mermaid run,
+/// Measure the rendered document. Call this before MathJax and the diagrams run,
 /// while the DOM still holds the plain rendering.
 function proseStats(contentEl) {
   const clone = contentEl.cloneNode(true);
@@ -132,7 +132,7 @@ function elementStats(contentEl) {
     "pre:not(.plain-text) > code:not(.language-mermaid)",
   ).length;
   const diagrams = contentEl.querySelectorAll(
-    "pre > code.language-mermaid, .mermaid",
+    "pre > code.language-mermaid, .diagram",
   ).length;
   return {
     codeBlocks,

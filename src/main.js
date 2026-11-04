@@ -17,6 +17,7 @@ import { createLinkPreview } from "./linkpreview.js";
 import { createTableView } from "./tableview.js";
 import { getScrollRoot } from "./scroll.js";
 import { highlightCode } from "./syntax.js";
+import { refreshDiagrams, renderDiagrams, restoreDiagramSources } from "./diagrams.js";
 import { createImportedList } from "./importedlist.js";
 import {
   applySyntaxTheme,
@@ -338,7 +339,7 @@ const settingZoom = document.getElementById("setting-zoom");
 const settingKeybindings = new RadioGroup(document.getElementById("setting-keybindings"));
 const settingGpu = document.getElementById("setting-gpu");
 const settingJustify = document.getElementById("setting-justify");
-const settingMermaid = document.getElementById("setting-mermaid");
+const settingDiagrams = document.getElementById("setting-diagrams");
 const settingUpdateCheck = document.getElementById("setting-update-check");
 const settingChanges = document.getElementById("setting-changes");
 const settingReadingWpm = document.getElementById("setting-reading-wpm");
@@ -801,7 +802,7 @@ function applySettings(settings) {
   renderKeybindingHelp(keybindingsHelp, settings.keybindings);
   settingGpu.checked = settings.gpu_acceleration;
   settingJustify.checked = settings.justify_text;
-  settingMermaid.checked = settings.mermaid_diagrams ?? true;
+  settingDiagrams.checked = settings.mermaid_diagrams ?? true;
   settingUpdateCheck.checked = settings.update_check ?? true;
   settingChanges.checked = settings.change_highlighting ?? false;
   const wpm = Number(settings.reading_wpm) > 0 ? Number(settings.reading_wpm) : DEFAULT_READING_WPM;
@@ -817,7 +818,7 @@ function applySettings(settings) {
   if (!docStats.hidden) buildStats();
   void applyWindowFrame(settings.window_frame);
   if (!printing) applyUiZoom(uiZoom);
-  scheduleMermaid();
+  syncDiagrams();
 }
 
 function settingsFromForm() {
@@ -839,7 +840,7 @@ function settingsFromForm() {
     gpu_acceleration: settingGpu.checked,
     justify_text: settingJustify.checked,
     reading_wpm: Number(settingReadingWpm.value) || DEFAULT_READING_WPM,
-    mermaid_diagrams: settingMermaid.checked,
+    mermaid_diagrams: settingDiagrams.checked,
     update_check: settingUpdateCheck.checked,
     change_highlighting: settingChanges.checked,
     share_username: shareUsername.value.trim(),
@@ -952,7 +953,7 @@ let printing = false;
 
 // Must match the `.prose.skip-offscreen > :is(…)` rule in styles.css.
 const SKIPPABLE_BLOCKS =
-  ":scope > :is(p, ul, ol, dl, blockquote, pre, table, figure, details, .table-wrapper, .mermaid)";
+  ":scope > :is(p, ul, ol, dl, blockquote, pre, table, figure, details, .table-wrapper, .diagram)";
 
 /**
  * Give every skippable block a placeholder equal to its real content height.
@@ -985,8 +986,8 @@ function pinIntrinsicSizes() {
  * measured heights (`pinIntrinsicSizes`), but the reader is still held by
  * heading anchor across the switch, not by pixel offset.
  *
- * Callers must have let MathJax and Mermaid finish first — both measure the box
- * they render into, and a skipped box has no width to read.
+ * Callers must have let MathJax and the diagrams finish first — both measure
+ * the box they render into, and a skipped box has no width to read.
  */
 async function enableOffscreenSkipping(openToken) {
   if (!SUPPORTS_OFFSCREEN_SKIP || !offscreenSkipAllowed) return;
@@ -1001,9 +1002,9 @@ async function enableOffscreenSkipping(openToken) {
   applyViewState(scrollRoot, contentEl, here);
 }
 
-/** Render the regions MathJax and Mermaid own, then hand the rest to the browser. */
+/** Render the regions MathJax and the diagrams own, then hand the rest to the browser. */
 async function renderDynamicRegions(openToken) {
-  await Promise.allSettled([renderMermaid(), typesetMath()]);
+  await Promise.allSettled([renderDiagramFences(), typesetMath()]);
   if (openToken !== undefined && openToken !== activeOpenToken) return;
   await enableOffscreenSkipping(openToken);
 }
@@ -1030,220 +1031,32 @@ async function withRealBoxes(fn) {
   }
 }
 
-let mermaidScriptLoaded = false;
 let codeCopy = null;
 let imageZoom = null;
 let tableView = null;
 let linkPreview = null;
 
-async function ensureMermaidLoaded() {
-  if (window.mermaid) return true;
-  if (mermaidScriptLoaded) {
-    const deadline = Date.now() + 5000;
-    while (!window.mermaid && Date.now() < deadline) {
-      await new Promise((r) => setTimeout(r, 50));
-    }
-    return !!window.mermaid;
-  }
-  mermaidScriptLoaded = true;
-  return new Promise((resolve) => {
-    const script = document.createElement("script");
-    script.src = "/vendor/mermaid/mermaid.min.js";
-    script.onload = () => resolve(true);
-    script.onerror = () => {
-      mermaidScriptLoaded = false;
-      console.warn("Failed to load Mermaid");
-      resolve(false);
-    };
-    document.head.appendChild(script);
-  });
-}
-
-// Resolve any CSS color (hex, rgb, hsl, color-mix(...)) to a plain "rgb(r, g, b)"
-// string by painting it onto a 1x1 canvas and reading the pixel back. Mermaid's
-// color parser only understands plain color values, not modern CSS functions.
-const paletteCanvas = document.createElement("canvas");
-paletteCanvas.width = paletteCanvas.height = 1;
-const paletteCtx = paletteCanvas.getContext("2d", { willReadFrequently: true });
-function resolveRgb(value) {
-  if (!paletteCtx || !value) return null;
-  paletteCtx.clearRect(0, 0, 1, 1);
-  paletteCtx.fillStyle = "#000";
-  paletteCtx.fillStyle = value;
-  paletteCtx.fillRect(0, 0, 1, 1);
-  const [r, g, b] = paletteCtx.getImageData(0, 0, 1, 1).data;
-  return { r, g, b, css: `rgb(${r}, ${g}, ${b})` };
-}
-
-// Build a distinct multi-color palette (pie slices, cScale, etc.) that reads on
-// the current theme background. Hues are spread by the golden angle so adjacent
-// entries stay visually separated; saturation is kept low and each color is
-// blended toward the background so the palette feels muted and on-theme rather
-// than neon-bright.
-function autoPalette(count, bgRgb, dark) {
-  const sat = 38;
-  const light = dark ? 58 : 52;
-  const blend = 0.28; // mix toward background to harmonize with the theme
-  const out = [];
-  for (let i = 0; i < count; i++) {
-    const hue = Math.round((i * 137.5) % 360);
-    const c = resolveRgb(`hsl(${hue}, ${sat}%, ${light}%)`);
-    if (!c) {
-      out.push(`hsl(${hue}, ${sat}%, ${light}%)`);
-      continue;
-    }
-    if (bgRgb) {
-      const r = Math.round(c.r * (1 - blend) + bgRgb.r * blend);
-      const g = Math.round(c.g * (1 - blend) + bgRgb.g * blend);
-      const b = Math.round(c.b * (1 - blend) + bgRgb.b * blend);
-      out.push(`rgb(${r}, ${g}, ${b})`);
-    } else {
-      out.push(c.css);
-    }
-  }
-  return out;
-}
-
-async function renderMermaid() {
-  if (!currentSettings?.mermaid_diagrams) return;
-  const blocks = contentEl.querySelectorAll("pre > code.language-mermaid");
-  const rendered = contentEl.querySelectorAll("div.mermaid[data-mermaid-source]");
-  if (blocks.length === 0 && rendered.length === 0) return;
-
-  const loaded = await ensureMermaidLoaded();
-  if (!loaded || !window.mermaid) return;
-
-  const style = getComputedStyle(document.documentElement);
-  const get = (v) => style.getPropertyValue(v).trim();
-  const fontFamily = get("--font-serif");
-  const fg = get("--color-fg");
-  const bg = get("--color-bg");
-  const border = get("--color-border");
-  const codeBg = get("--color-code-bg");
-  const link = get("--color-link");
-  const title = get("--color-title") || fg;
-  const bgRgb = resolveRgb(bg);
-  const dark = bgRgb
-    ? (0.2126 * bgRgb.r + 0.7152 * bgRgb.g + 0.0722 * bgRgb.b) / 255 < 0.5
-    : true;
-  const palette = autoPalette(12, bgRgb, dark);
-  const paletteVars = {};
-  palette.forEach((c, i) => {
-    paletteVars["pie" + (i + 1)] = c;
-    paletteVars["cScale" + i] = c;
-  });
-  window.mermaid.initialize({
-    startOnLoad: false,
-    // Mermaid 12 defaults to the ELK layout and the "neo" look; keep the
-    // dagre/classic rendering diagrams had before (front matter can override).
-    layout: "dagre",
-    look: "classic",
-    theme: "base",
-    themeVariables: {
-      fontFamily: fontFamily || undefined,
-      ...paletteVars,
-      // pie chart: colorful slices with themed strokes and text
-      pieStrokeColor: border || fg,
-      pieOuterStrokeColor: border || fg,
-      pieSectionTextColor: fg,
-      pieTitleTextColor: title,
-      pieOpacity: 1,
-      background: bg,
-      primaryColor: codeBg,
-      primaryTextColor: fg,
-      primaryBorderColor: fg,
-      secondaryColor: codeBg,
-      tertiaryColor: bg,
-      lineColor: fg,
-      mainBkg: codeBg,
-      nodeBorder: fg,
-      clusterBkg: codeBg,
-      clusterBorder: fg,
-      titleColor: title,
-      edgeLabelBackground: bg,
-      nodeTextColor: fg,
-      labelColor: fg,
-      // sequence diagrams
-      actorBkg: codeBg,
-      actorBorder: fg,
-      actorTextColor: fg,
-      actorLineColor: fg,
-      signalColor: fg,
-      signalTextColor: fg,
-      labelBoxBkgColor: codeBg,
-      labelBoxBorderColor: fg,
-      labelTextColor: fg,
-      loopTextColor: fg,
-      noteBkgColor: codeBg,
-      noteBorderColor: fg,
-      noteTextColor: fg,
-      activationBkgColor: codeBg,
-      activationBorderColor: fg,
-      // links
-      linkColor: link,
-    },
-  });
-
-  const nodes = [];
-  for (const code of blocks) {
-    const pre = code.parentElement;
-    const div = document.createElement("div");
-    div.className = "mermaid";
-    div.dataset.mermaidSource = code.textContent;
-    div.textContent = code.textContent;
-    pre.replaceWith(div);
-    nodes.push(div);
-  }
-  nodes.push(...rendered);
-
-  await runMermaidOutsideSheet(nodes);
+async function renderDiagramFences() {
+  if (!(currentSettings?.mermaid_diagrams ?? true)) return;
+  await renderDiagrams(contentEl);
 }
 
 /**
- * Mermaid sizes every shape from `getBoundingClientRect` of its label, which
- * includes ancestor transforms. Inside the zoomed page sheet that returns
- * zoomed pixels while the label itself is laid out unzoomed, so the boxes come
- * out too big by the zoom factor with the text stuck in their corner.
- *
- * So it renders copies in a hidden host outside the sheet, with the content's
- * classes (`.prose` rules reach the labels) and its layout width (gantt fills
- * the box it renders in), and the finished nodes move into the document. A
- * re-render keeps showing the old diagram until the new one is ready.
+ * Bring the diagrams in line with the settings: switching them off puts the
+ * fences back, and a font or size change re-lays them out. A color change
+ * needs nothing (they read the page's colors through CSS variables).
  */
-async function runMermaidOutsideSheet(nodes) {
-  const host = document.createElement("div");
-  host.className = contentEl.className;
-  host.classList.remove("skip-offscreen");
-  host.classList.add("mermaid-render-host");
-  // The computed width is layout pixels, which the transform leaves alone.
-  host.style.width = getComputedStyle(contentEl).width;
-
-  const copies = nodes.map((div) => {
-    const copy = document.createElement("div");
-    copy.className = "mermaid";
-    copy.textContent = div.dataset.mermaidSource;
-    return copy;
-  });
-  host.append(...copies);
-  readerEl.append(host);
-
-  try {
-    await window.mermaid.run({ nodes: copies });
-  } catch (err) {
-    console.warn("Mermaid rendering failed", err);
+function syncDiagrams() {
+  if (!(currentSettings?.mermaid_diagrams ?? true)) {
+    restoreDiagramSources(contentEl);
+    return;
   }
-
-  // Moved rather than serialized: a failed diagram leaves its error graphic
-  // here too, and the click handlers Mermaid bound stay attached.
-  nodes.forEach((div, i) => {
-    div.replaceChildren(...copies[i].childNodes);
-    div.dataset.processed = "true";
-  });
-  host.remove();
-}
-
-function scheduleMermaid() {
-  void withRealBoxes(renderMermaid);
+  refreshDiagrams(contentEl);
+  // Switched back on: draw the fences, with every block laid out for real so
+  // the skipping placeholders are measured from the finished diagrams.
+  if (contentEl.querySelector("pre > code.language-mermaid")) {
+    void withRealBoxes(renderDiagramFences);
+  }
 }
 
 function isRemoteUrl(src) {
@@ -1334,7 +1147,7 @@ async function restoreSavedViewState(viewState, openToken) {
   applyViewState(scrollRoot, contentEl, viewState);
 
   const scrollBeforeMath = scrollRoot.scrollTop;
-  await Promise.allSettled([renderMermaid(), typesetMath()]);
+  await Promise.allSettled([renderDiagramFences(), typesetMath()]);
   if (openToken !== undefined && openToken !== activeOpenToken) return;
 
   if (scrollRoot.scrollTop === scrollBeforeMath) {
@@ -1387,7 +1200,7 @@ async function applyDocument(result, { reload = false, openToken } = {}) {
     window.MathJax.typesetClear([contentEl, tocList]);
   }
 
-  // Measurement first: MathJax, Mermaid, the contents panel and the stats all
+  // Measurement first: MathJax, the diagrams, the contents panel and the stats all
   // read real boxes. `renderDynamicRegions` puts skipping back on afterwards.
   contentEl.classList.remove("skip-offscreen");
   contentEl.innerHTML = result.html;
@@ -1399,7 +1212,7 @@ async function applyDocument(result, { reload = false, openToken } = {}) {
   linkPreview?.hide();
   rewriteLocalImageSrcs(contentEl);
   wrapTables(contentEl);
-  // Before the contents panel is built and before math and mermaid replace
+  // Before the contents panel is built and before math and diagrams replace
   // their regions, while the DOM still matches what the backend diffed.
   applyChanges(contentEl, currentDocChanges);
   // Colors only, never geometry, so nothing that measures has to wait for it.
@@ -3158,7 +2971,7 @@ function wireSettings() {
   });
 
   settingJustify.addEventListener("input", scheduleSave);
-  settingMermaid.addEventListener("input", scheduleSave);
+  settingDiagrams.addEventListener("input", scheduleSave);
   settingUpdateCheck.addEventListener("input", scheduleSave);
 
   settingChanges.addEventListener("input", () => {
@@ -3654,11 +3467,12 @@ async function boot() {
       setReaderState("loading");
       await openFile(startupFile);
       // The render pipeline schedules these asynchronously; await them explicitly
-      // so the PDF isn't captured mid-typeset. All are idempotent. Mermaid can
-      // inject content, so re-typeset math afterward.
-      await typesetMath();
-      await renderMermaid();
-      await typesetMath();
+      // so the PDF isn't captured mid-typeset. All are idempotent. Diagram
+      // labels are measured, so they are laid out again once the web fonts
+      // have arrived (Pele would do it on its own, but not before we print).
+      await Promise.allSettled([renderDiagramFences(), typesetMath()]);
+      await document.fonts?.ready;
+      refreshDiagrams(contentEl);
       await highlightCode(contentEl);
       await syntaxThemeSettled();
       await nextFrame();

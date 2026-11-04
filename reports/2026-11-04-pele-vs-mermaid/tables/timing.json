@@ -1,0 +1,130 @@
+{
+  "metric": "time_ms",
+  "direction": "minimize",
+  "reference": "Pele",
+  "alpha": 0.05,
+  "runs_per_cell": [
+    30
+  ],
+  "pairwise_test": "Wilcoxon rank-sum (Mann-Whitney U)",
+  "n_algorithms": 2,
+  "n_instances": 14,
+  "avg_rank": {
+    "Pele": 1.0,
+    "Mermaid": 2.0
+  },
+  "pairwise": [
+    {
+      "instance": "01-flowchart-bilevel",
+      "algorithm": "Mermaid",
+      "reference": "Pele",
+      "p_value": 3.002865221010998e-11,
+      "a12_vs_reference": 0.0,
+      "marker": "−"
+    },
+    {
+      "instance": "02-flowchart-pipeline",
+      "algorithm": "Mermaid",
+      "reference": "Pele",
+      "p_value": 3.006634138511715e-11,
+      "a12_vs_reference": 0.0,
+      "marker": "−"
+    },
+    {
+      "instance": "03-sequence-share",
+      "algorithm": "Mermaid",
+      "reference": "Pele",
+      "p_value": 3.000982378980083e-11,
+      "a12_vs_reference": 0.0,
+      "marker": "−"
+    },
+    {
+      "instance": "04-class-metaheuristics",
+      "algorithm": "Mermaid",
+      "reference": "Pele",
+      "p_value": 3.004749140670014e-11,
+      "a12_vs_reference": 0.0,
+      "marker": "−"
+    },
+    {
+      "instance": "05-state-render",
+      "algorithm": "Mermaid",
+      "reference": "Pele",
+      "p_value": 3.0141849228072565e-11,
+      "a12_vs_reference": 0.0,
+      "marker": "−"
+    },
+    {
+      "instance": "06-er-share",
+      "algorithm": "Mermaid",
+      "reference": "Pele",
+      "p_value": 2.984085202574315e-11,
+      "a12_vs_reference": 0.0,
+      "marker": "−"
+    },
+    {
+      "instance": "07-gantt-paper",
+      "algorithm": "Mermaid",
+      "reference": "Pele",
+      "p_value": 2.952404922596988e-11,
+      "a12_vs_reference": 0.0,
+      "marker": "−"
+    },
+    {
+      "instance": "08-gitgraph-release",
+      "algorithm": "Mermaid",
+      "reference": "Pele",
+      "p_value": 2.967274866039994e-11,
+      "a12_vs_reference": 0.0,
+      "marker": "−"
+    },
+    {
+      "instance": "09-mindmap-research",
+      "algorithm": "Mermaid",
+      "reference": "Pele",
+      "p_value": 2.95425994015416e-11,
+      "a12_vs_reference": 0.0,
+      "marker": "−"
+    },
+    {
+      "instance": "10-timeline-ec",
+      "algorithm": "Mermaid",
+      "reference": "Pele",
+      "p_value": 2.9878326118129625e-11,
+      "a12_vs_reference": 0.0,
+      "marker": "−"
+    },
+    {
+      "instance": "11-xychart-convergence",
+      "algorithm": "Mermaid",
+      "reference": "Pele",
+      "p_value": 2.9728686875000726e-11,
+      "a12_vs_reference": 0.0,
+      "marker": "−"
+    },
+    {
+      "instance": "12-quadrant-algorithms",
+      "algorithm": "Mermaid",
+      "reference": "Pele",
+      "p_value": 2.941297115794813e-11,
+      "a12_vs_reference": 0.0,
+      "marker": "−"
+    },
+    {
+      "instance": "13-sankey-budget",
+      "algorithm": "Mermaid",
+      "reference": "Pele",
+      "p_value": 2.967274866039994e-11,
+      "a12_vs_reference": 0.0,
+      "marker": "−"
+    },
+    {
+      "instance": "14-pie-time",
+      "algorithm": "Mermaid",
+      "reference": "Pele",
+      "p_value": 2.957973165702965e-11,
+      "a12_vs_reference": 0.0,
+      "marker": "−"
+    }
+  ]
+}

@@ -1648,7 +1648,7 @@ pub fn get_note_share_info(
 }
 
 /// Content-Security-Policy applied to every served page. The shared pages use
-/// inline `<script>`/`<style>` and pull MathJax + Mermaid from jsDelivr; the
+/// inline `<script>`/`<style>` and pull MathJax, Pele and highlight.js from jsDelivr; the
 /// home page additionally uses Google Fonts. Everything else is denied.
 const SHARED_CSP: &str = "default-src 'none'; \
 script-src 'unsafe-inline' https://cdn.jsdelivr.net; \
@@ -2082,7 +2082,31 @@ const SHARED_PAGE_TEMPLATE: &str = r##"<!doctype html>
   .prose th, .prose td { border: 1px solid var(--color-border); padding: 0.4em 0.7em; }
   .prose th { font-family: var(--font-title); color: var(--color-title); }
   .prose hr { border: none; border-top: 1px solid var(--color-border); }
-  .prose .mermaid { text-align: center; }
+  .prose .diagram { text-align: center; margin: 1.5em 0; line-height: normal; }
+  .prose .diagram > svg { display: inline-block; vertical-align: top; }
+  /* Diagram colors from the page's tokens, as in the app (`styles.css`). */
+  :root {
+    --pele-bg: var(--color-bg);
+    --pele-fg: var(--color-fg);
+    --pele-muted: color-mix(in srgb, var(--color-fg) 62%, var(--color-bg));
+    --pele-line: color-mix(in srgb, var(--color-fg) 78%, var(--color-bg));
+    --pele-surface: var(--color-code-bg);
+    --pele-surface-alt: color-mix(in srgb, var(--color-fg) 6%, var(--color-code-bg));
+    --pele-border: color-mix(in srgb, var(--color-fg) 42%, var(--color-bg));
+    --pele-accent: var(--color-link);
+    --pele-critical: color-mix(in oklab, #d1495b 72%, var(--color-fg));
+    --pele-error: var(--pele-critical);
+    --pele-font: var(--font-serif);
+    --pele-font-mono: var(--font-code);
+    --pele-series-1: color-mix(in oklab, #4c78a8 60%, var(--color-fg));
+    --pele-series-2: color-mix(in oklab, #f58518 60%, var(--color-fg));
+    --pele-series-3: color-mix(in oklab, #54a24b 60%, var(--color-fg));
+    --pele-series-4: color-mix(in oklab, #e45756 60%, var(--color-fg));
+    --pele-series-5: color-mix(in oklab, #72b7b2 60%, var(--color-fg));
+    --pele-series-6: color-mix(in oklab, #c9a227 60%, var(--color-fg));
+    --pele-series-7: color-mix(in oklab, #b279a2 60%, var(--color-fg));
+    --pele-series-8: color-mix(in oklab, #9d755d 60%, var(--color-fg));
+  }
   {{SYNTAX_CSS}}
 
   .share-footer {
@@ -2202,135 +2226,50 @@ const SHARED_PAGE_TEMPLATE: &str = r##"<!doctype html>
     fg.addEventListener("input", function () {
       applyFg(fg.value);
       localStorage.setItem("emede-share-fg", fg.value);
-      renderMermaid();
     });
     bg.addEventListener("input", function () {
       applyBg(bg.value);
       localStorage.setItem("emede-share-bg", bg.value);
-      renderMermaid();
     });
     size.addEventListener("input", function () {
       applySize(size.value);
       localStorage.setItem("emede-share-size", size.value);
+      resizeDiagrams();
     });
     width.addEventListener("input", function () {
       applyWidth(width.value);
       localStorage.setItem("emede-share-width", width.value);
     });
 
-    var mermaidLib = null;
-    // Custom properties read back as their literal source text, so a value like
-    // color-mix(...) reaches Mermaid unresolved and its color parser throws.
-    // Paint the value onto a 1x1 canvas and read the pixel back. This forces the
-    // browser to resolve any modern syntax (color-mix(), color(srgb ...), etc.)
-    // down to plain 0-255 RGBA that Mermaid's color parser understands.
-    var probeCanvas = document.createElement("canvas");
-    probeCanvas.width = 1;
-    probeCanvas.height = 1;
-    var probeCtx = probeCanvas.getContext("2d");
-    function resolveColor(value) {
-      if (!probeCtx) return value;
-      probeCtx.clearRect(0, 0, 1, 1);
-      probeCtx.fillStyle = "#000";
-      probeCtx.fillStyle = value;
-      probeCtx.fillRect(0, 0, 1, 1);
-      var d = probeCtx.getImageData(0, 0, 1, 1).data;
-      return "rgb(" + d[0] + ", " + d[1] + ", " + d[2] + ")";
+    // Diagrams, as in the app (`src/diagrams.js`): ```mermaid fences drawn by
+    // Pele. Colors come from the --pele-* variables above, so the Text and
+    // Background pickers restyle them with no re-render; only the size does.
+    var diagrams = [];
+    function diagramOptions() {
+      var px = parseFloat(getComputedStyle(document.querySelector(".prose")).fontSize);
+      return { zoom: false, fontSize: px > 0 ? px : 16, linkRel: "noopener noreferrer" };
     }
-    function resolveRgbData(value) {
-      if (!probeCtx) return null;
-      probeCtx.clearRect(0, 0, 1, 1);
-      probeCtx.fillStyle = "#000";
-      probeCtx.fillStyle = value;
-      probeCtx.fillRect(0, 0, 1, 1);
-      return probeCtx.getImageData(0, 0, 1, 1).data;
-    }
-    // Distinct multi-color palette (pie slices, cScale) tuned for the theme bg.
-    // Low saturation + a blend toward the background keep it muted and on-theme.
-    function autoPalette(count, bgData, dark) {
-      var sat = 38;
-      var light = dark ? 58 : 52;
-      var blend = 0.28;
-      var out = [];
-      for (var i = 0; i < count; i++) {
-        var hue = Math.round((i * 137.5) % 360);
-        var c = resolveRgbData("hsl(" + hue + ", " + sat + "%, " + light + "%)");
-        if (!c || !bgData) {
-          out.push(resolveColor("hsl(" + hue + ", " + sat + "%, " + light + "%)"));
-          continue;
-        }
-        var r = Math.round(c[0] * (1 - blend) + bgData[0] * blend);
-        var g = Math.round(c[1] * (1 - blend) + bgData[1] * blend);
-        var b = Math.round(c[2] * (1 - blend) + bgData[2] * blend);
-        out.push("rgb(" + r + ", " + g + ", " + b + ")");
-      }
-      return out;
-    }
-    function renderMermaid() {
-      var blocks = document.querySelectorAll("pre > code.language-mermaid, div.mermaid[data-src]");
-      if (!blocks.length || !mermaidLib) return;
-      var style = getComputedStyle(root);
-      var fgc = resolveColor(style.getPropertyValue("--color-fg").trim());
-      var bgc = resolveColor(style.getPropertyValue("--color-bg").trim());
-      var codeBg = resolveColor(style.getPropertyValue("--color-code-bg").trim());
-      var link = resolveColor(style.getPropertyValue("--color-link").trim());
-      var bgData = resolveRgbData(style.getPropertyValue("--color-bg").trim());
-      var dark = bgData
-        ? (0.2126 * bgData[0] + 0.7152 * bgData[1] + 0.0722 * bgData[2]) / 255 < 0.5
-        : true;
-      var palette = autoPalette(12, bgData, dark);
-      var themeVars = {
-        background: bgc,
-        primaryColor: codeBg,
-        primaryTextColor: fgc,
-        primaryBorderColor: fgc,
-        lineColor: fgc,
-        mainBkg: codeBg,
-        nodeBorder: fgc,
-        nodeTextColor: fgc,
-        labelColor: fgc,
-        edgeLabelBackground: bgc,
-        linkColor: link,
-        pieStrokeColor: fgc,
-        pieOuterStrokeColor: fgc,
-        pieSectionTextColor: fgc,
-        pieTitleTextColor: fgc,
-        pieOpacity: 1,
-      };
-      for (var p = 0; p < palette.length; p++) {
-        themeVars["pie" + (p + 1)] = palette[p];
-        themeVars["cScale" + p] = palette[p];
-      }
-      mermaidLib.initialize({
-        startOnLoad: false,
-        // Same as the app (`src/main.js`): keep Mermaid 11's layout and look.
-        layout: "dagre",
-        look: "classic",
-        theme: "base",
-        themeVariables: themeVars,
-      });
-      var nodes = [];
+    function renderDiagrams() {
+      if (!window.pele) return;
+      var options = diagramOptions();
       document.querySelectorAll("pre > code.language-mermaid").forEach(function (code) {
         var div = document.createElement("div");
-        div.className = "mermaid";
-        div.dataset.src = code.textContent;
-        div.textContent = code.textContent;
+        div.className = "diagram mathjax_ignore";
+        var source = code.textContent;
         code.parentElement.replaceWith(div);
-        nodes.push(div);
+        try { diagrams.push(window.pele.mount(div, source, options)); }
+        catch (e) { console.warn(e); }
       });
-      document.querySelectorAll("div.mermaid[data-src]").forEach(function (div) {
-        if (nodes.indexOf(div) !== -1) return;
-        div.removeAttribute("data-processed");
-        div.textContent = div.dataset.src;
-        nodes.push(div);
-      });
-      mermaidLib.run({ nodes: nodes }).catch(function (e) { console.warn(e); });
+    }
+    function resizeDiagrams() {
+      var options = diagramOptions();
+      diagrams.forEach(function (d) { d.update(d.source, options); });
     }
 
     var script = document.createElement("script");
-    script.src = "https://cdn.jsdelivr.net/npm/mermaid@12/dist/mermaid.min.js";
-    script.onload = function () { mermaidLib = window.mermaid; renderMermaid(); };
-    script.onerror = function () { console.warn("Failed to load Mermaid"); };
+    script.src = "https://cdn.jsdelivr.net/npm/pele@1/dist/pele.global.js";
+    script.onload = renderDiagrams;
+    script.onerror = function () { console.warn("Failed to load Pele"); };
     document.head.appendChild(script);
 
     // Syntax highlighting, as in the app (`src/syntax.js`): only fences that
@@ -2872,6 +2811,12 @@ mod tests {
             page.contains("@highlightjs/cdn-assets@11") && page.contains(".hljs-keyword"),
             "shared page must load highlight.js and carry the syntax colors"
         );
+        assert!(
+            page.contains("cdn.jsdelivr.net/npm/pele@1/dist/pele.global.js")
+                && page.contains("--pele-fg: var(--color-fg)"),
+            "shared page must draw diagrams with Pele in the page's colors"
+        );
+        assert!(!page.contains("mermaid.min.js"), "Mermaid must no longer be loaded");
         assert!(!page.contains("{{SYNTAX_"), "syntax placeholder not replaced");
         assert!(!page.contains("{{CONTENT}}"), "template token not replaced");
     }

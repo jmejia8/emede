@@ -20,6 +20,38 @@
   --titlebar-height: 2.25rem;
 }
 
+/* Diagrams (Pele, `src/diagrams.js`). Every color in a diagram's SVG is one of
+ * these, derived from the page's own tokens, so any theme or color template
+ * restyles diagrams with no re-render and nothing in a diagram's source can
+ * repaint it. On `:root`, not `.prose`, so a diagram cloned into the zoom
+ * viewer keeps them. Kept in step with the inlined sheet in `share.rs`. */
+:root {
+  --pele-bg: var(--color-bg);
+  --pele-fg: var(--color-fg);
+  --pele-muted: color-mix(in srgb, var(--color-fg) 62%, var(--color-bg));
+  --pele-line: color-mix(in srgb, var(--color-fg) 78%, var(--color-bg));
+  --pele-surface: var(--color-code-bg);
+  --pele-surface-alt: color-mix(in srgb, var(--color-fg) 6%, var(--color-code-bg));
+  --pele-border: color-mix(in srgb, var(--color-fg) 42%, var(--color-bg));
+  --pele-accent: var(--color-link);
+  --pele-critical: color-mix(in oklab, #d1495b 72%, var(--color-fg));
+  --pele-error: var(--pele-critical);
+  --pele-font: var(--font-serif);
+  --pele-font-mono: var(--font-code);
+  /* Chart and category colors: a muted Tableau set pulled toward the text
+   * color. That darkens them on a light page and lightens them on a dark one,
+   * which is exactly what keeps the page-colored labels Pele draws on them
+   * (pie slices, git commits) readable in every theme. */
+  --pele-series-1: color-mix(in oklab, #4c78a8 60%, var(--color-fg));
+  --pele-series-2: color-mix(in oklab, #f58518 60%, var(--color-fg));
+  --pele-series-3: color-mix(in oklab, #54a24b 60%, var(--color-fg));
+  --pele-series-4: color-mix(in oklab, #e45756 60%, var(--color-fg));
+  --pele-series-5: color-mix(in oklab, #72b7b2 60%, var(--color-fg));
+  --pele-series-6: color-mix(in oklab, #c9a227 60%, var(--color-fg));
+  --pele-series-7: color-mix(in oklab, #b279a2 60%, var(--color-fg));
+  --pele-series-8: color-mix(in oklab, #9d755d 60%, var(--color-fg));
+}
+
 @property --find-match-strength {
   syntax: "<percentage>";
   inherits: true;
@@ -270,10 +302,10 @@ body {
  * So `main.js` measures every block just before adding the class and pins the
  * real content height inline (`auto <h>px`); 4em is only the fallback. `auto`
  * then keeps the size current once the block is drawn again. The class goes on
- * only once MathJax and Mermaid have measured — both render into a box whose
+ * only once MathJax and the diagrams have measured — both render into a box whose
  * width they read, and a skipped box has none. */
 .prose.skip-offscreen
-  > :is(p, ul, ol, dl, blockquote, pre, table, figure, details, .table-wrapper, .mermaid) {
+  > :is(p, ul, ol, dl, blockquote, pre, table, figure, details, .table-wrapper, .diagram) {
   content-visibility: auto;
   contain-intrinsic-size: auto 4em;
 }
@@ -707,26 +739,17 @@ body.frame-emede .prose :is(h1, h2, h3, h4, h5, h6) {
   text-decoration: none;
 }
 
-.prose .mermaid {
+/* Pele sizes the SVG itself (`max-width: 100%`, natural width otherwise) and
+ * lays it out again when this box changes width. */
+.prose .diagram {
   text-align: center;
   margin: 1.5em 0;
-  overflow-x: auto;
+  line-height: normal;
 }
 
-.prose .mermaid svg {
-  max-width: 100%;
-  height: auto;
-}
-
-/* Where Mermaid measures: outside the page sheet, whose zoom transform would
- * inflate every box (`runMermaidOutsideSheet` in main.js). Hidden, not
- * `display: none`, because the labels still need real layout. */
-.mermaid-render-host {
-  position: fixed;
-  top: 0;
-  left: 0;
-  visibility: hidden;
-  pointer-events: none;
+.prose .diagram > svg {
+  display: inline-block;
+  vertical-align: top;
 }
 
 .prose .zoomable {
@@ -4480,7 +4503,7 @@ body.frame-emede .search-bar {
     break-after: avoid;
   }
 
-  pre, table, figure, img, blockquote, .markdown-alert, .image-fallback, .mermaid, mjx-container {
+  pre, table, figure, img, blockquote, .markdown-alert, .image-fallback, .diagram, mjx-container {
     break-inside: avoid;
   }
 }

@@ -1,0 +1,11 @@
+,,min,min,max,max
+arm,,branch,installed,branch,installed
+doc,metric,,,,
+math-M,math_nodes,500.0,500.0,500.0,500.0
+math-M,mermaid_svgs,0.0,0.0,0.0,0.0
+mermaid-M,math_nodes,0.0,0.0,0.0,0.0
+mermaid-M,mermaid_svgs,20.0,20.0,20.0,20.0
+mixed-M,math_nodes,150.0,150.0,150.0,150.0
+mixed-M,mermaid_svgs,8.0,8.0,8.0,8.0
+prose-M,math_nodes,0.0,0.0,0.0,0.0
+prose-M,mermaid_svgs,0.0,0.0,0.0,0.0
