@@ -17,7 +17,7 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["protocol-asset"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-dirs = "6"
+dirs = "7"
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 comrak = { version = "0.52", default-features = false, features = ["shortcodes"] }
@@ -25,9 +25,9 @@ ammonia = "4.1.2"
 similar = "3"
 ureq = "2"
 tiny_http = "0.12"
-base64 = "0.22"
+base64 = "0.23"
 qrcode = { version = "0.14", features = ["svg"] }
-getrandom = "0.3"
+getrandom = "0.4"
 subtle = "2.6"
 notify = "8"
 ctrlc = "3"
