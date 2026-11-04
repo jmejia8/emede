@@ -3634,6 +3634,11 @@ async function boot() {
     applySettings(settings);
     initialFontSize = toPt(settings.font_size, 12);
     initialGpuAccel = settings.gpu_acceleration;
+    // The GPU setting only takes effect at launch (and only on Linux, where it
+    // disables WebKit's compositing), so this follows the launch value, not
+    // later edits. Styles that break in software rendering key off it.
+    const softwareRender = !settings.gpu_acceleration && /Linux/.test(navigator.userAgent);
+    document.documentElement.toggleAttribute("data-software-render", softwareRender);
   } catch (err) {
     console.warn("Startup initialization failed", err);
   }

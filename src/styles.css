@@ -552,6 +552,17 @@ body.frame-emede .prose :is(h1, h2, h3, h4, h5, h6) {
   .prose .spoiler:is(:hover, :active) {
     filter: none;
   }
+
+  /* Without compositing, WebKitGTK paints a CSS filter's blur outset as a
+     black square at the document origin. So software rendering blurs the
+     text with a shadow instead. That covers text only: a code or highlight
+     background inside the spoiler shows through, its text still hidden. */
+  :root[data-software-render] .prose .spoiler:not(:hover, :active),
+  :root[data-software-render] .prose .spoiler:not(:hover, :active) * {
+    filter: none;
+    color: transparent;
+    text-shadow: 0 0 0.8em var(--color-fg);
+  }
 }
 
 .prose dt {
@@ -3969,6 +3980,11 @@ body.has-modal {
   visibility: hidden;
   opacity: 0;
   pointer-events: none;
+}
+
+.search-bar.hidden .search-bar-inner {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 body.frame-emede .search-bar {
