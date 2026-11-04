@@ -374,6 +374,7 @@ fn run_inner(files: Vec<String>, print_target: Option<String>) {
             markdown::resolve_local_markdown_link,
             changes::get_document_changes,
             settings::get_settings,
+            settings::get_default_settings,
             settings::set_settings,
             settings::read_color_template,
             color_templates::import_color_template,

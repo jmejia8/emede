@@ -1,9 +1,10 @@
 import { FindInPage } from "./find.js";
 import {
-  attachFontSearch,
+  attachFontCombobox,
   markUnavailableFonts,
   selectFontStack,
 } from "./fontsearch.js";
+import { RadioGroup, syncStepper, wirePresetField, wireStepper } from "./settingscontrols.js";
 import { applyChanges, clearChanges } from "./changes.js";
 import {
   createKeybindingController,
@@ -268,9 +269,10 @@ const settingFont = document.getElementById("setting-font");
 const settingFontTitle = document.getElementById("setting-font-title");
 const settingFontCode = document.getElementById("setting-font-code");
 const settingSize = document.getElementById("setting-size");
-const settingSizeLabel = document.getElementById("setting-size-label");
 const settingMargin = document.getElementById("setting-margin");
-const settingMarginLabel = document.getElementById("setting-margin-label");
+const settingWidthMeasure = document.getElementById("setting-width-measure");
+const settingFontsSummary = document.getElementById("setting-fonts-summary");
+const settingsResetAll = document.getElementById("settings-reset-all");
 const settingFg = document.getElementById("setting-fg");
 const settingBg = document.getElementById("setting-bg");
 const settingPaperSize = document.getElementById("setting-paper-size");
@@ -331,17 +333,15 @@ const importedSyntaxList = createImportedList({
     syntaxThemeStatus.textContent = `Could not remove ${theme.label}: ${err}`;
   },
 });
-const settingWindowFrame = document.getElementById("setting-window-frame");
+const settingWindowFrame = new RadioGroup(document.getElementById("setting-window-frame"));
 const settingZoom = document.getElementById("setting-zoom");
-const settingZoomLabel = document.getElementById("setting-zoom-label");
-const settingKeybindings = document.getElementById("setting-keybindings");
+const settingKeybindings = new RadioGroup(document.getElementById("setting-keybindings"));
 const settingGpu = document.getElementById("setting-gpu");
 const settingJustify = document.getElementById("setting-justify");
 const settingMermaid = document.getElementById("setting-mermaid");
 const settingUpdateCheck = document.getElementById("setting-update-check");
 const settingChanges = document.getElementById("setting-changes");
 const settingReadingWpm = document.getElementById("setting-reading-wpm");
-const settingReadingWpmLabel = document.getElementById("setting-reading-wpm-label");
 const keybindingsHelp = document.getElementById("keybindings-help");
 const titlebarTitle = document.getElementById("titlebar-title");
 const winMinimize = document.getElementById("win-minimize");
@@ -420,20 +420,33 @@ function populateFontOptions() {
 
 // Flag presets fontconfig cannot resolve, so a silent fallback becomes visible.
 // Fire-and-forget: the selects are fully usable before this resolves.
-function markMissingFontPresets() {
-  return markUnavailableFonts([settingFont, settingFontTitle, settingFontCode], (families) =>
+async function markMissingFontPresets() {
+  await markUnavailableFonts([settingFont, settingFontTitle, settingFontCode], (families) =>
     invoke("check_fonts_available", { families }),
   );
+  syncFontFields();
 }
 
+let fontCombos = [];
+let presetFields = [];
+
 function wireFontSearch() {
-  for (const root of document.querySelectorAll("[data-font-search]")) {
-    attachFontSearch(
+  fontCombos = Array.from(document.querySelectorAll("[data-font-select]"), (root) =>
+    attachFontCombobox(
       root,
       (query, limit) => invoke("search_system_fonts", { query, limit }),
       scheduleSave,
-    );
-  }
+    ));
+}
+
+// The comboboxes show the hidden selects, and the "Fonts" row summarizes them.
+function syncFontFields() {
+  for (const combo of fontCombos) combo.sync();
+  const name = (select) =>
+    (select.selectedOptions[0]?.dataset.baseLabel ?? select.selectedOptions[0]?.textContent ?? "")
+      .replace(/\s*\(default\)$/, "");
+  const title = settingFontTitle.value ? name(settingFontTitle) : "same";
+  settingFontsSummary.textContent = `${name(settingFont)} · ${title} · ${name(settingFontCode)}`;
 }
 
 function bodyFontFromSettings(settings) {
@@ -648,18 +661,67 @@ function renderColorTemplates() {
   colorTemplateList.replaceChildren();
 
   for (const template of colorTemplates) {
+    const { color_fg: fg, color_bg: bg } = template.colors;
     const button = document.createElement("button");
     button.type = "button";
-    button.textContent = template.label;
+    button.className = "theme-card";
     button.title = template.label;
-    button.style.color = template.colors.color_fg;
-    button.style.background = template.colors.color_bg;
-    button.style.borderColor = template.colors.color_fg;
+    button.setAttribute("aria-pressed", "false");
+    button.templateColors = template.colors;
+
+    // "Aa" in the title color on the background, over a bar in the link color:
+    // enough of the theme to judge it before applying it.
+    const swatch = document.createElement("span");
+    swatch.className = "theme-card-swatch";
+    swatch.style.background = bg;
+    swatch.style.color = template.colors.color_title || fg;
+    swatch.textContent = "Aa";
+    const bar = document.createElement("i");
+    bar.style.background = template.colors.color_link || fg;
+    swatch.appendChild(bar);
+
+    const name = document.createElement("span");
+    name.className = "theme-card-name";
+    name.textContent = template.label;
+
+    button.append(swatch, name);
     button.addEventListener("click", () => {
       void applyColorTemplate(template);
     });
     colorTemplateList.appendChild(button);
   }
+  syncColorTemplateCards();
+}
+
+function syncColorTemplateCards() {
+  for (const button of colorTemplateList.children) {
+    const active = Boolean(currentSettings) &&
+      Object.entries(button.templateColors).every(([key, color]) => currentSettings[key] === color);
+    button.setAttribute("aria-pressed", String(active));
+  }
+}
+
+function syncFontPresetCards() {
+  for (const button of document.querySelectorAll("[data-font-preset]")) {
+    const preset = FONT_PRESETS[button.dataset.fontPreset];
+    const active = Boolean(currentSettings) && preset &&
+      Object.entries(preset).every(([key, value]) => (currentSettings[key] ?? "") === value);
+    button.setAttribute("aria-pressed", String(Boolean(active)));
+  }
+}
+
+// Characters per line of the reading column, measured with the body font at
+// its size. Approximate (an average glyph width), which is all a hint needs.
+const MEASURE_SAMPLE =
+  "Anything from 45 to 75 characters is widely regarded as a satisfactory length of line.";
+function charactersPerLine(fontStack, sizePt, widthCm) {
+  const context =
+    charactersPerLine.context ||
+    (charactersPerLine.context = document.createElement("canvas").getContext("2d"));
+  context.font = `${sizePt}pt ${fontStack}`;
+  const average = context.measureText(MEASURE_SAMPLE).width / MEASURE_SAMPLE.length;
+  if (!(average > 0)) return null;
+  return Math.round((widthCm * 96) / 2.54 / average);
 }
 
 async function applyColorTemplate(template) {
@@ -724,16 +786,17 @@ function applySettings(settings) {
   syncFontSelect(settingFontTitle, settings.font_title, "");
   syncFontSelect(settingFontCode, settings.font_code, DEFAULT_FONT_CODE);
   settingSize.value = sizePt;
-  settingSizeLabel.textContent = `${sizePt}pt`;
   settingMargin.value = readerWidthCm;
-  settingMarginLabel.textContent = `${readerWidthCm} cm`;
+  const cpl = charactersPerLine(bodyFont, sizePt, readerWidthCm);
+  settingWidthMeasure.textContent = cpl
+    ? `${readerWidthCm} cm, about ${cpl} characters per line`
+    : `${readerWidthCm} cm`;
   settingFg.value = settings.color_fg;
   settingBg.value = settings.color_bg;
   settingPaperSize.value = paperSize;
   settingWindowFrame.value = normalizeWindowFrame(settings.window_frame);
   const uiZoom = normalizeUiZoom(settings.zoom);
   settingZoom.value = uiZoom;
-  settingZoomLabel.textContent = `${uiZoom}%`;
   settingKeybindings.value = normalizeKeybindingMode(settings.keybindings);
   renderKeybindingHelp(keybindingsHelp, settings.keybindings);
   settingGpu.checked = settings.gpu_acceleration;
@@ -743,7 +806,11 @@ function applySettings(settings) {
   settingChanges.checked = settings.change_highlighting ?? false;
   const wpm = Number(settings.reading_wpm) > 0 ? Number(settings.reading_wpm) : DEFAULT_READING_WPM;
   settingReadingWpm.value = wpm;
-  settingReadingWpmLabel.textContent = `${wpm} wpm`;
+  for (const stepper of settingsPanel.querySelectorAll("[data-stepper]")) syncStepper(stepper);
+  for (const field of presetFields) field.sync();
+  syncFontFields();
+  syncColorTemplateCards();
+  syncFontPresetCards();
   shareUsername.value = settings.share_username ?? "";
   contentEl.classList.toggle("prose-justify", settings.justify_text);
   // Read time is derived from the reading speed, so refresh it in place.
@@ -2103,6 +2170,15 @@ async function handleImportColorTemplate() {
   }
 }
 
+// The share button is an icon in the settings header, so its state is in the
+// label and a class rather than in its text.
+function setShareToggleActive(active) {
+  const label = active ? "Sharing on LAN: show link" : "Share on LAN";
+  shareToggle.title = label;
+  shareToggle.setAttribute("aria-label", label);
+  shareToggle.classList.toggle("is-active", active);
+}
+
 function updateShareButtonState() {
   if (!shareToggle) return;
   shareToggle.disabled = !shareActive && !currentDocPath;
@@ -2259,12 +2335,12 @@ async function startShare() {
     const info = await invoke("start_share", { path: currentDocPath });
     shareActive = true;
     currentShareInfo = info;
-    shareToggle.textContent = "Sharing info";
+    setShareToggleActive(true);
     showShareModal(info);
     shareStatus.textContent = "Sharing…";
   } catch (err) {
     shareActive = false;
-    shareToggle.textContent = "Share on LAN";
+    setShareToggleActive(false);
     shareStatus.textContent = String(err);
   }
   updateShareButtonState();
@@ -2277,7 +2353,7 @@ async function stopShare() {
     console.warn("Failed to stop share", err);
   }
   shareActive = false;
-  shareToggle.textContent = "Share on LAN";
+  setShareToggleActive(false);
   shareStatus.textContent = "";
   hideShareModal();
   updateShareButtonState();
@@ -2708,7 +2784,6 @@ function wireContextMenu() {
 function toggleSettings(open) {
   const show = open ?? settingsPanel.classList.contains("hidden");
   const hadFocus = settingsPanel.contains(document.activeElement);
-  if (!show) closeSettingTip();
   settingsPanel.classList.toggle("hidden", !show);
   settingsPanel.setAttribute("aria-hidden", String(!show));
   syncPanelBackdrop();
@@ -3047,7 +3122,6 @@ function wireTitlebar() {
 function wireSettings() {
   settingsToggle.addEventListener("click", () => toggleSettings(true));
   settingsClose.addEventListener("click", () => toggleSettings(false));
-  wireSettingTips();
   renderColorTemplates();
   importColorTemplateBtn.addEventListener("click", () => {
     void handleImportColorTemplate();
@@ -3059,19 +3133,19 @@ function wireSettings() {
   });
   settingSyntaxTheme.addEventListener("input", scheduleSave);
 
-  [
-    settingFont,
-    settingFontTitle,
-    settingFontCode,
-    settingSize,
-    settingMargin,
-    settingFg,
-    settingBg,
-    settingPaperSize,
-    settingWindowFrame,
-    settingZoom,
-    settingKeybindings,
-  ].forEach((el) => {
+  // Steppers first: their own `change` listener normalizes a typed value
+  // before the save below reads it.
+  settingsPanel.querySelectorAll("[data-stepper]").forEach(wireStepper);
+  presetFields = [
+    wirePresetField(document.getElementById("setting-width-preset"), settingMargin),
+    wirePresetField(document.getElementById("setting-wpm-preset"), settingReadingWpm),
+  ];
+  // `change`, not `input`: a half-typed number must not be saved.
+  [settingSize, settingMargin, settingZoom, settingReadingWpm].forEach((el) => {
+    el.addEventListener("change", scheduleSave);
+  });
+
+  [settingFg, settingBg, settingPaperSize, settingWindowFrame, settingKeybindings].forEach((el) => {
     el.addEventListener("input", scheduleSave);
   });
 
@@ -3084,56 +3158,20 @@ function wireSettings() {
   settingUpdateCheck.addEventListener("input", scheduleSave);
 
   settingChanges.addEventListener("input", () => {
-    // Turning it off clears immediately — the marks are already in the DOM.
-    if (!settingChanges.checked) {
-      clearChanges(contentEl);
-      currentDocChanges = null;
-    }
-    // Turning it on needs a re-render, since the diff is computed in Rust. Save
-    // first rather than through the debounce: the backend reads the setting off
-    // disk when it renders, so a re-render requested before the save landed
-    // would come back with no changes at all.
-    void (async () => {
-      const settings = settingsFromForm();
-      applySettings(settings);
-      await invoke("set_settings", { settings });
-      if (settingChanges.checked) await reloadCurrentDocument();
-    })().catch((err) => console.warn("Applying change-highlighting setting failed", err));
+    void commitSettings(settingsFromForm()).catch((err) =>
+      console.warn("Applying change-highlighting setting failed", err));
   });
 
-  settingReadingWpm.addEventListener("input", () => {
-    settingReadingWpmLabel.textContent = `${Number(settingReadingWpm.value)} wpm`;
+  settingGpu.addEventListener("change", () => {
     scheduleSave();
+    void restartIfGpuChanged(settingGpu.checked);
   });
 
-  settingGpu.addEventListener("change", async () => {
-    scheduleSave();
-    if (initialGpuAccel === null) return;
-    if (settingGpu.checked === initialGpuAccel) return;
-
-    await window.__TAURI__.dialog.message(
-      "GPU acceleration change requires a restart to take effect. The application will now restart.",
-      { title: "emede", kind: "info" },
-    );
-
-    invoke("restart_app");
-  });
-
-  settingSize.addEventListener("input", () => {
-    settingSizeLabel.textContent = `${Number(settingSize.value)}pt`;
-  });
-
-  settingMargin.addEventListener("input", () => {
-    settingMarginLabel.textContent = `${Number(settingMargin.value)} cm`;
-  });
-
-  settingZoom.addEventListener("input", () => {
-    settingZoomLabel.textContent = `${Number(settingZoom.value)}%`;
-  });
-
-  document.querySelectorAll("[data-font-preset]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const preset = FONT_PRESETS[btn.dataset.fontPreset];
+  for (const button of document.querySelectorAll("[data-font-preset]")) {
+    const preset = FONT_PRESETS[button.dataset.fontPreset];
+    const specimen = button.querySelector(".preset-card-specimen");
+    if (preset && specimen) specimen.style.fontFamily = preset.font_family;
+    button.addEventListener("click", async () => {
       if (!preset) return;
       const settings = {
         ...(currentSettings || settingsFromForm()),
@@ -3143,7 +3181,14 @@ function wireSettings() {
       void markMissingFontPresets();
       await invoke("set_settings", { settings });
     });
-  });
+  }
+
+  for (const button of settingsPanel.querySelectorAll("[data-reset-group]")) {
+    button.addEventListener("click", () => {
+      void resetSettingGroups([button.dataset.resetGroup]);
+    });
+  }
+  wireResetAll();
 
   aboutLink.addEventListener("click", () => toggleAbout(true));
   updateBanner.addEventListener("click", () => toggleAbout(true));
@@ -3153,47 +3198,97 @@ function wireSettings() {
   });
 }
 
-let openSettingTipButton = null;
-
-function closeSettingTip({ restoreFocus = false } = {}) {
-  if (!openSettingTipButton) return;
-  const button = openSettingTipButton;
-  const tip = document.getElementById(button.getAttribute("aria-controls"));
-  button.setAttribute("aria-expanded", "false");
-  tip?.setAttribute("hidden", "");
-  openSettingTipButton = null;
-  if (restoreFocus) button.focus();
+/**
+ * Apply and persist `next` right away (no debounce), then run the side effects
+ * a setting needs beyond restyling: change highlighting is diffed in Rust, and
+ * GPU acceleration only takes effect in a new process.
+ */
+async function commitSettings(next) {
+  clearTimeout(saveTimer);
+  const before = currentSettings;
+  // Turning highlighting off clears immediately, since the marks are already in
+  // the DOM.
+  if (!next.change_highlighting) {
+    clearChanges(contentEl);
+    currentDocChanges = null;
+  }
+  applySettings(next);
+  // Save before re-rendering: the backend reads the setting off disk when it
+  // renders, so a re-render requested before the save landed would come back
+  // with no changes at all.
+  await invoke("set_settings", { settings: next });
+  if (next.change_highlighting && !before?.change_highlighting) await reloadCurrentDocument();
+  await restartIfGpuChanged(next.gpu_acceleration);
 }
 
-function wireSettingTips() {
-  settingsPanel.querySelectorAll(".setting-info-button").forEach((button) => {
-    button.addEventListener("click", (event) => {
-      event.stopPropagation();
-      const wasOpen = button === openSettingTipButton;
-      closeSettingTip();
-      if (wasOpen) return;
+async function restartIfGpuChanged(enabled) {
+  if (initialGpuAccel === null) return;
+  if (enabled === initialGpuAccel) return;
 
-      const tip = document.getElementById(button.getAttribute("aria-controls"));
-      if (!tip) return;
-      tip.removeAttribute("hidden");
-      button.setAttribute("aria-expanded", "true");
-      openSettingTipButton = button;
-    });
-  });
+  await window.__TAURI__.dialog.message(
+    "GPU acceleration change requires a restart to take effect. The application will now restart.",
+    { title: "emede", kind: "info" },
+  );
 
-  document.addEventListener("click", (event) => {
-    if (openSettingTipButton && !event.target.closest(".setting-info")) {
-      closeSettingTip();
+  invoke("restart_app");
+}
+
+// Which settings each panel group's Reset restores. The optional template
+// colors belong to the theme: resetting it must not leave a template's link
+// or title colors over the default background.
+const SETTING_GROUPS = {
+  theme: ["color_fg", "color_bg", "syntax_theme", ...OPTIONAL_COLOR_TEMPLATE_SETTINGS],
+  text: ["font_family", "font_title", "font_code", "font_size", "justify_text"],
+  page: ["margin", "paper_size", "page_zoom"],
+  reading: ["keybindings", "change_highlighting", "mermaid_diagrams", "reading_wpm"],
+  system: ["zoom", "window_frame", "gpu_acceleration", "update_check"],
+};
+
+async function resetSettingGroups(groups) {
+  if (!currentSettings) return;
+  let defaults;
+  try {
+    // The defaults live in Rust (`Settings::default`), so they are asked for
+    // rather than duplicated here.
+    defaults = await invoke("get_default_settings");
+  } catch (err) {
+    console.warn("Failed to read default settings", err);
+    return;
+  }
+  const next = { ...currentSettings };
+  for (const group of groups) {
+    for (const key of SETTING_GROUPS[group] ?? []) {
+      if (defaults[key] === null || defaults[key] === undefined) delete next[key];
+      else next[key] = defaults[key];
     }
-  });
+  }
+  for (const field of presetFields) field.sync({ unpin: true });
+  if (groups.includes("text")) initialFontSize = toPt(next.font_size, 12);
+  await commitSettings(next);
+  if (groups.includes("text")) void markMissingFontPresets();
+}
 
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && openSettingTipButton) {
-      event.preventDefault();
-      event.stopPropagation();
-      closeSettingTip({ restoreFocus: true });
+// "Reset all…" asks by arming itself: a second click within a few seconds
+// resets, anything else lets it lapse. No dialog over the panel.
+function wireResetAll() {
+  const label = settingsResetAll.textContent;
+  let timer = null;
+  const disarm = () => {
+    clearTimeout(timer);
+    delete settingsResetAll.dataset.armed;
+    settingsResetAll.textContent = label;
+  };
+  settingsResetAll.addEventListener("click", () => {
+    if (settingsResetAll.dataset.armed) {
+      disarm();
+      void resetSettingGroups(Object.keys(SETTING_GROUPS));
+      return;
     }
-  }, true);
+    settingsResetAll.dataset.armed = "true";
+    settingsResetAll.textContent = "Click again to reset all";
+    timer = setTimeout(disarm, 4000);
+  });
+  settingsResetAll.addEventListener("blur", disarm);
 }
 
 // With a page border shown, zoom is a view transform of the sheet (like a PDF
@@ -3239,7 +3334,6 @@ function adjustFontSize(delta) {
   const currentPt = toPt(currentSettings?.font_size, 12);
   const newPt = Math.min(32, Math.max(8, currentPt + delta));
   settingSize.value = newPt;
-  settingSizeLabel.textContent = `${newPt}pt`;
   applySettings(settingsFromForm());
   scheduleSave();
 }
@@ -3251,7 +3345,6 @@ function resetFontSize() {
   }
   const pt = initialFontSize;
   settingSize.value = pt;
-  settingSizeLabel.textContent = `${pt}pt`;
   applySettings(settingsFromForm());
   scheduleSave();
 }
@@ -3506,8 +3599,9 @@ async function boot() {
   const printTargetPromise = invoke("get_print_target").catch(() => null);
   const settingsPromise = invoke("get_settings");
   invoke("get_app_version").then((v) => {
-    const el = document.querySelector(".about-version");
-    if (el) el.textContent = `v${v}`;
+    for (const el of document.querySelectorAll(".about-version, .settings-version")) {
+      el.textContent = `v${v}`;
+    }
   }).catch(() => {});
 
   void listen("file-to-open", (event) => {

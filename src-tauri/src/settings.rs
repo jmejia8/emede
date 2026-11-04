@@ -202,6 +202,13 @@ pub fn get_settings() -> Settings {
     load_settings()
 }
 
+/// The defaults, so the settings panel's Reset buttons restore exactly what a
+/// fresh install gets instead of a copy kept in the frontend.
+#[tauri::command]
+pub fn get_default_settings() -> Settings {
+    Settings::default()
+}
+
 #[tauri::command]
 pub fn set_settings(settings: Settings) -> Result<(), String> {
     save_settings(&settings)

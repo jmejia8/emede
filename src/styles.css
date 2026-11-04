@@ -2299,49 +2299,98 @@ body:has(#reader.paper-preview .page-sheet--active) .toc-panel {
   flex-direction: column;
   font-family: system-ui, sans-serif;
   font-size: 0.875rem;
+  /* Shared by the boxed rows and their controls. */
+  --settings-surface: color-mix(in srgb, var(--color-fg) 4%, var(--color-bg));
+  --settings-sunken: color-mix(in srgb, var(--color-fg) 9%, var(--color-bg));
+  --settings-hover: color-mix(in srgb, var(--color-fg) 7%, transparent);
+  --settings-radius: 10px;
 }
 
 .settings-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 1rem 1.25rem;
+  gap: 0.15rem;
+  padding: 0.7rem 0.6rem 0.7rem 1.1rem;
   border-bottom: 1px solid var(--color-border);
 }
 
 .settings-header h2 {
+  flex: 1;
   margin: 0;
   font-size: 1rem;
   font-weight: 600;
 }
 
-.settings-close {
-  border: none;
-  background: none;
-  font-size: 1.5rem;
-  line-height: 1;
-  cursor: pointer;
-  color: var(--color-muted);
+/* Print, Share and Close: actions, so they live in the header and not among
+   the settings. */
+.settings-header-btn {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
   padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.settings-header-btn:hover:not(:disabled) {
+  background: var(--settings-hover);
+  color: var(--color-fg);
+}
+
+.settings-header-btn:focus-visible {
+  outline: 2px solid var(--color-link);
+  outline-offset: 1px;
+}
+
+.settings-header-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Sharing is running: tint the icon so the state is visible without a label. */
+.settings-header-btn.is-active {
+  color: var(--color-link);
+  background: color-mix(in srgb, var(--color-link) 12%, transparent);
 }
 
 .settings-body {
-  padding: 1rem 1.25rem 1.25rem;
+  flex: 1;
+  min-height: 0;
+  padding: 0.25rem 0.85rem 1rem;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.35rem;
   overflow-y: auto;
+  /* Rows wrap or shrink to the panel; never scroll sideways. */
+  overflow-x: hidden;
+  scrollbar-width: thin;
 }
 
-.settings-section {
+.settings-body > .update-banner {
+  margin-top: 0.6rem;
+}
+
+.settings-group-header {
+  /* Sticky, so the group you are in stays named while its rows scroll. */
+  position: sticky;
+  top: -0.25rem;
+  z-index: 2;
   display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-  padding-top: 0.85rem;
-  border-top: 1px solid var(--color-border);
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding: 0.55rem 0.25rem 0.4rem;
+  background: var(--color-bg);
 }
 
-.settings-section-title {
+.settings-group-title {
   margin: 0;
   font-size: 0.7rem;
   font-weight: 600;
@@ -2350,10 +2399,593 @@ body:has(#reader.paper-preview .page-sheet--active) .toc-panel {
   color: var(--color-muted);
 }
 
-.settings-actions {
+.settings-group-reset {
+  padding: 0.1rem 0.25rem;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: color-mix(in srgb, var(--color-fg) 45%, transparent);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.settings-group-reset:hover,
+.settings-group-reset:focus-visible {
+  color: var(--color-fg);
+  text-decoration: underline;
+}
+
+.settings-group-reset:focus-visible {
+  outline: 2px solid var(--color-link);
+  outline-offset: 1px;
+}
+
+.settings-group-reset[data-armed] {
+  color: var(--color-fg);
+  font-weight: 600;
+}
+
+/* A group's rows, GNOME-style: one bordered box, rows divided by hairlines. */
+.settings-box {
+  border: 1px solid var(--color-border);
+  border-radius: var(--settings-radius);
+  background: var(--settings-surface);
+}
+
+.settings-box > * + * {
+  border-top: 1px solid var(--color-border);
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 2.75rem;
+  padding: 0.55rem 0.75rem;
+  color: var(--color-fg);
+}
+
+.settings-row--stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.55rem;
+}
+
+/* A switch row: the whole row is the switch's label, so it is one big target. */
+.settings-row--click {
+  cursor: pointer;
+}
+
+.settings-row--click:hover {
+  background: var(--settings-hover);
+}
+
+.settings-box > :first-child {
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
+}
+
+.settings-box > :last-child {
+  border-bottom-left-radius: inherit;
+  border-bottom-right-radius: inherit;
+}
+
+.settings-row-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.settings-row-line[hidden] {
+  display: none;
+}
+
+.settings-row-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.settings-row-title {
+  font-weight: 500;
+}
+
+.settings-row-sub {
+  margin-top: 0.05rem;
+  color: var(--color-muted);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.settings-select {
+  min-width: 0;
+  max-width: 10.5rem;
+  height: 1.9rem;
+  padding: 0 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+  color-scheme: inherit;
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.settings-select--short {
+  width: 5.5rem;
+}
+
+.settings-select option {
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+}
+
+.settings-select:focus-visible,
+.settings-btn:focus-visible,
+.settings-link-btn:focus-visible {
+  outline: 2px solid var(--color-link);
+  outline-offset: 1px;
+}
+
+.settings-btn {
+  align-self: flex-start;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.settings-btn:hover {
+  background: var(--settings-hover);
+}
+
+.settings-link-btn {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 0.75rem;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.settings-link-btn:hover {
+  color: var(--color-fg);
+}
+
+/* ── Switch ───────────────────────────────────────────────────────────────── */
+.settings-switch {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  position: relative;
+  width: 2.25rem;
+  height: 1.25rem;
+  margin: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--settings-sunken);
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.settings-switch::after {
+  content: "";
+  position: absolute;
+  top: 0.15rem;
+  left: 0.15rem;
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-fg) 55%, var(--color-bg));
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.settings-switch:checked {
+  background: var(--color-fg);
+  border-color: var(--color-fg);
+}
+
+.settings-switch:checked::after {
+  transform: translateX(1rem);
+  background: var(--color-bg);
+}
+
+.settings-switch:focus-visible {
+  outline: 2px solid var(--color-link);
+  outline-offset: 2px;
+}
+
+/* ── Stepper (`settingscontrols.js`) ──────────────────────────────────────── */
+.stepper {
+  display: inline-flex;
+  flex: none;
+  align-items: stretch;
+  height: 1.9rem;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  background: var(--color-bg);
+  overflow: hidden;
+}
+
+.stepper-btn {
+  width: 1.75rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.stepper-btn:hover:not(:disabled) {
+  background: var(--settings-hover);
+  color: var(--color-fg);
+}
+
+.stepper-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.stepper-btn:focus-visible {
+  outline: 2px solid var(--color-link);
+  outline-offset: -2px;
+}
+
+.stepper-value {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  min-width: 4rem;
+  padding: 0 0.35rem;
+  border-inline: 1px solid var(--color-border);
+  cursor: text;
+}
+
+.stepper-value:focus-within {
+  background: var(--settings-surface);
+}
+
+.stepper-value input {
+  width: 3.4ch;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-fg);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.stepper-value input::-webkit-inner-spin-button,
+.stepper-value input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.stepper-value input:focus {
+  outline: none;
+}
+
+.stepper-unit {
+  color: var(--color-muted);
+  font-size: 0.72rem;
+}
+
+/* ── Segmented control: native radios (`settingscontrols.js`) ─────────────── */
+.segmented {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--settings-sunken);
+}
+
+.segmented--inline {
+  flex: none;
+}
+
+.segmented label {
+  position: relative;
+  /* Sized by content, so the bold checked label never truncates. */
+  flex: 1 1 auto;
+  cursor: pointer;
+}
+
+.segmented input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  pointer-events: none;
+}
+
+.segmented span {
+  display: block;
+  padding: 0.28rem 0.35rem;
+  border-radius: 6px;
+  color: var(--color-muted);
+  font-size: 0.78rem;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.segmented label:hover span {
+  color: var(--color-fg);
+}
+
+.segmented input:checked + span {
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-weight: 600;
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--color-fg) 18%, transparent),
+    0 0 0 1px var(--color-border);
+}
+
+.segmented input:focus-visible + span {
+  outline: 2px solid var(--color-link);
+  outline-offset: 1px;
+}
+
+/* ── Expander rows ────────────────────────────────────────────────────────── */
+.settings-expander > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 2.75rem;
+  padding: 0.55rem 0.75rem;
+  list-style: none;
+  cursor: pointer;
+}
+
+.settings-expander > summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings-expander > summary:hover {
+  background: var(--settings-hover);
+}
+
+.settings-expander > summary:focus-visible {
+  outline: 2px solid var(--color-link);
+  outline-offset: -2px;
+}
+
+.settings-expander:not([open]):last-child > summary {
+  border-bottom-left-radius: inherit;
+  border-bottom-right-radius: inherit;
+}
+
+.settings-chevron {
+  flex: none;
+  color: var(--color-muted);
+  transition: transform 0.15s ease;
+}
+
+.settings-expander[open] .settings-chevron {
+  transform: rotate(90deg);
+}
+
+.settings-expander-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.1rem 0.75rem 0.8rem;
+}
+
+/* ── Theme ────────────────────────────────────────────────────────────────── */
+.theme-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.45rem;
+}
+
+.theme-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font: inherit;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.theme-card-swatch {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  height: 2.3rem;
+  padding: 0 0.5rem;
+  font-family: var(--font-serif);
+  font-size: 1rem;
+}
+
+.theme-card-swatch i {
+  flex: 1;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.theme-card-name {
+  padding: 0.15rem 0.45rem 0.2rem;
+  border-top: 1px solid var(--color-border);
+  color: var(--color-muted);
+  font-size: 0.7rem;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.theme-card:hover .theme-card-name {
+  color: var(--color-fg);
+}
+
+.theme-card[aria-pressed="true"] {
+  outline: 2px solid var(--color-fg);
+  outline-offset: 1px;
+}
+
+.theme-card[aria-pressed="true"] .theme-card-name {
+  color: var(--color-fg);
+  font-weight: 600;
+}
+
+.theme-card:focus-visible {
+  outline: 2px solid var(--color-link);
+  outline-offset: 1px;
+}
+
+.syntax-theme-row {
+  display: flex;
+  flex: 1;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  min-width: 0;
+  /* WebKitGTK's menulist reports its whole selected label as overflow even
+     when the box shrinks, so a long theme name widened the settings body by
+     ~20px and gave it a horizontal scrollbar. Clip here; the padding and
+     matching negative margin keep the select's 3px focus ring visible. */
+  overflow: clip;
+  padding: 3px;
+  margin: -3px;
+}
+
+.syntax-theme-row .settings-select {
+  flex: 0 1 10.5rem;
+}
+
+.settings-row-line > .settings-row-title {
+  white-space: nowrap;
+}
+
+.color-pickers {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.5rem;
+}
+
+.color-pickers label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.25rem 0.45rem;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  background: var(--color-bg);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.color-pickers input[type="color"] {
+  flex: none;
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.color-pickers input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.color-pickers input[type="color"]::-webkit-color-swatch {
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+}
+
+/* ── Text ─────────────────────────────────────────────────────────────────── */
+.preset-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+}
+
+.preset-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  padding: 0.35rem 0.55rem 0.3rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.preset-card:hover {
+  background: color-mix(in srgb, var(--color-fg) 4%, var(--color-bg));
+}
+
+/* Each preset's specimen is set in its own body font (inline style). */
+.preset-card-specimen {
+  max-width: 100%;
+  font-size: 1.05rem;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.preset-card-name {
+  color: var(--color-muted);
+  font-size: 0.7rem;
+}
+
+.preset-card[aria-pressed="true"] {
+  outline: 2px solid var(--color-fg);
+  outline-offset: 1px;
+}
+
+.preset-card:focus-visible {
+  outline: 2px solid var(--color-link);
+  outline-offset: 1px;
+}
+
+.font-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.font-field > label {
+  font-size: 0.8125rem;
 }
 
 /* Full-width notice at the top of the settings panel while an update is
@@ -2405,232 +3037,10 @@ body:has(#reader.paper-preview .page-sheet--active) .toc-panel {
   }
 }
 
-.action-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  padding: 0.5rem 0.4rem;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--color-fg);
-  font: inherit;
-  font-size: 0.85em;
-  white-space: nowrap;
-  cursor: pointer;
-  touch-action: manipulation;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-
-.action-btn:hover:not(:disabled),
-.action-btn:focus-visible {
-  background: color-mix(in srgb, var(--color-fg) 6%, transparent);
-}
-
-.action-btn:focus-visible {
-  outline: 2px solid var(--color-link);
-  outline-offset: 2px;
-}
-
-.action-btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.settings-body label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  color: var(--color-fg);
-}
-
-.setting-field {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.setting-label-with-info {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.38rem;
-  min-width: 0;
-}
-
-.settings-body .setting-label-with-info > label {
-  display: inline;
-}
-
-.setting-info {
-  display: inline-flex;
-  flex: 0 0 auto;
-}
-
-.setting-info-button {
-  display: inline-grid;
-  place-items: center;
-  width: 1.1rem;
-  height: 1.1rem;
-  padding: 0;
-  border: 1px solid color-mix(in srgb, var(--color-fg) 30%, transparent);
-  border-radius: 50%;
-  background: transparent;
-  color: var(--color-muted);
-  font: 600 0.68rem/1 system-ui, sans-serif;
-  cursor: pointer;
-  transition:
-    color 0.15s ease,
-    border-color 0.15s ease,
-    background-color 0.15s ease;
-}
-
-.setting-info-button:hover,
-.setting-info-button[aria-expanded="true"] {
-  color: var(--color-fg);
-  border-color: var(--color-link);
-  background: color-mix(in srgb, var(--color-link) 10%, var(--color-bg));
-}
-
-.setting-info-button:focus-visible {
-  outline: 2px solid var(--color-link);
-  outline-offset: 2px;
-}
-
-.setting-tip {
-  position: absolute;
-  top: calc(100% + 0.55rem);
-  left: 0;
-  z-index: 4;
-  width: min(14rem, calc(90vw - 3.5rem));
-  padding: 0.62rem 0.72rem;
-  border: 1px solid var(--color-border);
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--color-bg) 94%, var(--color-fg));
-  box-shadow: 0 8px 24px color-mix(in srgb, var(--color-fg) 16%, transparent);
-  color: var(--color-fg);
-  font-size: 0.75rem;
-  font-weight: 400;
-  line-height: 1.45;
-}
-
-.setting-tip[hidden] {
-  display: none;
-}
-
-.color-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.75rem;
-}
-
-.settings-body input[type="text"],
-.settings-body select {
-  font: inherit;
-  padding: 0.5rem 0.65rem;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background-color: color-mix(in srgb, var(--color-bg) 90%, var(--color-fg));
-  color: var(--color-fg);
-  color-scheme: inherit;
-}
-
-.settings-body select option {
-  background-color: var(--color-bg);
-  color: var(--color-fg);
-}
-
-.range-row {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-
-.range-row input[type="range"] {
-  flex: 1;
-}
-
-.range-value {
-  min-width: 4ch;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  color: var(--color-muted);
-}
-
-.settings-body input[type="color"] {
-  width: 100%;
-  height: 2.25rem;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  padding: 0.15rem;
-  cursor: pointer;
-  background: transparent;
-}
-
-.presets {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.presets-label {
-  color: var(--color-fg);
-}
-
-.preset-buttons {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.4rem;
-}
-
-.preset-buttons button,
-.template-import-btn {
-  padding: 0.35rem 0.4rem;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--color-fg);
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.85em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.preset-buttons button:hover,
-.template-import-btn:hover {
-  background: color-mix(in srgb, var(--color-fg) 6%, transparent);
-}
-
-.template-import-btn {
-  width: 100%;
-  margin-top: 0.2rem;
-  color: var(--color-muted);
-  border-style: dashed;
-}
-
-.template-import-btn:hover {
-  color: var(--color-fg);
-}
-
-/* The code theme picker: a swatch in the selected theme's own background and
-   text color beside the select, since option styling depends on the platform. */
-.syntax-theme-row {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.syntax-theme-row select {
-  flex: 1;
-  min-width: 0;
-}
-
 .syntax-theme-swatch {
   display: grid;
   place-items: center;
-  flex: 0 0 2.25rem;
+  flex: 0 0 1.9rem;
   border: 1px solid var(--color-border);
   border-radius: 6px;
   font-family: var(--font-code);
@@ -2786,34 +3196,28 @@ body:has(#reader.paper-preview .page-sheet--active) .toc-panel {
   text-decoration: underline;
 }
 
-.settings-help {
-  color: var(--color-fg);
-}
-
+/* The keybindings' shortcut list, under the segmented control. */
 .settings-help > summary {
+  display: inline-block;
   color: var(--color-muted);
-  font-size: 0.92em;
+  font-size: 0.75rem;
   cursor: pointer;
   list-style: none;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+  text-underline-offset: 2px;
 }
 
 .settings-help > summary::-webkit-details-marker {
   display: none;
 }
 
-.settings-help > summary::before {
-  content: "▸";
-  display: inline-block;
-  margin-right: 0.35rem;
-  transition: transform 0.15s ease;
+.settings-help > summary:hover {
+  color: var(--color-fg);
 }
 
-.settings-help[open] > summary::before {
-  transform: rotate(90deg);
-}
-
-.settings-help-body {
-  margin-top: 0.4rem;
+.settings-help[open] > summary {
+  color: var(--color-fg);
 }
 
 .keybindings-help-body {
@@ -2844,67 +3248,39 @@ body:has(#reader.paper-preview .page-sheet--active) .toc-panel {
   font-size: 0.92em;
 }
 
-.setting-toggle {
-  position: relative;
-  display: flex;
-  flex-direction: row !important;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.setting-toggle-label {
-  font-size: 0.875rem;
-  color: var(--color-fg);
-}
-
-.setting-toggle input[type="checkbox"] {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 2.25rem;
-  height: 1.25rem;
-  border-radius: 999px;
-  border: 1px solid var(--color-border);
-  background: color-mix(in srgb, var(--color-fg) 14%, var(--color-bg));
-  cursor: pointer;
-  flex-shrink: 0;
-  position: relative;
-  transition: background 0.2s ease, border-color 0.2s ease;
-}
-
-.setting-toggle input[type="checkbox"]::after {
-  content: "";
-  position: absolute;
-  top: 0.15rem;
-  left: 0.15rem;
-  width: 0.85rem;
-  height: 0.85rem;
-  border-radius: 50%;
-  background: var(--color-bg);
-  box-shadow: 0 1px 3px color-mix(in srgb, var(--color-fg) 20%, transparent);
-  transition: transform 0.2s ease;
-}
-
-.setting-toggle input[type="checkbox"]:checked {
-  background: color-mix(in srgb, var(--color-link) 88%, var(--color-fg));
-  border-color: var(--color-link);
-}
-
-.setting-toggle input[type="checkbox"]:checked::after {
-  transform: translateX(1rem);
-}
-
 #share-status {
-  margin-top: -0.5rem;
+  margin-top: 0.6rem;
   word-break: break-all;
   user-select: text;
   -webkit-user-select: text;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .action-btn,
-  .setting-info-button {
+  .settings-header-btn,
+  .settings-switch,
+  .settings-switch::after,
+  .segmented span,
+  .settings-chevron {
     transition: none;
   }
+}
+
+.settings-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+  padding: 0 0.25rem;
+}
+
+.settings-footer .about-link {
+  margin: 0;
+  padding: 0.2rem 0.25rem;
+}
+
+.settings-version {
+  color: color-mix(in srgb, var(--color-fg) 45%, transparent);
 }
 
 .about-link {
@@ -4094,77 +4470,99 @@ body.frame-emede .search-bar {
 }
 
 
-/* System font search, under each font select in the settings panel. */
-.font-search {
+/* The font fields (`fontsearch.js`): one combobox per font slot. */
+.font-combo {
   position: relative;
-  margin: -0.35rem 0 0.15rem;
+  flex: 0 1 10.5rem;
+  min-width: 0;
 }
 
-.font-search-input {
+.font-combo-input {
   width: 100%;
-  padding: 0.3rem 0.4rem;
+  height: 1.9rem;
+  padding: 0 0.5rem;
   border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background: transparent;
+  border-radius: 7px;
+  background: var(--color-bg);
   color: var(--color-fg);
-  font: inherit;
-  font-size: 0.85em;
+  font-size: 0.875rem;
+  text-overflow: ellipsis;
 }
 
-.font-search-input::placeholder {
-  color: var(--color-muted);
+.font-combo-input:focus {
+  outline: 2px solid var(--color-link);
+  outline-offset: 1px;
 }
 
-.font-search-results {
+.font-combo-list {
   position: absolute;
-  z-index: 3;
-  left: 0;
+  z-index: 5;
+  top: calc(100% + 0.25rem);
   right: 0;
-  margin: 0.2rem 0 0;
-  padding: 0.2rem;
-  max-height: 15rem;
+  width: 15rem;
+  max-width: calc(100vw - 2rem);
+  margin: 0;
+  padding: 0.25rem;
+  max-height: 16rem;
   overflow-y: auto;
   list-style: none;
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: 9px;
   background: var(--color-bg);
-  box-shadow: 0 6px 18px color-mix(in srgb, var(--color-fg) 14%, transparent);
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--color-fg) 18%, transparent);
 }
 
-.font-search-result {
+.font-combo-list[hidden] {
+  display: none;
+}
+
+.font-combo-heading {
+  padding: 0.45rem 0.45rem 0.15rem;
+  color: var(--color-muted);
+  font: 600 0.65rem/1.2 system-ui, sans-serif;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.font-combo-option {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 0.5rem;
-  width: 100%;
-  padding: 0.3rem 0.4rem;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
+  padding: 0.3rem 0.45rem;
+  border-radius: 5px;
   color: var(--color-fg);
-  cursor: pointer;
-  text-align: left;
   /* The face itself comes from the inline style; only the size is ours. */
-  font-size: 0.95em;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
 }
 
-.font-search-result:hover,
-.font-search-result:focus-visible {
-  background: color-mix(in srgb, var(--color-fg) 8%, transparent);
-  outline: none;
+.font-combo-option:hover,
+.font-combo-option.is-active {
+  background: color-mix(in srgb, var(--color-fg) 9%, transparent);
 }
 
-.font-search-generic {
+.font-combo-option[aria-selected="true"] {
+  font-weight: 600;
+}
+
+.font-combo-option.is-muted {
+  color: var(--color-muted);
+}
+
+.font-combo-generic {
   flex: none;
   color: var(--color-muted);
-  font-family: var(--font-ui, sans-serif);
-  font-size: 0.75em;
+  font: 0.7rem system-ui, sans-serif;
 }
 
-.font-search-empty {
-  padding: 0.3rem 0.4rem;
+.font-combo-note {
+  padding: 0.35rem 0.45rem;
   color: var(--color-muted);
-  font-size: 0.85em;
+  font: 0.75rem system-ui, sans-serif;
 }
 
 /* What a preset really resolves to. Both stay selectable — a saved config

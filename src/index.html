@@ -119,10 +119,18 @@
       &#9881;
     </button>
 
-    <aside id="settings-panel" class="settings-panel hidden" aria-hidden="true">
+    <aside id="settings-panel" class="settings-panel hidden" aria-hidden="true" aria-labelledby="settings-title">
       <header class="settings-header">
-        <h2>Settings</h2>
-        <button id="settings-close" class="settings-close" aria-label="Close settings">&times;</button>
+        <h2 id="settings-title">Settings</h2>
+        <button id="print-toggle" class="settings-header-btn" type="button" title="Print / Save as PDF (Ctrl+P)" aria-label="Print or save as PDF">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M6 14h12v7H6z"/></svg>
+        </button>
+        <button id="share-toggle" class="settings-header-btn" type="button" title="Share on LAN" aria-label="Share on LAN">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4.5 10.5a10.5 10.5 0 0 1 15 0M7.5 13.8a6.3 6.3 0 0 1 9 0"/><circle cx="12" cy="17.6" r="1.3" fill="currentColor" stroke="none"/></svg>
+        </button>
+        <button id="settings-close" class="settings-header-btn" type="button" aria-label="Close settings">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
       </header>
 
       <div class="settings-body">
@@ -130,313 +138,280 @@
           <span class="update-banner-dot" aria-hidden="true"></span>
           <span id="update-banner-text">Update available</span>
         </button>
-        <div class="settings-actions">
-          <button id="print-toggle" class="action-btn" type="button" title="Print / Save as PDF (Ctrl+P)" aria-label="Print or save as PDF">⎙ Print / PDF</button>
-          <button id="share-toggle" class="action-btn" type="button" title="Share this document on the local network">Share on LAN</button>
-        </div>
         <p id="share-status" class="setting-note"></p>
 
-        <section class="settings-section">
-          <h3 class="settings-section-title">Colors</h3>
-
-          <div class="color-row">
-            <label>
-              Text
-              <input id="setting-fg" type="color" />
-            </label>
-
-            <label>
-              Background
-              <input id="setting-bg" type="color" />
-            </label>
+        <section class="settings-group" aria-labelledby="settings-group-theme">
+          <div class="settings-group-header">
+            <h3 id="settings-group-theme" class="settings-group-title">Theme</h3>
+            <button class="settings-group-reset" type="button" data-reset-group="theme" aria-label="Reset theme settings">Reset</button>
           </div>
+          <div class="settings-box">
+            <div class="settings-row settings-row--stack">
+              <div id="color-template-list" class="theme-cards" role="group" aria-label="Color theme"></div>
+              <ul id="imported-color-templates" class="imported-list" aria-label="Imported color templates" hidden></ul>
+            </div>
 
-          <div class="presets color-templates">
-            <span class="presets-label">Templates</span>
-            <div id="color-template-list" class="preset-buttons color-template-buttons"></div>
-            <ul id="imported-color-templates" class="imported-list" aria-label="Imported color templates" hidden></ul>
-            <button id="import-color-template" class="template-import-btn" type="button">Import CSS template&hellip;</button>
-            <p id="color-template-status" class="setting-note"></p>
-            <details class="settings-help">
-              <summary>Template format</summary>
-              <p class="setting-note settings-help-body">
-                A CSS file defining variables. Required: <code>--color-fg</code>, <code>--color-bg</code>. Optional:
-                <code>--color-title</code>, <code>--color-bold</code>, <code>--color-italic</code>,
-                <code>--color-quote</code>, <code>--color-link</code>, <code>--color-code</code>,
-                <code>--color-code-bg</code>, <code>--color-border</code>, <code>--color-muted</code>.
-              </p>
+            <details class="settings-expander">
+              <summary>
+                <span class="settings-row-text">
+                  <span class="settings-row-title">Custom colors</span>
+                  <span class="settings-row-sub">Hand-pick, or import a CSS template</span>
+                </span>
+                <svg class="settings-chevron" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+              </summary>
+              <div class="settings-expander-body">
+                <div class="color-pickers">
+                  <label><input id="setting-fg" type="color" /> Text</label>
+                  <label><input id="setting-bg" type="color" /> Background</label>
+                </div>
+                <button id="import-color-template" class="settings-btn" type="button">Import color template&hellip;</button>
+                <p id="color-template-status" class="setting-note"></p>
+                <p class="setting-note">
+                  A CSS file defining <code>--color-fg</code> and <code>--color-bg</code>, and optionally
+                  <code>--color-title</code>, <code>--color-bold</code>, <code>--color-italic</code>,
+                  <code>--color-quote</code>, <code>--color-link</code>, <code>--color-code</code>,
+                  <code>--color-code-bg</code>, <code>--color-border</code>, <code>--color-muted</code>.
+                </p>
+              </div>
+            </details>
+
+            <div class="settings-row settings-row--stack">
+              <div class="settings-row-line">
+                <label class="settings-row-title" for="setting-syntax-theme">Code theme</label>
+                <div class="syntax-theme-row">
+                  <span id="syntax-theme-swatch" class="syntax-theme-swatch" aria-hidden="true">{}</span>
+                  <select id="setting-syntax-theme" class="settings-select"></select>
+                </div>
+              </div>
+              <ul id="imported-syntax-themes" class="imported-list" aria-label="Imported code themes" hidden></ul>
+              <button id="import-syntax-theme" class="settings-link-btn" type="button">Import highlight.js theme&hellip;</button>
+              <p id="syntax-theme-status" class="setting-note"></p>
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-group" aria-labelledby="settings-group-text">
+          <div class="settings-group-header">
+            <h3 id="settings-group-text" class="settings-group-title">Text</h3>
+            <button class="settings-group-reset" type="button" data-reset-group="text" aria-label="Reset text settings">Reset</button>
+          </div>
+          <div class="settings-box">
+            <div class="settings-row settings-row--stack">
+              <span class="settings-row-text">
+                <span class="settings-row-title">Reading preset</span>
+                <span class="settings-row-sub">Sets all three fonts at once</span>
+              </span>
+              <div class="preset-cards" role="group" aria-label="Reading preset">
+                <button type="button" class="preset-card" data-font-preset="default"><span class="preset-card-specimen">Reading</span><span class="preset-card-name">Default</span></button>
+                <button type="button" class="preset-card" data-font-preset="longform" title="Books and long articles"><span class="preset-card-specimen">Reading</span><span class="preset-card-name">Long-form</span></button>
+                <button type="button" class="preset-card" data-font-preset="scientific" title="Papers, equations, and technical prose"><span class="preset-card-specimen">Reading</span><span class="preset-card-name">Scientific</span></button>
+                <button type="button" class="preset-card" data-font-preset="documentation" title="Documentation and reference material"><span class="preset-card-specimen">Reading</span><span class="preset-card-name">Docs</span></button>
+                <button type="button" class="preset-card" data-font-preset="editorial" title="Editorial posts and essays"><span class="preset-card-specimen">Reading</span><span class="preset-card-name">Blog</span></button>
+                <button type="button" class="preset-card" data-font-preset="code" title="Developer notes with frequent code"><span class="preset-card-specimen">Reading</span><span class="preset-card-name">Code-heavy</span></button>
+              </div>
+            </div>
+
+            <div class="settings-row">
+              <label class="settings-row-title" for="setting-size">Font size</label>
+              <div class="stepper" data-stepper>
+                <button type="button" class="stepper-btn" data-delta="-1" aria-label="Decrease font size">&minus;</button>
+                <span class="stepper-value"><input id="setting-size" type="number" min="8" max="32" step="1" inputmode="numeric" /><span class="stepper-unit">pt</span></span>
+                <button type="button" class="stepper-btn" data-delta="1" aria-label="Increase font size">+</button>
+              </div>
+            </div>
+
+            <label class="settings-row settings-row--click">
+              <span class="settings-row-title">Justify text</span>
+              <input id="setting-justify" class="settings-switch" type="checkbox" role="switch" />
+            </label>
+
+            <details class="settings-expander">
+              <summary>
+                <span class="settings-row-text">
+                  <span class="settings-row-title">Fonts</span>
+                  <span id="setting-fonts-summary" class="settings-row-sub"></span>
+                </span>
+                <svg class="settings-chevron" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+              </summary>
+              <div class="settings-expander-body">
+                <div class="font-field">
+                  <label for="setting-font-input">Body</label>
+                  <div class="font-combo" data-font-select="setting-font">
+                    <input id="setting-font-input" class="font-combo-input" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="setting-font-list" autocomplete="off" spellcheck="false" />
+                    <ul id="setting-font-list" class="font-combo-list" role="listbox" aria-label="Body fonts" hidden></ul>
+                  </div>
+                  <select id="setting-font" hidden tabindex="-1" aria-hidden="true"></select>
+                </div>
+                <div class="font-field">
+                  <label for="setting-font-title-input">Titles</label>
+                  <div class="font-combo" data-font-select="setting-font-title">
+                    <input id="setting-font-title-input" class="font-combo-input" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="setting-font-title-list" autocomplete="off" spellcheck="false" />
+                    <ul id="setting-font-title-list" class="font-combo-list" role="listbox" aria-label="Title fonts" hidden></ul>
+                  </div>
+                  <select id="setting-font-title" hidden tabindex="-1" aria-hidden="true"></select>
+                </div>
+                <div class="font-field">
+                  <label for="setting-font-code-input">Code</label>
+                  <div class="font-combo" data-font-select="setting-font-code" data-font-mono="true">
+                    <input id="setting-font-code-input" class="font-combo-input" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="setting-font-code-list" autocomplete="off" spellcheck="false" />
+                    <ul id="setting-font-code-list" class="font-combo-list" role="listbox" aria-label="Code fonts" hidden></ul>
+                  </div>
+                  <select id="setting-font-code" hidden tabindex="-1" aria-hidden="true"></select>
+                </div>
+                <p class="setting-note">Type in a field to search the fonts installed on your system.</p>
+              </div>
             </details>
           </div>
-
-          <div class="setting-field syntax-theme-field">
-            <label for="setting-syntax-theme">Code theme</label>
-            <div class="syntax-theme-row">
-              <span id="syntax-theme-swatch" class="syntax-theme-swatch" aria-hidden="true">{}</span>
-              <select id="setting-syntax-theme"></select>
-            </div>
-            <ul id="imported-syntax-themes" class="imported-list" aria-label="Imported code themes" hidden></ul>
-            <button id="import-syntax-theme" class="template-import-btn" type="button">Import highlight.js theme&hellip;</button>
-            <p id="syntax-theme-status" class="setting-note"></p>
-          </div>
-
-          <div class="setting-field">
-            <span class="setting-label-with-info">
-              <label for="setting-paper-size">Page border</label>
-              <span class="setting-info">
-                <button
-                  class="setting-info-button"
-                  type="button"
-                  aria-label="About page borders"
-                  aria-expanded="false"
-                  aria-controls="page-border-tip"
-                  aria-describedby="page-border-tip"
-                >?</button>
-                <span id="page-border-tip" class="setting-tip" role="tooltip" hidden>
-                  Screen only; the border is not printed or shared.
-                </span>
-              </span>
-            </span>
-            <select id="setting-paper-size">
-              <option value="none">None</option>
-              <option value="letter">Letter (8.5 × 11 in)</option>
-              <option value="legal">Legal (8.5 × 14 in)</option>
-              <option value="a3">A3 (297 × 420 mm)</option>
-              <option value="a4">A4 (210 × 297 mm)</option>
-              <option value="a5">A5 (148 × 210 mm)</option>
-            </select>
-          </div>
         </section>
 
-        <section class="settings-section">
-          <h3 class="settings-section-title">Typography</h3>
-
-          <label>
-            Body font
-            <select id="setting-font"></select>
-          </label>
-          <div class="font-search" data-font-search="setting-font">
-            <input
-              type="search"
-              class="font-search-input"
-              placeholder="Search system fonts…"
-              autocomplete="off"
-              spellcheck="false"
-              aria-label="Search system fonts for body text"
-            />
-            <ul class="font-search-results" hidden></ul>
+        <section class="settings-group" aria-labelledby="settings-group-page">
+          <div class="settings-group-header">
+            <h3 id="settings-group-page" class="settings-group-title">Page</h3>
+            <button class="settings-group-reset" type="button" data-reset-group="page" aria-label="Reset page settings">Reset</button>
           </div>
+          <div class="settings-box">
+            <div class="settings-row settings-row--stack">
+              <span class="settings-row-text">
+                <span id="setting-width-title" class="settings-row-title">Reading width</span>
+                <span id="setting-width-measure" class="settings-row-sub"></span>
+              </span>
+              <div id="setting-width-preset" class="segmented" role="radiogroup" aria-labelledby="setting-width-title">
+                <label><input type="radio" name="reading-width" value="13" /><span>Narrow</span></label>
+                <label><input type="radio" name="reading-width" value="16" /><span>Medium</span></label>
+                <label><input type="radio" name="reading-width" value="20" /><span>Wide</span></label>
+                <label><input type="radio" name="reading-width" value="custom" /><span>Custom</span></label>
+              </div>
+              <div class="settings-row-line" data-preset-custom hidden>
+                <label class="settings-row-sub" for="setting-margin">Width</label>
+                <div class="stepper" data-stepper>
+                  <button type="button" class="stepper-btn" data-delta="-1" aria-label="Narrower">&minus;</button>
+                  <span class="stepper-value"><input id="setting-margin" type="number" min="10" max="30" step="0.5" inputmode="decimal" /><span class="stepper-unit">cm</span></span>
+                  <button type="button" class="stepper-btn" data-delta="1" aria-label="Wider">+</button>
+                </div>
+              </div>
+            </div>
 
-          <label>
-            Titles font
-            <select id="setting-font-title"></select>
-          </label>
-          <div class="font-search" data-font-search="setting-font-title">
-            <input
-              type="search"
-              class="font-search-input"
-              placeholder="Search system fonts…"
-              autocomplete="off"
-              spellcheck="false"
-              aria-label="Search system fonts for titles"
-            />
-            <ul class="font-search-results" hidden></ul>
-          </div>
-
-          <label>
-            Code font
-            <select id="setting-font-code"></select>
-          </label>
-          <div class="font-search" data-font-search="setting-font-code" data-font-search-mono="true">
-            <input
-              type="search"
-              class="font-search-input"
-              placeholder="Search system monospace fonts…"
-              autocomplete="off"
-              spellcheck="false"
-              aria-label="Search system fonts for code"
-            />
-            <ul class="font-search-results" hidden></ul>
-          </div>
-
-          <div class="presets">
-            <span class="presets-label">Reading presets</span>
-            <div class="preset-buttons">
-              <button type="button" data-font-preset="default">Default</button>
-              <button
-                type="button"
-                data-font-preset="longform"
-                title="Books and long articles"
-              >
-                Long-form
-              </button>
-              <button
-                type="button"
-                data-font-preset="scientific"
-                title="Papers, equations, and technical prose"
-              >
-                Scientific
-              </button>
-              <button
-                type="button"
-                data-font-preset="documentation"
-                title="Documentation and reference material"
-              >
-                Docs
-              </button>
-              <button
-                type="button"
-                data-font-preset="editorial"
-                title="Editorial posts and essays"
-              >
-                Blog
-              </button>
-              <button
-                type="button"
-                data-font-preset="code"
-                title="Developer notes with frequent code"
-              >
-                Code-heavy
-              </button>
+            <div class="settings-row">
+              <span class="settings-row-text">
+                <label class="settings-row-title" for="setting-paper-size">Page border</label>
+                <span class="settings-row-sub">Screen only; not printed or shared</span>
+              </span>
+              <select id="setting-paper-size" class="settings-select settings-select--short">
+                <option value="none">None</option>
+                <option value="letter">Letter</option>
+                <option value="legal">Legal</option>
+                <option value="a3">A3</option>
+                <option value="a4">A4</option>
+                <option value="a5">A5</option>
+              </select>
             </div>
           </div>
-
-          <label>
-            Font size
-            <span class="range-row">
-              <input id="setting-size" type="range" min="8" max="32" step="1" />
-              <span id="setting-size-label" class="range-value"></span>
-            </span>
-          </label>
-
-          <label class="setting-toggle">
-            <span class="setting-toggle-label">Justify text</span>
-            <input id="setting-justify" type="checkbox" role="switch" />
-          </label>
         </section>
 
-        <section class="settings-section">
-          <h3 class="settings-section-title">Layout</h3>
-
-          <label>
-            Reading width
-            <span class="range-row">
-              <input id="setting-margin" type="range" min="10" max="30" step="0.5" />
-              <span id="setting-margin-label" class="range-value"></span>
-            </span>
-          </label>
-
-          <label>
-            Zoom
-            <span class="range-row">
-              <input id="setting-zoom" type="range" min="50" max="200" step="10" />
-              <span id="setting-zoom-label" class="range-value"></span>
-            </span>
-          </label>
-
-          <label>
-            Window frame
-            <select id="setting-window-frame">
-              <option value="emede">emede (custom)</option>
-              <option value="system">System (native)</option>
-            </select>
-          </label>
-        </section>
-
-        <section class="settings-section">
-          <h3 class="settings-section-title">Behavior</h3>
-
-          <label>
-            Keybindings
-            <select id="setting-keybindings">
-              <option value="default">Default (browser)</option>
-              <option value="vim">Vim</option>
-              <option value="emacs">Emacs</option>
-              <option value="common">Common reader</option>
-            </select>
-          </label>
-
-          <details class="settings-help keybindings-help">
-            <summary>Shortcuts</summary>
-            <div id="keybindings-help" class="keybindings-help-body"></div>
-          </details>
-
-          <label class="setting-toggle">
-            <span class="setting-toggle-label">Mermaid diagrams</span>
-            <input id="setting-mermaid" type="checkbox" role="switch" />
-          </label>
-
-          <div class="setting-toggle">
-            <span class="setting-label-with-info">
-              <label class="setting-toggle-label" for="setting-changes">Highlight changes</label>
-              <span class="setting-info">
-                <button
-                  class="setting-info-button"
-                  type="button"
-                  aria-label="About change highlighting"
-                  aria-expanded="false"
-                  aria-controls="change-highlighting-tip"
-                  aria-describedby="change-highlighting-tip"
-                >?</button>
-                <span id="change-highlighting-tip" class="setting-tip" role="tooltip" hidden>
-                  Tints text that differs from the last commit, or from the version
-                  emede opened when the file is not tracked by git.
-                </span>
-              </span>
-            </span>
-            <input id="setting-changes" type="checkbox" role="switch" />
+        <section class="settings-group" aria-labelledby="settings-group-reading">
+          <div class="settings-group-header">
+            <h3 id="settings-group-reading" class="settings-group-title">Reading</h3>
+            <button class="settings-group-reset" type="button" data-reset-group="reading" aria-label="Reset reading settings">Reset</button>
           </div>
+          <div class="settings-box">
+            <div class="settings-row settings-row--stack">
+              <span id="setting-keybindings-title" class="settings-row-title">Keybindings</span>
+              <div id="setting-keybindings" class="segmented" role="radiogroup" aria-labelledby="setting-keybindings-title">
+                <label title="Browser defaults"><input type="radio" name="keybindings" value="default" /><span>Default</span></label>
+                <label><input type="radio" name="keybindings" value="vim" /><span>Vim</span></label>
+                <label><input type="radio" name="keybindings" value="emacs" /><span>Emacs</span></label>
+                <label title="Common reader"><input type="radio" name="keybindings" value="common" /><span>Reader</span></label>
+              </div>
+              <details class="settings-help">
+                <summary>Shortcuts</summary>
+                <div id="keybindings-help" class="keybindings-help-body"></div>
+              </details>
+            </div>
 
-          <label>
-            Reading speed
-            <span class="range-row">
-              <input id="setting-reading-wpm" type="range" min="100" max="600" step="1" />
-              <span id="setting-reading-wpm-label" class="range-value"></span>
-            </span>
-          </label>
-
-          <div class="setting-toggle">
-            <span class="setting-label-with-info">
-              <label class="setting-toggle-label" for="setting-update-check">Check for updates</label>
-              <span class="setting-info">
-                <button
-                  class="setting-info-button"
-                  type="button"
-                  aria-label="About update checks"
-                  aria-expanded="false"
-                  aria-controls="update-check-tip"
-                  aria-describedby="update-check-tip"
-                >?</button>
-                <span id="update-check-tip" class="setting-tip" role="tooltip" hidden>
-                  Asks GitHub once a day whether a newer release exists. emede never
-                  installs anything on its own; it only tells you the command.
-                </span>
+            <label class="settings-row settings-row--click">
+              <span class="settings-row-text">
+                <span class="settings-row-title">Highlight changes</span>
+                <span class="settings-row-sub">Tints text that differs from the last commit, or from the version emede opened when the file is not in git</span>
               </span>
-            </span>
-            <input id="setting-update-check" type="checkbox" role="switch" />
-          </div>
+              <input id="setting-changes" class="settings-switch" type="checkbox" role="switch" />
+            </label>
 
-          <div class="setting-toggle">
-            <span class="setting-label-with-info">
-              <label class="setting-toggle-label" for="setting-gpu">GPU acceleration</label>
-              <span class="setting-info">
-                <button
-                  class="setting-info-button"
-                  type="button"
-                  aria-label="About GPU acceleration"
-                  aria-expanded="false"
-                  aria-controls="gpu-acceleration-tip"
-                  aria-describedby="gpu-acceleration-tip"
-                >?</button>
-                <span id="gpu-acceleration-tip" class="setting-tip" role="tooltip" hidden>
-                  Restart required &mdash; will restart automatically.
-                </span>
+            <label class="settings-row settings-row--click">
+              <span class="settings-row-title">Mermaid diagrams</span>
+              <input id="setting-mermaid" class="settings-switch" type="checkbox" role="switch" />
+            </label>
+
+            <div class="settings-row settings-row--stack">
+              <span class="settings-row-text">
+                <span id="setting-wpm-title" class="settings-row-title">Reading speed</span>
+                <span class="settings-row-sub">Used for the read time in Statistics</span>
               </span>
-            </span>
-            <input id="setting-gpu" type="checkbox" role="switch" />
+              <div id="setting-wpm-preset" class="segmented" role="radiogroup" aria-labelledby="setting-wpm-title">
+                <label title="180 words per minute"><input type="radio" name="reading-wpm" value="180" /><span>Relaxed</span></label>
+                <label title="238 words per minute"><input type="radio" name="reading-wpm" value="238" /><span>Average</span></label>
+                <label title="300 words per minute"><input type="radio" name="reading-wpm" value="300" /><span>Fast</span></label>
+                <label><input type="radio" name="reading-wpm" value="custom" /><span>Custom</span></label>
+              </div>
+              <div class="settings-row-line" data-preset-custom hidden>
+                <label class="settings-row-sub" for="setting-reading-wpm">Words per minute</label>
+                <div class="stepper" data-stepper>
+                  <button type="button" class="stepper-btn" data-delta="-1" aria-label="Slower">&minus;</button>
+                  <span class="stepper-value"><input id="setting-reading-wpm" type="number" min="100" max="600" step="10" inputmode="numeric" /><span class="stepper-unit">wpm</span></span>
+                  <button type="button" class="stepper-btn" data-delta="1" aria-label="Faster">+</button>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
-        <button id="about-link" class="about-link" type="button">About emede</button>
+        <section class="settings-group" aria-labelledby="settings-group-system">
+          <div class="settings-group-header">
+            <h3 id="settings-group-system" class="settings-group-title">Window &amp; system</h3>
+            <button class="settings-group-reset" type="button" data-reset-group="system" aria-label="Reset window and system settings">Reset</button>
+          </div>
+          <div class="settings-box">
+            <div class="settings-row">
+              <span class="settings-row-text">
+                <label class="settings-row-title" for="setting-zoom">Interface zoom</label>
+                <span class="settings-row-sub">Panels and controls</span>
+              </span>
+              <div class="stepper" data-stepper>
+                <button type="button" class="stepper-btn" data-delta="-1" aria-label="Zoom out">&minus;</button>
+                <span class="stepper-value"><input id="setting-zoom" type="number" min="50" max="200" step="10" inputmode="numeric" /><span class="stepper-unit">%</span></span>
+                <button type="button" class="stepper-btn" data-delta="1" aria-label="Zoom in">+</button>
+              </div>
+            </div>
+
+            <div class="settings-row">
+              <span id="setting-window-frame-title" class="settings-row-title">Window frame</span>
+              <div id="setting-window-frame" class="segmented segmented--inline" role="radiogroup" aria-labelledby="setting-window-frame-title">
+                <label title="emede's own title bar"><input type="radio" name="window-frame" value="emede" /><span>emede</span></label>
+                <label title="Your desktop's native title bar"><input type="radio" name="window-frame" value="system" /><span>System</span></label>
+              </div>
+            </div>
+
+            <label class="settings-row settings-row--click">
+              <span class="settings-row-text">
+                <span class="settings-row-title">GPU acceleration</span>
+                <span class="settings-row-sub">emede restarts to apply this</span>
+              </span>
+              <input id="setting-gpu" class="settings-switch" type="checkbox" role="switch" />
+            </label>
+
+            <label class="settings-row settings-row--click">
+              <span class="settings-row-text">
+                <span class="settings-row-title">Check for updates</span>
+                <span class="settings-row-sub">Asks GitHub once a day; never installs anything</span>
+              </span>
+              <input id="setting-update-check" class="settings-switch" type="checkbox" role="switch" />
+            </label>
+          </div>
+        </section>
+
+        <footer class="settings-footer">
+          <button id="about-link" class="about-link" type="button">About emede <span id="settings-version" class="settings-version"></span></button>
+          <button id="settings-reset-all" class="settings-group-reset" type="button">Reset all&hellip;</button>
+        </footer>
       </div>
     </aside>
 

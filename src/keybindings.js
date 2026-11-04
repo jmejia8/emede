@@ -68,7 +68,9 @@ function isTypingTarget(target) {
   if (tag === "SELECT") return true;
   if (tag === "INPUT") {
     const type = target.type;
-    return !["button", "submit", "reset", "checkbox", "radio", "range", "color"].includes(type);
+    // A radio is a typing target: arrow keys move between the options of a
+    // segmented control in the settings panel, and Space picks one.
+    return !["button", "submit", "reset", "checkbox", "range", "color"].includes(type);
   }
   return false;
 }
