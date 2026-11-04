@@ -2303,6 +2303,9 @@ const SHARED_PAGE_TEMPLATE: &str = r##"<!doctype html>
       }
       mermaidLib.initialize({
         startOnLoad: false,
+        // Same as the app (`src/main.js`): keep Mermaid 11's layout and look.
+        layout: "dagre",
+        look: "classic",
         theme: "base",
         themeVariables: themeVars,
       });
@@ -2325,7 +2328,7 @@ const SHARED_PAGE_TEMPLATE: &str = r##"<!doctype html>
     }
 
     var script = document.createElement("script");
-    script.src = "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js";
+    script.src = "https://cdn.jsdelivr.net/npm/mermaid@12/dist/mermaid.min.js";
     script.onload = function () { mermaidLib = window.mermaid; renderMermaid(); };
     script.onerror = function () { console.warn("Failed to load Mermaid"); };
     document.head.appendChild(script);

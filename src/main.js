@@ -1134,6 +1134,10 @@ async function renderMermaid() {
   });
   window.mermaid.initialize({
     startOnLoad: false,
+    // Mermaid 12 defaults to the ELK layout and the "neo" look; keep the
+    // dagre/classic rendering diagrams had before (front matter can override).
+    layout: "dagre",
+    look: "classic",
     theme: "base",
     themeVariables: {
       fontFamily: fontFamily || undefined,
