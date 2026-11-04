@@ -924,6 +924,10 @@ pub(crate) fn comrak_options_ext(markdown_path: &Path, sourcepos: bool) -> Optio
     options.extension.spoiler = true;
     options.extension.shortcodes = true;
     options.extension.wikilinks_title_after_pipe = true;
+    // comrak >= 0.57 parses `![[x]]` as an embed, which `wikilink_href` would
+    // render as a plain link with the `!` dropped. Keep it literal until
+    // embeds are rendered as such.
+    options.extension.wikilinks_ignore_embeds = true;
     options.render.tasklist_classes = true;
     options.render.r#unsafe = true;
     options.extension.header_id_prefix = Some(String::new());
@@ -2007,6 +2011,19 @@ mod tests {
     }
 
     #[test]
+    fn wikilink_embeds_stay_literal() {
+        let src = "See [[README]] and ![[diagram.png]].\n";
+        let preprocessed = preprocess_tex_delimiters(&preprocess_math_fences(src));
+        let arena = Arena::new();
+        let options = comrak_options_ext(Path::new("test.md"), false);
+        let root = parse_document(&arena, &preprocessed, &options);
+        let mut html = String::new();
+        MathJaxFormatter::format_document(root, &options, &mut html).unwrap();
+        assert!(html.contains("href=\"README.md\""), "{html}");
+        assert!(html.contains("![[diagram.png]]"), "{html}");
+    }
+
+    #[test]
     fn renders_heading_ids() {
         let html = {
             let src = "# Hello World\n\n## Section Two\n";
@@ -2046,7 +2063,8 @@ mod tests {
             !html.contains("<hr"),
             "preamble delimiters should not become horizontal rules, got: {html}"
         );
-        assert!(html.contains("Hello</h1>"));
+        // comrak >= 0.54 puts the heading anchor after the text.
+        assert!(html.contains("<h1") && html.contains(">Hello<"), "{html}");
     }
 
     #[test]

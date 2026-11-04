@@ -986,10 +986,23 @@ A note[^1] and an inline^[Inline text] one.
 [^1]: The footnote text
 ";
         let html = render(src);
+        // Count opening tags of `key.tag` carrying the key's sourcepos, in any
+        // attribute order: comrak puts a heading's `id` first, and the frontend
+        // looks blocks up with a selector, which does not care about order.
+        let count = |tag: &str, sourcepos: &str| {
+            let attr = format!(" data-sourcepos=\"{sourcepos}\"");
+            let open = format!("<{tag}");
+            html.match_indices(&open)
+                .filter(|(i, _)| {
+                    let rest = &html[i + open.len()..];
+                    rest.starts_with([' ', '>'])
+                        && rest[..rest.find('>').unwrap_or(rest.len())].contains(&attr)
+                })
+                .count()
+        };
         for block in blocks(src) {
             let Some(key) = block.key else { continue };
-            let needle = format!("<{} data-sourcepos=\"{}\"", key.tag, key.sourcepos);
-            let hits = html.matches(&needle).count();
+            let hits = count(&key.tag, &key.sourcepos);
             assert_eq!(hits, 1, "key {key:?} matched {hits} elements in:\n{html}");
         }
     }
